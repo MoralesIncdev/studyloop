@@ -12,6 +12,7 @@ import { captureRoutes } from "./routes/capture.js";
 import { conceptsRoutes } from "./routes/concepts.js";
 import { compileRoutes } from "./routes/compile.js";
 import { youtubeRoutes } from "./routes/youtube.js";
+import { searchRoutes } from "./routes/search.js";
 import { configRoutes } from "./routes/config.js";
 import { mediaRoutes } from "./routes/media.js";
 import { revealRoutes } from "./routes/reveal.js";
@@ -56,6 +57,7 @@ async function main(): Promise<void> {
   await app.register(conceptsRoutes);
   await app.register(compileRoutes);
   await app.register(youtubeRoutes);
+  await app.register(searchRoutes);
   await app.register(configRoutes);
   await app.register(mediaRoutes);
   await app.register(revealRoutes);

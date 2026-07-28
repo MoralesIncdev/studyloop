@@ -96,6 +96,11 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
       updatedAt: now,
       lastPosition: 0,
       watchedUpTo: 0,
+      // author/related only make sense for youtube sources — POST
+      // /api/youtube/resolve (V2-B) resolves both before project creation,
+      // same pattern as captions above.
+      author: body.source.type === "youtube" ? body.author : undefined,
+      related: body.source.type === "youtube" ? body.related : undefined,
     };
     if (hasYoutubeCaptions && body.captions) {
       await writeCaptions(dataDir, id, body.captions);

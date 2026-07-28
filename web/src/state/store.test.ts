@@ -167,3 +167,56 @@ describe("loadProjectSession stale-response guard", () => {
     vi.unstubAllGlobals();
   });
 });
+
+function makeYoutubeProject(id: string, videoId: string): Project {
+  return {
+    id,
+    title: `Video ${videoId}`,
+    source: { type: "youtube", videoId, url: `https://www.youtube.com/watch?v=${videoId}` },
+    transcript: { type: "none" },
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+    lastPosition: 0,
+    watchedUpTo: 0,
+  };
+}
+
+describe("openOrCreateYoutubeProject (V2-B — search/up-next click target)", () => {
+  beforeEach(() => {
+    useStudyLoopStore.setState({ projects: [], projectsLoaded: true, toasts: [] });
+  });
+
+  it("returns an already-open project for the same videoId without hitting the network", async () => {
+    const existing = makeYoutubeProject("proj-1", "abc123");
+    useStudyLoopStore.setState({ projects: [existing], projectsLoaded: true });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await useStudyLoopStore.getState().openOrCreateYoutubeProject("abc123");
+
+    expect(result).toBe(existing);
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("creates a new project (via resolve + create) for a videoId with no existing project", async () => {
+    const created = makeYoutubeProject("proj-new", "xyz789");
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/youtube/resolve")) {
+        return Promise.resolve(jsonResponse({ videoId: "xyz789", title: "Video xyz789", captions: [] }));
+      }
+      if (url.includes("/api/projects")) {
+        return Promise.resolve(jsonResponse(created));
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await useStudyLoopStore.getState().openOrCreateYoutubeProject("xyz789");
+
+    expect(result.id).toBe("proj-new");
+    expect(useStudyLoopStore.getState().projects.some((p) => p.id === "proj-new")).toBe(true);
+    vi.unstubAllGlobals();
+  });
+});

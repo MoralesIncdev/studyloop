@@ -149,6 +149,62 @@ describe("withProjectLock", () => {
   });
 });
 
+describe("writeProject/readProject — related/author round-trip (V2-B)", () => {
+  let dataDir: string;
+
+  beforeEach(async () => {
+    dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "studyloop-related-"));
+  });
+
+  afterEach(async () => {
+    await fs.rm(dataDir, { recursive: true, force: true });
+  });
+
+  it("persists and reloads a youtube project's author + related list", async () => {
+    const id = "yt-project";
+    const now = new Date().toISOString();
+    const project: Project = {
+      id,
+      title: "A YouTube video",
+      source: { type: "youtube", videoId: "abc123", url: "https://youtu.be/abc123" },
+      transcript: { type: "file", path: "captions.json" },
+      createdAt: now,
+      updatedAt: now,
+      lastPosition: 0,
+      watchedUpTo: 0,
+      author: "Some Channel",
+      related: [
+        { videoId: "r1", title: "Related one", author: "Channel A", durationSeconds: 204 },
+        { videoId: "r2", title: "Related two", author: "Channel B", thumbnailUrl: "https://x/y.jpg" },
+      ],
+    };
+    await writeProject(dataDir, project);
+
+    const reloaded = await readProject(dataDir, id);
+    expect(reloaded?.author).toBe("Some Channel");
+    expect(reloaded?.related).toEqual(project.related);
+  });
+
+  it("round-trips a project with no related/author (local source) without introducing empty defaults", async () => {
+    const id = "local-project";
+    const now = new Date().toISOString();
+    const project: Project = {
+      id,
+      title: "A local video",
+      source: { type: "local", path: "/tmp/video.mp4" },
+      transcript: { type: "none" },
+      createdAt: now,
+      updatedAt: now,
+      lastPosition: 0,
+      watchedUpTo: 0,
+    };
+    await writeProject(dataDir, project);
+    const reloaded = await readProject(dataDir, id);
+    expect(reloaded?.author).toBeUndefined();
+    expect(reloaded?.related).toBeUndefined();
+  });
+});
+
 describe("readProject watchedUpTo migration", () => {
   let dataDir: string;
 

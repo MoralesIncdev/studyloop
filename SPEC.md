@@ -390,7 +390,10 @@ identically for local files.*
   author, durationSeconds, captions (normalized segments incl. auto-generated),
   related: [{videoId, title, author, durationSeconds, viewCountText, thumbnailUrl}].
   Captions persisted to `captions.json` as before. Related list cached in project.json
-  (`related` field) and refreshable via `POST /api/youtube/related {videoId}`.
+  (`related` field) and refreshable via `POST /api/youtube/related {videoId, projectId}`
+  — `projectId` (deviation from the originally-scoped `{videoId}`-only body) identifies
+  which project's cached `related` to overwrite; `videoId` alone doesn't uniquely name a
+  project since nothing currently dedupes youtube-source projects by videoId at creation.
 - `GET /api/search?q=` → `{library: LibraryItem[], youtube: RelatedVideo[]}` — fuzzy
   match over library titles/instructors + Innertube search (youtube section omitted
   for empty/failed Innertube). TopBar search dropdown shows both sections; picking a

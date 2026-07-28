@@ -118,7 +118,12 @@ export function StudyView({ projectId }: Props): JSX.Element {
       const match = libraryItems.find((i) => i.videoPath === videoPath);
       return match?.instructor ?? "Local video";
     }
-    return "YouTube";
+    // V2-B: real channel/author name, resolved via Innertube at project
+    // creation (see lib/innertube.ts, POST /api/youtube/resolve) and
+    // persisted on the project. Falls back to a generic label for projects
+    // created before this field existed, or when Innertube couldn't resolve
+    // an author (yt-dlp fallback path never sets it).
+    return currentProject.author ?? "YouTube";
   }, [currentProject, libraryItems]);
 
   if (currentProjectLoading || !isSameProjectLoaded || !currentProject) {
@@ -200,7 +205,7 @@ export function StudyView({ projectId }: Props): JSX.Element {
         </div>
 
         <div className={styles.rightCol}>
-          <RightRail segments={transcriptSegments} transcriptLoading={transcriptLoading} isYoutube={isYoutube} />
+          <RightRail segments={transcriptSegments} transcriptLoading={transcriptLoading} />
         </div>
       </div>
 

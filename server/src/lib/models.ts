@@ -29,6 +29,23 @@ export const ConceptDocRefSchema = z.object({
 });
 export type ConceptDocRef = z.infer<typeof ConceptDocRefSchema>;
 
+/**
+ * V2-B "Fast YouTube layer": related-video shape returned by both Innertube's
+ * watch-next feed and its search results (server/src/lib/innertube.ts). Kept
+ * as a zod schema (not just a TS interface) because it's persisted as-is into
+ * project.json's `related` field and must validate on read the same way every
+ * other on-disk shape does.
+ */
+export const RelatedVideoSchema = z.object({
+  videoId: z.string(),
+  title: z.string(),
+  author: z.string(),
+  durationSeconds: z.number().nonnegative().optional(),
+  viewCountText: z.string().optional(),
+  thumbnailUrl: z.string().optional(),
+});
+export type RelatedVideo = z.infer<typeof RelatedVideoSchema>;
+
 export const ProjectSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -40,6 +57,10 @@ export const ProjectSchema = z.object({
   lastPosition: z.number().nonnegative().default(0),
   /** Furthest playback position ever reached (monotonic; drives compiled "covered" concepts). */
   watchedUpTo: z.number().nonnegative().default(0),
+  /** YouTube channel/author name (source.type === "youtube" only) — drives the channel-row name. */
+  author: z.string().optional(),
+  /** Cached Innertube related-video list (source.type === "youtube" only); refreshed via POST /api/youtube/related. */
+  related: z.array(RelatedVideoSchema).optional(),
 });
 export type Project = z.infer<typeof ProjectSchema>;
 
@@ -62,6 +83,10 @@ export const CreateProjectBodySchema = z.object({
    * used when source.type === "youtube". See lib/store.ts writeCaptions.
    */
   captions: z.array(TranscriptSegmentSchema).optional(),
+  /** Channel/author name resolved by POST /api/youtube/resolve — youtube sources only. */
+  author: z.string().optional(),
+  /** Related-video list resolved by POST /api/youtube/resolve — youtube sources only. */
+  related: z.array(RelatedVideoSchema).optional(),
 });
 export type CreateProjectBody = z.infer<typeof CreateProjectBodySchema>;
 

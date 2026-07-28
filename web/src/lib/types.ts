@@ -29,6 +29,16 @@ export interface ConceptDocRef {
   profile?: ConceptProfile;
 }
 
+/** V2-B "Fast YouTube layer" related-video shape (server/src/lib/innertube.ts's normalized output). */
+export interface RelatedVideo {
+  videoId: string;
+  title: string;
+  author: string;
+  durationSeconds?: number;
+  viewCountText?: string;
+  thumbnailUrl?: string;
+}
+
 export interface Project {
   id: string;
   title: string;
@@ -40,6 +50,10 @@ export interface Project {
   lastPosition: number;
   /** Furthest playback position ever reached (monotonic; drives "covered" concepts in compile). */
   watchedUpTo: number;
+  /** YouTube channel/author name (source.type === "youtube" only) — drives the channel-row name. */
+  author?: string;
+  /** Cached Innertube related-video list (source.type === "youtube" only). */
+  related?: RelatedVideo[];
 }
 
 export interface CreateProjectBody {
@@ -50,6 +64,10 @@ export interface CreateProjectBody {
   conceptDocProfile?: ConceptProfile;
   /** Pre-resolved YouTube captions to persist as captions.json — youtube sources only. */
   captions?: TranscriptSegment[];
+  /** Channel/author name resolved by POST /api/youtube/resolve — youtube sources only. */
+  author?: string;
+  /** Related-video list resolved by POST /api/youtube/resolve — youtube sources only. */
+  related?: RelatedVideo[];
 }
 
 export interface PatchProjectBody {
@@ -111,10 +129,21 @@ export interface StudyLoopConfigPatch {
 export interface YoutubeResolveResponse {
   videoId: string | null;
   title: string | null;
+  /** Channel/author name — populated when Innertube resolved the video (V2-B). */
+  author?: string;
+  durationSeconds?: number;
   captions?: TranscriptSegment[];
+  /** Related videos — [] when Innertube didn't resolve this video (yt-dlp fallback path). */
+  related?: RelatedVideo[];
   error?: string;
   /** True if yt-dlp isn't installed — the project should still be created (title = URL). */
   ytdlpMissing?: boolean;
+}
+
+/** GET /api/search?q= response (V2-B). */
+export interface SearchResponse {
+  library: LibraryItem[];
+  youtube: RelatedVideo[];
 }
 
 /** GET /api/health — lets the UI disable ffmpeg/yt-dlp-dependent controls with a clear reason. */

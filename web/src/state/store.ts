@@ -145,6 +145,10 @@ export interface StudyLoopStore {
   loadProjects: () => Promise<Project[]>;
   openOrCreateLocalProject: (item: LibraryItem) => Promise<Project>;
   createYoutubeProject: (url: string) => Promise<Project>;
+  /** Dedupes against an already-open project for the same videoId (search results, up-next clicks); else creates one. */
+  openOrCreateYoutubeProject: (videoId: string) => Promise<Project>;
+  /** Bypasses innertube.ts's cache and re-persists `related` on the current project. */
+  refreshRelated: () => Promise<void>;
 
   // --- current study session ----------------------------------------------------
   currentProject: Project | null;
@@ -387,12 +391,36 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
         // TranscriptPane then "just works" for YouTube projects with no
         // further client-side plumbing.
         captions: resolved.captions,
+        // V2-B: author drives the channel-row name, related seeds the
+        // Up-next cabinet — both resolved by Innertube in the same call
+        // above (or [] / undefined via the yt-dlp fallback path).
+        author: resolved.author,
+        related: resolved.related,
       });
       set((state) => ({ projects: [...state.projects, created] }));
       return created;
     } catch (err) {
       if (!(err instanceof ApiError)) get().pushToast(`Could not add YouTube video: ${errorMessage(err)}`, "error");
       throw err;
+    }
+  },
+  openOrCreateYoutubeProject: async (videoId) => {
+    const list = get().projectsLoaded ? get().projects : await get().loadProjects();
+    const existing = list.find((p) => p.source.type === "youtube" && p.source.videoId === videoId);
+    if (existing) return existing;
+    return get().createYoutubeProject(`https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`);
+  },
+  refreshRelated: async () => {
+    const project = get().currentProject;
+    if (!project || project.source.type !== "youtube") return;
+    try {
+      const updated = await api.refreshRelated(project.id, project.source.videoId);
+      set((state) => ({
+        currentProject: state.currentProject?.id === updated.id ? updated : state.currentProject,
+        projects: state.projects.map((p) => (p.id === updated.id ? updated : p)),
+      }));
+    } catch (err) {
+      get().pushToast(`Could not refresh related videos: ${errorMessage(err)}`, "error");
     }
   },
 

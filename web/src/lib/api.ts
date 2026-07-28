@@ -10,6 +10,7 @@ import type {
   PatchProjectBody,
   Project,
   RevealResponse,
+  SearchResponse,
   StudyLoopConfig,
   StudyLoopConfigPatch,
   TranscriptResponse,
@@ -116,6 +117,10 @@ export const api = {
 
   resolveYoutube: (url: string) =>
     request<YoutubeResolveResponse>("/api/youtube/resolve", { method: "POST", body: JSON.stringify({ url }) }),
+  refreshRelated: (projectId: string, videoId: string) =>
+    request<Project>("/api/youtube/related", { method: "POST", body: JSON.stringify({ projectId, videoId }) }),
+
+  search: (q: string) => request<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}`),
 
   videoStreamUrl: (path: string) => `/api/video/stream?path=${encodeURIComponent(path)}`,
   shotUrl: (projectId: string, shot: string) =>

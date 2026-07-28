@@ -1,25 +1,23 @@
-// V2-A: replaces every per-view header (SPEC "TopBar: [logo StudyLoop] [centered
-// search + 🔍] [⚙ avatar]"). Mounted once in App.tsx above the routed view.
-// Search is wired to client-side library filtering for now — `runSearch` below is
-// the one place to swap in a real `GET /api/search?q=` call later (SPEC "Fast
-// YouTube layer"), everything else (dropdown shape, sections) is already built
-// for it: the YouTube section always renders its "coming in next build" empty
-// state regardless of query.
+// V2-B: TopBar search now hits GET /api/search?q= (SPEC "Fast YouTube layer")
+// instead of the V2-A client-side library filter stub. Debounced 300ms;
+// dropdown shows "Your library" (thumbnail-less rows) + "YouTube" (thumb +
+// author + duration) sections; ↑/↓/Enter/Esc navigate and act on either
+// section. Innertube-down degrades to an empty YouTube section — never an
+// error toast (the youtube array is just [] from the server in that case).
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useStudyLoopStore } from "../state/store";
+import { api, ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/time";
-import type { LibraryItem } from "../lib/types";
+import type { LibraryItem, RelatedVideo } from "../lib/types";
 import styles from "./TopBar.module.css";
 
-const MAX_RESULTS = 6;
+const SEARCH_DEBOUNCE_MS = 300;
+const MAX_LIBRARY_RESULTS = 6;
+const MAX_YOUTUBE_RESULTS = 6;
 
-/** Client-side stand-in for `GET /api/search?q=`. Swap the body for a fetch later. */
-function runSearch(items: LibraryItem[], query: string): LibraryItem[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-  return items
-    .filter((item) => item.title.toLowerCase().includes(q) || item.instructor?.toLowerCase().includes(q))
-    .slice(0, MAX_RESULTS);
+interface FlatRow {
+  section: "library" | "youtube";
+  index: number;
 }
 
 function Wordmark({ onClick }: { onClick: () => void }): JSX.Element {
@@ -37,24 +35,22 @@ function Wordmark({ onClick }: { onClick: () => void }): JSX.Element {
 
 export function TopBar(): JSX.Element {
   const navigate = useStudyLoopStore((s) => s.navigate);
-  const libraryItems = useStudyLoopStore((s) => s.libraryItems);
-  const libraryLoaded = useStudyLoopStore((s) => s.libraryLoaded);
-  const loadLibrary = useStudyLoopStore((s) => s.loadLibrary);
   const openOrCreateLocalProject = useStudyLoopStore((s) => s.openOrCreateLocalProject);
+  const openOrCreateYoutubeProject = useStudyLoopStore((s) => s.openOrCreateYoutubeProject);
+  const pushToast = useStudyLoopStore((s) => s.pushToast);
 
   const [query, setQuery] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [openingPath, setOpeningPath] = useState<string | null>(null);
+  const [libraryResults, setLibraryResults] = useState<LibraryItem[]>([]);
+  const [youtubeResults, setYoutubeResults] = useState<RelatedVideo[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [openingKey, setOpeningKey] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
   const menuWrapRef = useRef<HTMLDivElement | null>(null);
-
-  // The TopBar is mounted for every view (including Study, where LibraryView
-  // never mounts), so it owns loading the library data its own dropdown needs.
-  // loadLibrary() no-ops if a load is already in flight (see store.ts).
-  useEffect(() => {
-    if (!libraryLoaded) void loadLibrary();
-  }, [libraryLoaded, loadLibrary]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     function onPointerDown(e: MouseEvent): void {
@@ -65,10 +61,61 @@ export function TopBar(): JSX.Element {
     return () => window.removeEventListener("mousedown", onPointerDown);
   }, []);
 
-  const results = useMemo(() => runSearch(libraryItems, query), [libraryItems, query]);
+  // Debounced GET /api/search?q=. A trailing empty query clears results
+  // immediately (no request, dropdown just closes) rather than waiting out
+  // the debounce.
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const q = query.trim();
+    if (!q) {
+      setLibraryResults([]);
+      setYoutubeResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    debounceRef.current = setTimeout(() => {
+      const requestId = ++requestIdRef.current;
+      void api
+        .search(q)
+        .then((res) => {
+          if (requestId !== requestIdRef.current) return; // superseded by a newer keystroke
+          setLibraryResults(res.library.slice(0, MAX_LIBRARY_RESULTS));
+          // Innertube-down surfaces here as an already-empty `youtube` array
+          // from the server (see lib/innertube.ts / lib/search.ts) — nothing
+          // for the UI to distinguish from "no results", by design (no error toast).
+          setYoutubeResults(res.youtube.slice(0, MAX_YOUTUBE_RESULTS));
+        })
+        .catch(() => {
+          // A failed /api/search request itself (not an Innertube-only
+          // failure, which already degrades server-side) — fail quiet, the
+          // dropdown just shows empty states rather than spamming a toast on
+          // every keystroke.
+          if (requestId !== requestIdRef.current) return;
+          setLibraryResults([]);
+          setYoutubeResults([]);
+        })
+        .finally(() => {
+          if (requestId === requestIdRef.current) setSearching(false);
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query]);
 
-  const handleOpen = async (item: LibraryItem): Promise<void> => {
-    setOpeningPath(item.videoPath);
+  useEffect(() => {
+    setActiveIndex(-1);
+  }, [libraryResults, youtubeResults]);
+
+  const rows = useMemo<FlatRow[]>(() => {
+    const libraryRows: FlatRow[] = libraryResults.map((_, index) => ({ section: "library", index }));
+    const youtubeRows: FlatRow[] = youtubeResults.map((_, index) => ({ section: "youtube", index }));
+    return [...libraryRows, ...youtubeRows];
+  }, [libraryResults, youtubeResults]);
+
+  const handleOpenLibrary = async (item: LibraryItem): Promise<void> => {
+    setOpeningKey(`lib:${item.videoPath}`);
     try {
       const project = await openOrCreateLocalProject(item);
       setDropdownOpen(false);
@@ -77,9 +124,51 @@ export function TopBar(): JSX.Element {
     } catch {
       // store already toasted the error
     } finally {
-      setOpeningPath(null);
+      setOpeningKey(null);
     }
   };
+
+  const handleOpenYoutube = async (video: RelatedVideo): Promise<void> => {
+    setOpeningKey(`yt:${video.videoId}`);
+    try {
+      const project = await openOrCreateYoutubeProject(video.videoId);
+      setDropdownOpen(false);
+      setQuery("");
+      navigate({ view: "study", projectId: project.id });
+    } catch (err) {
+      if (!(err instanceof ApiError)) pushToast(`Could not open "${video.title}"`, "error");
+    } finally {
+      setOpeningKey(null);
+    }
+  };
+
+  const activateRow = (row: FlatRow): void => {
+    if (row.section === "library") void handleOpenLibrary(libraryResults[row.index]);
+    else void handleOpenYoutube(youtubeResults[row.index]);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === "Escape") {
+      setDropdownOpen(false);
+      (e.target as HTMLInputElement).blur();
+      return;
+    }
+    if (!dropdownOpen || rows.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => (i + 1) % rows.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => (i <= 0 ? rows.length - 1 : i - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const row = activeIndex >= 0 ? rows[activeIndex] : rows[0];
+      if (row) activateRow(row);
+    }
+  };
+
+  const libraryActiveIndex = rows[activeIndex]?.section === "library" ? rows[activeIndex].index : -1;
+  const youtubeActiveIndex = rows[activeIndex]?.section === "youtube" ? rows[activeIndex].index : -1;
 
   return (
     <header className={styles.topbar}>
@@ -90,42 +179,49 @@ export function TopBar(): JSX.Element {
           className={styles.searchForm}
           onSubmit={(e) => {
             e.preventDefault();
+            if (rows[0]) activateRow(rows[0]);
           }}
         >
           <input
             type="text"
             className={styles.searchInput}
-            placeholder="Search your library"
+            placeholder="Search your library or YouTube"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
               setDropdownOpen(true);
             }}
-            onFocus={() => setDropdownOpen(true)}
+            onFocus={() => {
+              if (query.trim()) setDropdownOpen(true);
+            }}
+            onKeyDown={handleKeyDown}
+            role="combobox"
+            aria-expanded={dropdownOpen}
+            aria-controls="topbar-search-dropdown"
           />
           <button type="submit" className={styles.searchButton} aria-label="Search">
             🔍
           </button>
         </form>
-        {dropdownOpen && (
-          <div className={styles.dropdown} role="listbox">
+        {dropdownOpen && query.trim().length > 0 && (
+          <div id="topbar-search-dropdown" className={styles.dropdown} role="listbox">
             <div className={styles.dropdownSection}>
-              <div className={styles.dropdownLabel}>Library</div>
-              {query.trim().length === 0 && <div className={styles.dropdownEmpty}>Start typing to search your videos…</div>}
-              {query.trim().length > 0 && results.length === 0 && (
-                <div className={styles.dropdownEmpty}>No matches for &ldquo;{query}&rdquo;.</div>
+              <div className={styles.dropdownLabel}>Your library</div>
+              {searching && libraryResults.length === 0 && (
+                <div className={styles.dropdownEmpty}>Searching…</div>
               )}
-              {results.map((item) => (
+              {!searching && libraryResults.length === 0 && (
+                <div className={styles.dropdownEmpty}>No matches for &ldquo;{query.trim()}&rdquo;.</div>
+              )}
+              {libraryResults.map((item, index) => (
                 <button
                   type="button"
                   key={item.videoPath}
-                  className={styles.dropdownItem}
-                  disabled={openingPath === item.videoPath}
-                  onClick={() => void handleOpen(item)}
+                  className={`${styles.dropdownItem} ${index === libraryActiveIndex ? styles.dropdownItemActive : ""}`}
+                  disabled={openingKey === `lib:${item.videoPath}`}
+                  onMouseEnter={() => setActiveIndex(rows.findIndex((r) => r.section === "library" && r.index === index))}
+                  onClick={() => void handleOpenLibrary(item)}
                 >
-                  <span className={styles.dropdownItemThumb} aria-hidden="true">
-                    🎞
-                  </span>
                   <span className={styles.dropdownItemBody}>
                     <span className={styles.dropdownItemTitle}>{item.title}</span>
                     <span className={styles.dropdownItemMeta}>
@@ -138,7 +234,36 @@ export function TopBar(): JSX.Element {
             </div>
             <div className={styles.dropdownSection}>
               <div className={styles.dropdownLabel}>YouTube</div>
-              <div className={styles.dropdownEmpty}>YouTube search is coming in the next build — paste a URL from the home page for now.</div>
+              {youtubeResults.length === 0 && (
+                <div className={styles.dropdownEmpty}>
+                  {searching ? "Searching…" : "No YouTube results — try a different search."}
+                </div>
+              )}
+              {youtubeResults.map((video, index) => (
+                <button
+                  type="button"
+                  key={video.videoId}
+                  className={`${styles.dropdownItem} ${index === youtubeActiveIndex ? styles.dropdownItemActive : ""}`}
+                  disabled={openingKey === `yt:${video.videoId}`}
+                  onMouseEnter={() => setActiveIndex(rows.findIndex((r) => r.section === "youtube" && r.index === index))}
+                  onClick={() => void handleOpenYoutube(video)}
+                >
+                  <span className={styles.dropdownItemThumb} aria-hidden="true">
+                    {video.thumbnailUrl ? (
+                      <img src={video.thumbnailUrl} alt="" className={styles.dropdownItemThumbImg} />
+                    ) : (
+                      "▶"
+                    )}
+                  </span>
+                  <span className={styles.dropdownItemBody}>
+                    <span className={styles.dropdownItemTitle}>{video.title}</span>
+                    <span className={styles.dropdownItemMeta}>
+                      {video.author}
+                      {video.durationSeconds ? ` · ${formatTimestamp(video.durationSeconds)}` : ""}
+                    </span>
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         )}

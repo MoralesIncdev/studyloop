@@ -137,7 +137,8 @@
   cursor: pointer;
 }
 
-.dropdownItem:hover:not(:disabled) {
+.dropdownItem:hover:not(:disabled),
+.dropdownItemActive {
   background: var(--bg-hover);
 }
 
@@ -147,15 +148,22 @@
 }
 
 .dropdownItemThumb {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: 44px;
+  height: 25px;
+  border-radius: 4px;
   background: var(--bg-chip);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: 11px;
+  overflow: hidden;
+}
+
+.dropdownItemThumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .dropdownItemBody {

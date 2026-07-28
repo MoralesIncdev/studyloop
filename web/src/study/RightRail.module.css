@@ -36,9 +36,11 @@
 }
 
 .cardHeaderStatic {
+  flex: 1;
   padding: 12px 14px;
   font-size: 14px;
   font-weight: 600;
+  min-width: 0;
 }
 
 .cardTitle {
@@ -91,4 +93,114 @@
   font-size: 12px;
   color: var(--text-dim);
   line-height: 1.5;
+}
+
+.upNextList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 10px 12px;
+}
+
+.upNextCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 4px;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+  /* YouTube-hover style: compact rows expand slightly on hover, no layout shift. */
+  transform: scale(1);
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+
+.upNextCard:hover:not(:disabled),
+.upNextCard:focus-visible {
+  background: var(--bg-hover);
+  transform: scale(1.015);
+}
+
+.upNextCard:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.upNextThumb {
+  position: relative;
+  width: 168px;
+  height: 94px;
+  border-radius: 8px;
+  background: var(--bg-chip);
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upNextThumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.upNextThumbGlyph {
+  font-size: 22px;
+  color: var(--text-dim);
+}
+
+.upNextDuration {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.upNextOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upNextBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.upNextTitle {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.upNextAuthor {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.upNextViews {
+  font-size: 11px;
+  color: var(--text-dim);
 }
