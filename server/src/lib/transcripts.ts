@@ -16,8 +16,8 @@ const BjjCorpusSchema = z.object({
   text: z.string().optional(),
   timestamps: z.array(
     z.object({
-      start: z.number(),
-      end: z.number(),
+      start: z.number().nonnegative(),
+      end: z.number().nonnegative(),
       text: z.string(),
       kind: z.string().optional(),
     })
@@ -30,8 +30,8 @@ const BjjCorpusSchema = z.object({
 const WhisperJsonSchema = z.object({
   segments: z.array(
     z.object({
-      start: z.number(),
-      end: z.number(),
+      start: z.number().nonnegative(),
+      end: z.number().nonnegative(),
       text: z.string(),
     })
   ),

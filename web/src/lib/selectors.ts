@@ -4,9 +4,21 @@
 import { findActiveIndex } from "./time";
 import type { ConceptCard, TranscriptSegment } from "./types";
 
-/** Index of the transcript segment currently playing, or -1 before the first segment. */
+/** Tolerance past a segment's `end` before we consider playback to have left it. */
+const SEGMENT_END_GRACE_SECONDS = 0.5;
+
+/**
+ * Index of the transcript segment currently playing, or -1 if `t` is before
+ * the first segment, in a gap between two segments, or past the end of the
+ * last one. A small grace period past `end` absorbs normalization slop
+ * between segment boundaries and the sync engine's ~4Hz sampling.
+ */
 export function activeSegmentIndex(segments: readonly TranscriptSegment[], t: number): number {
-  return findActiveIndex(segments, t, (s) => s.start);
+  const idx = findActiveIndex(segments, t, (s) => s.start);
+  if (idx < 0) return -1;
+  const segment = segments[idx];
+  if (t > segment.end + SEGMENT_END_GRACE_SECONDS) return -1;
+  return idx;
 }
 
 const CONCEPT_WINDOW_SECONDS = 90;

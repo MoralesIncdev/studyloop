@@ -6,7 +6,14 @@ import { api, ApiError } from "../lib/api";
 import { parseHash, routeToHash, type Route } from "../lib/router";
 import { activeSegmentIndex } from "../lib/selectors";
 import { formatTimestamp } from "../lib/time";
-import type { Bubble, LibraryItem, Project, StudyLoopConfig, TranscriptSegment } from "../lib/types";
+import type {
+  Bubble,
+  LibraryItem,
+  Project,
+  StudyLoopConfig,
+  StudyLoopConfigPatch,
+  TranscriptSegment,
+} from "../lib/types";
 import type { PlayerHandle } from "../player/types";
 
 export type DockTab = "notes" | "bubbles" | "concepts";
@@ -66,7 +73,7 @@ export interface StudyLoopStore {
   config: StudyLoopConfig | null;
   configLoading: boolean;
   loadConfig: () => Promise<StudyLoopConfig | null>;
-  saveConfig: (patch: Partial<StudyLoopConfig>) => Promise<StudyLoopConfig>;
+  saveConfig: (patch: StudyLoopConfigPatch) => Promise<StudyLoopConfig>;
 
   // --- projects ----------------------------------------------------------------
   projects: Project[];
@@ -78,11 +85,14 @@ export interface StudyLoopStore {
   // --- current study session ----------------------------------------------------
   currentProject: Project | null;
   currentProjectLoading: boolean;
+  /** Bumped on every loadProjectSession/clearProjectSession call; late responses from a
+   *  superseded call compare their captured id against this and discard themselves. */
+  sessionRequestId: number;
   transcriptSegments: TranscriptSegment[];
   transcriptLoading: boolean;
   loadProjectSession: (id: string) => Promise<void>;
   clearProjectSession: () => void;
-  patchCurrentProject: (patch: Partial<Pick<Project, "title" | "lastPosition">>) => Promise<void>;
+  patchCurrentProject: (patch: Partial<Pick<Project, "title" | "lastPosition" | "watchedUpTo">>) => Promise<void>;
 
   // --- player + sync engine -------------------------------------------------------
   controller: PlayerHandle | null;
@@ -246,9 +256,15 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
         get().pushToast(message, "error");
         throw new ApiError(message, 502);
       }
-      if (resolved.error) get().pushToast(resolved.error, "info");
+      // yt-dlp missing must not block project creation — playback/captions are
+      // a later chunk; the project is still created with title = URL.
+      if (resolved.ytdlpMissing) {
+        get().pushToast("yt-dlp not found — the project was created without a title or captions.", "info");
+      } else if (resolved.error) {
+        get().pushToast(resolved.error, "info");
+      }
       const created = await api.createProject({
-        title: resolved.title ?? undefined,
+        title: resolved.title ?? url,
         source: { type: "youtube", videoId: resolved.videoId, url },
       });
       set((state) => ({ projects: [...state.projects, created] }));
@@ -262,10 +278,23 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   // --- current study session ----------------------------------------------------
   currentProject: null,
   currentProjectLoading: false,
+  sessionRequestId: 0,
   transcriptSegments: [],
   transcriptLoading: false,
   loadProjectSession: async (id) => {
+    // Tag this call with a fresh request id. Every async continuation below
+    // checks it's still current before touching state — if the user
+    // navigates to a different project (or back to the library and into a
+    // third project) before an earlier fetch resolves, that response is
+    // discarded instead of clobbering the now-current session (which was the
+    // "Loading project…" forever bug: a stale response could flip
+    // currentProjectLoading back on, or set currentProject to the wrong id,
+    // after a newer load had already finished).
+    const requestId = get().sessionRequestId + 1;
+    const isCurrent = () => get().sessionRequestId === requestId;
+
     set({
+      sessionRequestId: requestId,
       currentProjectLoading: true,
       currentProject: null,
       transcriptSegments: [],
@@ -287,18 +316,22 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     try {
       project = await api.getProject(id);
     } catch (err) {
+      if (!isCurrent()) return;
       set({ currentProjectLoading: false });
       get().pushToast(`Could not load project: ${errorMessage(err)}`, "error");
       return;
     }
+    if (!isCurrent()) return;
     set({ currentProject: project, currentProjectLoading: false });
 
     const bubblesPromise = (async () => {
       set({ bubblesLoading: true });
       try {
         const res = await api.listBubbles(id);
+        if (!isCurrent()) return;
         set({ bubbles: sortBubbles(res.bubbles), bubblesLoading: false });
       } catch (err) {
+        if (!isCurrent()) return;
         set({ bubblesLoading: false });
         get().pushToast(`Could not load bubbles: ${errorMessage(err)}`, "error");
       }
@@ -307,8 +340,10 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     const notesPromise = (async () => {
       try {
         const content = await api.getNotes(id);
+        if (!isCurrent()) return;
         set({ notes: content, notesLoaded: true });
       } catch (err) {
+        if (!isCurrent()) return;
         set({ notesLoaded: true });
         get().pushToast(`Could not load notes: ${errorMessage(err)}`, "error");
       }
@@ -318,8 +353,10 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       set({ transcriptLoading: true });
       try {
         const res = await api.getTranscript(project.transcript.path);
+        if (!isCurrent()) return;
         set({ transcriptSegments: res.segments, transcriptLoading: false });
       } catch (err) {
+        if (!isCurrent()) return;
         set({ transcriptLoading: false });
         get().pushToast(`Could not load transcript: ${errorMessage(err)}`, "error");
       }
@@ -329,6 +366,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   },
   clearProjectSession: () => {
     set((state) => ({
+      sessionRequestId: state.sessionRequestId + 1,
       currentProject: null,
       transcriptSegments: [],
       controller: null,

@@ -8,26 +8,86 @@ export class YtDlpNotFoundError extends Error {
   }
 }
 
+export class InvalidYoutubeUrlError extends Error {
+  constructor(message = "URL must be an https:// link to a youtube.com or youtu.be video") {
+    super(message);
+    this.name = "InvalidYoutubeUrlError";
+  }
+}
+
+const ALLOWED_YOUTUBE_HOSTS = new Set([
+  "youtube.com",
+  "www.youtube.com",
+  "m.youtube.com",
+  "youtu.be",
+  "music.youtube.com",
+]);
+
+/** Validates a URL is https and points at an allowlisted YouTube host. Throws otherwise. */
+export function assertValidYoutubeUrl(url: string): URL {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new InvalidYoutubeUrlError();
+  }
+  if (parsed.protocol !== "https:") throw new InvalidYoutubeUrlError();
+  if (!ALLOWED_YOUTUBE_HOSTS.has(parsed.hostname.toLowerCase())) throw new InvalidYoutubeUrlError();
+  return parsed;
+}
+
 function ytdlpBin(): string {
   return process.env.STUDYLOOP_YTDLP_BIN || "yt-dlp";
 }
+
+const SPAWN_TIMEOUT_MS = 30_000;
+const MAX_STDOUT_BYTES = 10 * 1024 * 1024;
 
 function run(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(ytdlpBin(), args, { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (chunk) => {
+    let stdoutBytes = 0;
+    let settled = false;
+
+    const finishReject = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.kill("SIGKILL");
+      reject(err);
+    };
+
+    const timer = setTimeout(() => {
+      finishReject(new Error(`yt-dlp timed out after ${SPAWN_TIMEOUT_MS}ms`));
+    }, SPAWN_TIMEOUT_MS);
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      if (settled) return;
+      stdoutBytes += chunk.length;
+      if (stdoutBytes > MAX_STDOUT_BYTES) {
+        finishReject(new Error("yt-dlp stdout exceeded the 10MB cap"));
+        return;
+      }
       stdout += chunk.toString();
     });
-    child.stderr.on("data", (chunk) => {
+    child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
     });
     child.on("error", (err: NodeJS.ErrnoException) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       if (err.code === "ENOENT") reject(new YtDlpNotFoundError());
       else reject(err);
     });
-    child.on("close", (code) => resolve({ code, stdout, stderr }));
+    child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ code, stdout, stderr });
+    });
   });
 }
 
@@ -46,6 +106,7 @@ export function extractVideoId(url: string): string | null {
 
 /** Resolves a direct playable stream URL for a YouTube video (`yt-dlp -g`). */
 export async function resolveStreamUrl(url: string): Promise<string> {
+  assertValidYoutubeUrl(url);
   const { code, stdout, stderr } = await run(["-g", "-f", "best[height<=720]", url]);
   if (code !== 0 || !stdout.trim()) {
     throw new Error(`yt-dlp could not resolve a stream URL: ${stderr.slice(-500)}`);
@@ -55,12 +116,20 @@ export async function resolveStreamUrl(url: string): Promise<string> {
 
 export interface YoutubeMetadata {
   videoId: string;
-  title: string;
-  captions?: NormalizedTranscript["segments"];
+  title: string | null;
+  captions?: NormalizedTranscript["segments"] | null;
+  /** True if yt-dlp isn't installed — playback/project-creation still proceed without it. */
+  ytdlpMissing?: boolean;
 }
 
-/** Resolves title + auto-captions for a YouTube URL via yt-dlp, without downloading video. */
+/**
+ * Resolves title + auto-captions for a YouTube URL via yt-dlp, without
+ * downloading video. If yt-dlp isn't installed, this does NOT throw/block —
+ * it falls back to a locally-extracted videoId with `ytdlpMissing: true` so
+ * project creation can proceed without captions/title.
+ */
 export async function resolveYoutube(url: string): Promise<YoutubeMetadata> {
+  assertValidYoutubeUrl(url);
   const videoId = extractVideoId(url) ?? url;
   const os = await import("node:os");
   const path = await import("node:path");
@@ -68,22 +137,39 @@ export async function resolveYoutube(url: string): Promise<YoutubeMetadata> {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "studyloop-yt-"));
   const outTemplate = path.join(tmpDir, "%(id)s.%(ext)s");
 
-  const { code: subsCode, stderr: subsStderr } = await run([
-    "--skip-download",
-    "--write-auto-sub",
-    "--sub-lang",
-    "en",
-    "--sub-format",
-    "vtt",
-    "-o",
-    outTemplate,
-    url,
-  ]);
+  let subsCode: number | null = null;
+  let subsStderr = "";
+  try {
+    const subsResult = await run([
+      "--skip-download",
+      "--write-auto-sub",
+      "--sub-lang",
+      "en",
+      "--sub-format",
+      "vtt",
+      "-o",
+      outTemplate,
+      url,
+    ]);
+    subsCode = subsResult.code;
+    subsStderr = subsResult.stderr;
+  } catch (err) {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    if (err instanceof YtDlpNotFoundError) {
+      return { videoId, title: null, captions: null, ytdlpMissing: true };
+    }
+    throw err;
+  }
 
-  let title = videoId;
-  const meta = await run(["--print", "%(title)s", "--skip-download", url]);
-  if (meta.code === 0 && meta.stdout.trim()) {
-    title = meta.stdout.trim().split("\n")[0];
+  let title: string | null = videoId;
+  try {
+    const meta = await run(["--print", "%(title)s", "--skip-download", url]);
+    if (meta.code === 0 && meta.stdout.trim()) {
+      title = meta.stdout.trim().split("\n")[0];
+    }
+  } catch (err) {
+    if (!(err instanceof YtDlpNotFoundError)) throw err;
+    // yt-dlp vanished between the two calls (unlikely) — keep the placeholder title.
   }
 
   let captions: NormalizedTranscript["segments"] | undefined;
@@ -105,5 +191,5 @@ export async function resolveYoutube(url: string): Promise<YoutubeMetadata> {
     throw new Error(`yt-dlp failed: ${subsStderr.slice(-500)}`);
   }
 
-  return { videoId: videoId ?? url, title, captions };
+  return { videoId, title, captions };
 }

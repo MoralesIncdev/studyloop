@@ -1,9 +1,10 @@
 import fs from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { getConfig, resolveDataDir } from "../config.js";
+import { getConfig, resolveDataDir, resolveRoots } from "../config.js";
+import { isPathAllowedCanonical } from "../lib/paths.js";
 import { detectProfileAndParse, parseConceptDoc } from "../lib/concepts.js";
-import { readProject, writeProject } from "../lib/store.js";
+import { readProject } from "../lib/store.js";
 
 const IdParamSchema = z.object({ id: z.string().min(1) });
 
@@ -21,6 +22,13 @@ export async function conceptsRoutes(app: FastifyInstance): Promise<void> {
       return { concepts: [] };
     }
 
+    // Concept-doc path is stored on the project (validated at creation/PATCH
+    // time), but roots can change via Settings after that — revalidate here
+    // too rather than trusting whatever's on disk.
+    if (!(await isPathAllowedCanonical(project.conceptDoc.path, resolveRoots(config)))) {
+      return reply.status(403).send({ error: "conceptDoc.path is outside configured roots" });
+    }
+
     let markdown: string;
     try {
       markdown = await fs.readFile(project.conceptDoc.path, "utf8");
@@ -35,8 +43,12 @@ export async function conceptsRoutes(app: FastifyInstance): Promise<void> {
       return { profile: project.conceptDoc.profile, concepts };
     }
 
+    // GET must not have write side effects: detect the profile fresh on every
+    // request instead of persisting it back onto the project. Persisting from
+    // a GET raced with concurrent writers (two GETs, or a GET racing a PATCH,
+    // could stomp each other's project.json) and is surprising for a read
+    // endpoint besides. Re-running detection is cheap (markdown regex parse).
     const { profile, cards } = detectProfileAndParse(markdown, videoPath);
-    await writeProject(dataDir, { ...project, conceptDoc: { ...project.conceptDoc, profile }, updatedAt: new Date().toISOString() });
     return { profile, concepts: cards };
   });
 }

@@ -59,19 +59,31 @@ export function StudyView({ projectId }: Props): JSX.Element {
     setStartAt(0);
   }, [isSameProjectLoaded, currentProject, startAt]);
 
-  // Persist lastPosition every 10s while a local project is open.
+  // Persist lastPosition (and the monotonic watchedUpTo high-water mark)
+  // every 10s while a local project is open. Serialized: if a patch is still
+  // in flight when the next tick (or unmount) fires, that tick is skipped
+  // rather than firing a second overlapping PATCH — an out-of-order response
+  // to an earlier request could otherwise stomp a later position.
   const patchRef = useRef(patchCurrentProject);
   patchRef.current = patchCurrentProject;
+  const patchInFlightRef = useRef(false);
   useEffect(() => {
     if (!isLocal || !isSameProjectLoaded) return undefined;
-    const interval = setInterval(() => {
+    const doPatch = () => {
+      if (patchInFlightRef.current) return;
       const t = useStudyLoopStore.getState().currentTime;
-      void patchRef.current({ lastPosition: t });
-    }, PATCH_INTERVAL_MS);
+      const prevWatchedUpTo = useStudyLoopStore.getState().currentProject?.watchedUpTo ?? 0;
+      const watchedUpTo = Math.max(prevWatchedUpTo, t);
+      patchInFlightRef.current = true;
+      void patchRef.current({ lastPosition: t, watchedUpTo }).finally(() => {
+        patchInFlightRef.current = false;
+      });
+    };
+    const interval = setInterval(doPatch, PATCH_INTERVAL_MS);
     return () => {
       clearInterval(interval);
       const t = useStudyLoopStore.getState().currentTime;
-      if (t > 0) void patchRef.current({ lastPosition: t });
+      if (t > 0) doPatch();
     };
   }, [isLocal, isSameProjectLoaded, projectId]);
 

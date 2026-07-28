@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { getConfig } from "../config.js";
-import { isPathAllowed } from "../lib/paths.js";
+import { getConfig, resolveRoots } from "../config.js";
+import { isPathAllowedCanonical } from "../lib/paths.js";
 import { loadTranscriptFromText, TranscriptParseError } from "../lib/transcripts.js";
 
 const QuerySchema = z.object({ path: z.string().min(1) });
@@ -16,7 +16,7 @@ export async function transcriptRoutes(app: FastifyInstance): Promise<void> {
     const filePath = parsed.data.path;
 
     const config = await getConfig();
-    if (!isPathAllowed(filePath, config)) {
+    if (!(await isPathAllowedCanonical(filePath, resolveRoots(config)))) {
       return reply.status(403).send({ error: "Path is outside configured roots" });
     }
 

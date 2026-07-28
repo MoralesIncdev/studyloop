@@ -16,8 +16,13 @@ import { configRoutes } from "./routes/config.js";
 import { mediaRoutes } from "./routes/media.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.PORT ?? 4600);
+const PORT = Number(process.env.PORT ?? process.env.STUDYLOOP_PORT ?? 4600);
+// Loopback by default — this app has no auth, so anything beyond localhost is
+// an explicit, advanced opt-in (e.g. accessing from another device on the LAN).
+const HOST = process.env.HOST ?? "127.0.0.1";
 const WEB_DIST = path.resolve(__dirname, "../../web/dist");
+
+const LOCALHOST_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
 
 async function main(): Promise<void> {
   const config = await getConfig();
@@ -25,7 +30,14 @@ async function main(): Promise<void> {
 
   const app = Fastify({ logger: true });
 
-  await app.register(cors, { origin: true });
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      // No Origin header (curl, same-origin requests, server-to-server) — allow.
+      if (!origin) return cb(null, true);
+      if (LOCALHOST_ORIGIN_RE.test(origin)) return cb(null, true);
+      cb(new Error("Not allowed by CORS: only localhost origins are permitted"), false);
+    },
+  });
 
   await app.register(libraryRoutes);
   await app.register(videoRoutes);
@@ -53,8 +65,8 @@ async function main(): Promise<void> {
   }
 
   try {
-    await app.listen({ port: PORT, host: "0.0.0.0" });
-    app.log.info(`StudyLoop server listening on http://localhost:${PORT}`);
+    await app.listen({ port: PORT, host: HOST });
+    app.log.info(`StudyLoop server listening on http://${HOST}:${PORT}`);
   } catch (err) {
     const nodeErr = err as NodeJS.ErrnoException;
     if (nodeErr.code === "EADDRINUSE") {

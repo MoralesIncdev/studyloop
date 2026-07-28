@@ -1,14 +1,15 @@
 import type { FastifyInstance } from "fastify";
-import { getConfig } from "../config.js";
+import { getConfig, resolveRoots } from "../config.js";
 import { scanLibrary, type ScanResult } from "../lib/scan.js";
 
 let cachedResult: ScanResult | null = null;
 
 async function runScan(): Promise<ScanResult> {
   const config = await getConfig();
+  const roots = resolveRoots(config);
   const result = await scanLibrary({
-    libraryRoots: config.libraryRoots,
-    transcriptRoots: config.transcriptRoots,
+    libraryRoots: roots.libraryRoots,
+    transcriptRoots: roots.transcriptRoots,
   });
   cachedResult = result;
   return result;

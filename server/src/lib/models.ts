@@ -26,7 +26,9 @@ export const ProjectSchema = z.object({
   conceptDoc: ConceptDocRefSchema.optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
-  lastPosition: z.number().default(0),
+  lastPosition: z.number().nonnegative().default(0),
+  /** Furthest playback position ever reached (monotonic; drives compiled "covered" concepts). */
+  watchedUpTo: z.number().nonnegative().default(0),
 });
 export type Project = z.infer<typeof ProjectSchema>;
 
@@ -41,7 +43,8 @@ export type CreateProjectBody = z.infer<typeof CreateProjectBodySchema>;
 
 export const PatchProjectBodySchema = z.object({
   title: z.string().optional(),
-  lastPosition: z.number().optional(),
+  lastPosition: z.number().nonnegative().optional(),
+  watchedUpTo: z.number().nonnegative().optional(),
   conceptDoc: ConceptDocRefSchema.optional(),
   transcript: TranscriptRefSchema.optional(),
 });
@@ -49,7 +52,7 @@ export type PatchProjectBody = z.infer<typeof PatchProjectBodySchema>;
 
 export const BubbleSchema = z.object({
   id: z.string(),
-  t: z.number(),
+  t: z.number().nonnegative(),
   text: z.string().default(""),
   shot: z.string().nullable().optional(),
   createdAt: z.string(),
@@ -57,13 +60,13 @@ export const BubbleSchema = z.object({
 export type Bubble = z.infer<typeof BubbleSchema>;
 
 export const CreateBubbleBodySchema = z.object({
-  t: z.number(),
+  t: z.number().nonnegative(),
   text: z.string().default(""),
   shot: z.string().nullable().optional(),
 });
 
 export const PatchBubbleBodySchema = z.object({
-  t: z.number().optional(),
+  t: z.number().nonnegative().optional(),
   text: z.string().optional(),
   shot: z.string().nullable().optional(),
 });

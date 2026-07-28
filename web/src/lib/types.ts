@@ -38,6 +38,8 @@ export interface Project {
   createdAt: string;
   updatedAt: string;
   lastPosition: number;
+  /** Furthest playback position ever reached (monotonic; drives "covered" concepts in compile). */
+  watchedUpTo: number;
 }
 
 export interface CreateProjectBody {
@@ -51,6 +53,7 @@ export interface CreateProjectBody {
 export interface PatchProjectBody {
   title?: string;
   lastPosition?: number;
+  watchedUpTo?: number;
   conceptDoc?: ConceptDocRef;
   transcript?: TranscriptRef;
 }
@@ -85,12 +88,22 @@ export interface Bubble {
   createdAt: string;
 }
 
+/** GET/PUT /api/config response shape — the server never echoes the actual key back. */
 export interface StudyLoopConfig {
   dataDir: string;
   libraryRoots: string[];
   transcriptRoots: string[];
   conceptDocs: string[];
-  anthropicApiKey: string | null;
+  anthropicApiKeySet: boolean;
+}
+
+/** Body accepted by PUT /api/config — this is the only place the plaintext key travels. */
+export interface StudyLoopConfigPatch {
+  dataDir?: string;
+  libraryRoots?: string[];
+  transcriptRoots?: string[];
+  conceptDocs?: string[];
+  anthropicApiKey?: string | null;
 }
 
 export interface YoutubeResolveResponse {
@@ -98,4 +111,6 @@ export interface YoutubeResolveResponse {
   title: string | null;
   captions?: TranscriptSegment[];
   error?: string;
+  /** True if yt-dlp isn't installed — the project should still be created (title = URL). */
+  ytdlpMissing?: boolean;
 }

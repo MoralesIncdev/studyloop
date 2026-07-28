@@ -9,6 +9,7 @@ import type {
   PatchProjectBody,
   Project,
   StudyLoopConfig,
+  StudyLoopConfigPatch,
   TranscriptResponse,
   YoutubeResolveResponse,
 } from "./types";
@@ -57,7 +58,7 @@ export const api = {
   rescanLibrary: () => request<LibraryResponse>("/api/library/rescan", { method: "POST" }),
 
   getConfig: () => request<StudyLoopConfig>("/api/config"),
-  putConfig: (patch: Partial<StudyLoopConfig>) =>
+  putConfig: (patch: StudyLoopConfigPatch) =>
     request<StudyLoopConfig>("/api/config", { method: "PUT", body: JSON.stringify(patch) }),
 
   getTranscript: (path: string) =>

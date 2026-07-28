@@ -54,29 +54,63 @@ studyloop/
 ```
 - Missing/unmounted roots are skipped with a warning in the library response, never a crash.
 - `GET /api/config` and `PUT /api/config` let the web app edit this (Settings screen).
+  **`anthropicApiKey` is write-only from the browser's point of view:** `GET
+  /api/config` never returns it — the response substitutes `anthropicApiKeySet:
+  boolean` for the `anthropicApiKey` field. `PUT /api/config` still accepts
+  `anthropicApiKey` (string to set it, `null` to clear it) but its response is
+  redacted the same way, so the plaintext key never round-trips back to the client.
+- `~` in `dataDir` **and** every entry of `libraryRoots` / `transcriptRoots` /
+  `conceptDocs` is expanded to the user's home directory before use.
+- Server port is controlled by `PORT` (or `STUDYLOOP_PORT`) env var, default `4600`;
+  the Vite dev proxy reads the same variable. `HOST` controls the bind interface,
+  default `127.0.0.1` (loopback-only — no auth exists, so anything broader is an
+  explicit opt-in). CORS only allows `localhost`/`127.0.0.1`/`[::1]` origins (any port).
 
 ## Data model — project folder `<dataDir>/projects/<id>/`
 ```
 project.json   { id, title, source: {type:"local"|"youtube", path?|videoId?, url?},
                  transcript: {type:"file"|"none", path?}, conceptDoc: {path?, profile?},
-                 createdAt, updatedAt, lastPosition }
+                 createdAt, updatedAt, lastPosition, watchedUpTo }
 notes.md       long-running notes (markdown; ^t:123.4 tokens rendered as timestamp links)
 bubbles.json   [{ id, t, text, shot?: "shots/<file>.jpg", createdAt }]
 shots/         extracted JPEG frames, named shot-<t-in-ms>.jpg
 exports/       compiled documents
 ```
 Server persists atomically (write temp + rename). No database anywhere.
+All read-modify-write operations against a project's files (bubbles CRUD, project
+PATCH, notes PUT) go through a per-project in-process mutex (promise chain keyed by
+project id) so two concurrent requests against the same project can't race each
+other's read-then-write.
+
+`lastPosition` is "where playback currently is" (drives resume). `watchedUpTo` is the
+**furthest** position ever reached — monotonically non-decreasing, used by compile to
+decide which concepts are "covered" (so scrubbing backward to rewatch a section
+doesn't un-cover concepts you've already passed). On a project.json predating this
+field, it's migrated on read by defaulting to the existing `lastPosition`. The client
+PATCHes `{lastPosition, watchedUpTo: max(prevWatchedUpTo, currentPosition)}` every 10s;
+the server also enforces the max server-side against the stored value as a backstop.
+The periodic PATCH is serialized client-side (skipped if one is already in flight).
 
 ## Server API (all JSON unless noted)
 - `GET /api/library` → `{ items: [{videoPath, title, durationSeconds?, transcriptPath?,
   instructor?, series?, hasLesson?}], warnings: [] }` — scans libraryRoots for video
   files AND transcriptRoots for transcript JSONs whose `source_video` exists; merges.
 - `GET /api/video/stream?path=<abs>` — HTTP 206 range streaming. **Security:** path must
-  be inside a configured root; otherwise 403.
+  resolve (via `fs.realpath` of the path or its nearest existing ancestor, not just a
+  string prefix check) inside a configured root; otherwise 403. Supports standard
+  `bytes=start-end` and suffix (`bytes=-N`, last N bytes) ranges; malformed ranges get
+  416, multi-range requests fall back to a full 200 response (both per RFC 7233).
 - `GET /api/transcript?path=<abs>` → normalized `{ segments: [{start, end, text}] }`.
   Loaders: (a) BJJ-corpus JSON `{timestamps:[{start,end,text}]}`, (b) .srt, (c) .vtt.
+  Same realpath-canonical root guard as video streaming.
 - `POST /api/projects` `{source, transcriptPath?, conceptDocPath?}` → creates project.
-- `GET /api/projects` / `GET /api/projects/:id` / `PATCH /api/projects/:id` (lastPosition etc.)
+  Same realpath-canonical guard on `source.path`/`transcriptPath`/`conceptDocPath`;
+  `source.type: "youtube"` URLs are validated (https, allowlisted YouTube hosts) the
+  same way `/api/youtube/resolve` does.
+- `GET /api/projects` / `GET /api/projects/:id` / `PATCH /api/projects/:id`
+  (`lastPosition`, `watchedUpTo`, etc.) — PATCH revalidates any path-bearing fields
+  (`conceptDoc.path`, `transcript.path`) against the configured roots exactly like
+  project creation does, not just at creation time.
 - `GET/PUT /api/projects/:id/notes` — raw markdown body.
 - `GET/POST/PATCH/DELETE /api/projects/:id/bubbles`
 - `POST /api/projects/:id/shots` `{t}` → grabs frame via ffmpeg from local file
@@ -85,38 +119,61 @@ Server persists atomically (write temp + rename). No database anywhere.
   same ffmpeg call against the URL; on failure return `{shot: null, error}` — UI still
   creates the bubble without an image.
 - `GET /api/projects/:id/concepts` → `[{id, title, body, anchors:[{t}], raw}]`
-  parsed from the attached concept doc (see Concept profiles).
+  parsed from the attached concept doc (see Concept profiles), re-parsed fresh on every
+  request. A GET never persists (no auto-detected profile write-back — parsing is cheap
+  enough to redo, and persisting from a GET risked racing a concurrent writer).
 - `POST /api/projects/:id/compile` → writes `exports/study-<date>.md`, returns
   `{path, markdown}`. Contents: title/source header → long notes (timestamp tokens
   become `[mm:ss]` links) → chronological bubbles with inline `![shot]` images
-  (relative paths) → concepts list (covered = playback passed an anchor). ONLY user
-  captures + covered concepts; never dump full transcript or all cards.
-- `POST /api/youtube/resolve` `{url}` → `{videoId, title, captions?: segments}` using
-  `yt-dlp --skip-download --write-auto-subs` (vtt → normalized segments). yt-dlp absent →
-  clear error; playback still works without captions.
+  (relative paths) → concepts list (covered = `watchedUpTo` passed an anchor, falling
+  back to `lastPosition` for pre-migration projects). ONLY user captures + covered
+  concepts; never dump full transcript or all cards.
+- `POST /api/youtube/resolve` `{url}` → `{videoId, title, captions?: segments,
+  ytdlpMissing?}` using `yt-dlp --skip-download --write-auto-subs` (vtt → normalized
+  segments). URL must be `https://` and match an allowlisted YouTube host
+  (youtube.com, www.youtube.com, m.youtube.com, youtu.be, music.youtube.com) — anything
+  else is a 400. Every yt-dlp invocation has a 30s spawn timeout and a 10MB stdout cap.
+  yt-dlp absent → **does not block project creation**: `videoId` is still extracted
+  locally from the URL, `title`/`captions` are `null`, `ytdlpMissing: true`; the web
+  app creates the project anyway with `title = url`.
 - `GET /api/media/:projectId/shots/<file>` — serves shot images.
 
 ## Concept-doc profiles (`server/src/lib/concepts.ts`)
 1. `bjj-curriculum`: split on `##`/`###` headings; extract time anchors from citation
    lines matching `/(Seated|Supine)\s+V(?:ol)?\.?\s*(\d+).*?@\s*(\d+:)?\d+:\d{2}/g` plus
-   any bare `@ mm:ss` / `@ h:mm:ss`. An anchor applies to the project only if the volume
-   reference matches the project's video (match via filename containing volume number
-   AND seated/supine keyword); unmatched anchors are kept with `t:null` (shown in the
-   "all concepts" list, never auto-surfaced).
+   any bare `@ mm:ss` / `@ h:mm:ss`. An anchor whose cluster is preceded by a
+   `Seated/Supine Vol N` citation on the same line applies to the project only if that
+   citation's type+volume matches the project's video (match via filename containing
+   volume number AND seated/supine keyword); non-matching citations are kept with
+   `t:null` (shown in the "all concepts" list, never auto-surfaced). A **bare** `@
+   mm:ss` cluster with no volume citation on its line isn't scoped to any volume, so it
+   applies to every project (`t` set, never null).
 2. `headings`: any markdown; each `##` section is a card; anchors = any `@ mm:ss` or
    `[mm:ss]` tokens found in the section body.
-Profile auto-detect: try bjj-curriculum; if <2 anchored cards, fall back to headings.
+Profile auto-detect: bjj-curriculum is only attempted when the doc contains at least
+one genuine `Seated/Supine Vol N` citation (a bare `@ mm:ss` alone isn't evidence of
+BJJ-style formatting); of those, fall back to headings if <2 anchored cards.
 
 ## Frontend behavior contracts
 - **Sync engine:** rAF-throttled (~4Hz) read of player currentTime into zustand.
-  Derived selectors (binary search over sorted arrays): activeSegment, activeConcepts
-  (t within [anchor, anchor+90s] window), passedConcepts. All panes subscribe.
-- **TranscriptPane:** virtualized list (react-window or simple windowing); active
+  Derived selectors (binary search over sorted arrays): activeSegment (requires `t <=
+  segment.end` + 0.5s grace — no active segment in a gap between segments or past the
+  end of the last one), activeConcepts (t within [anchor, anchor+90s] window),
+  passedConcepts. All panes subscribe.
+- **TranscriptPane:** virtualized list (react-window or simple windowing) — search
+  results are windowed the same way as the full list, not rendered in full; active
   segment highlighted + kept in view (unless user scrolled recently — 5s hold-off);
   click seeks; search box filters + Enter jumps.
 - **Player interface:** `{play, pause, seek(t), getCurrentTime(), getDuration(),
   setRate(r), on(event)}` implemented by LocalVideoPlayer (<video>) and
   YouTubePlayer (IFrame API). Seek bar shows bubble pins + concept ticks.
+  LocalVideoPlayer applies the store's current `playbackRate` on mount and again on
+  `loadedmetadata`, so a rate change made on one video carries over to the next.
+- **Loading a project session:** each `loadProjectSession(id)` call is tagged with a
+  request id; if a newer call (or a return to the library) supersedes it before its
+  fetches resolve, the stale response is discarded rather than applied — otherwise a
+  slow response for a project you've since navigated away from could leave the view
+  stuck on "Loading project…" or show the wrong project's data.
 - **Hotkeys** (disabled while typing in inputs/textareas):
   space play/pause · J/L −/+10s · ←/→ −/+5s · K pause · ,/. speed −/+0.25 (0.5–2.5)
   · A/B set loop points, Shift+A clear · N notation · S screenshot-only.
@@ -132,7 +189,9 @@ Profile auto-detect: try bjj-curriculum; if <2 anchored cards, fall back to head
   uncaptioned shots show a subtle "no caption" badge.
 - **Compile button:** calls compile, shows the markdown in a modal with "Reveal in
   Finder" (opens exports/) and Copy buttons.
-- **Resume:** lastPosition PATCHed every 10s; reopening a project offers resume.
+- **Resume:** `{lastPosition, watchedUpTo}` PATCHed every 10s (serialized — skipped if
+  a previous PATCH is still in flight); reopening a project offers resume from
+  `lastPosition`.
 
 ## Out-of-box requirements (non-negotiable)
 - `npm install && npm run dev` from repo root starts both server and web (concurrently),
@@ -140,11 +199,13 @@ Profile auto-detect: try bjj-curriculum; if <2 anchored cards, fall back to head
 - First run with empty config: Library screen shows a friendly setup card → Settings
   to add roots, or paste a YouTube URL to start immediately.
 - ffmpeg missing → screenshots disabled with visible hint, everything else works.
-- All errors surface as toasts, never blank screens. Server 4600 conflict → clear message.
+- All errors surface as toasts, never blank screens. Server port conflict → clear message.
 
 ## Quality bar
 - TypeScript strict; no `any` in exported signatures.
-- Server: input validation on every route (zod); path-traversal guard on file params.
+- Server: input validation on every route (zod); path-traversal guard on file params
+  using realpath-canonical root checks (not lexical prefix checks alone — a symlink
+  inside an allowed root can't be used to escape it).
 - Vitest: unit tests for transcript loaders, concept parsers, time utils, compile
   renderer (golden file). No E2E suite in v1.
 - UI: dark theme default, clean/minimal, keyboard-first. No component library; plain

@@ -23,6 +23,9 @@ export function SettingsView(): JSX.Element {
   const [libraryRoots, setLibraryRoots] = useState("");
   const [transcriptRoots, setTranscriptRoots] = useState("");
   const [conceptDocs, setConceptDocs] = useState("");
+  // The server never sends the actual key back (GET /api/config redacts it to
+  // `anthropicApiKeySet`), so this field always starts empty — typing in it
+  // sets/replaces the key, leaving it blank keeps whatever's already saved.
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -37,7 +40,6 @@ export function SettingsView(): JSX.Element {
     setLibraryRoots(config.libraryRoots.join("\n"));
     setTranscriptRoots(config.transcriptRoots.join("\n"));
     setConceptDocs(config.conceptDocs.join("\n"));
-    setAnthropicApiKey(config.anthropicApiKey ?? "");
     setLoaded(true);
   }, [config, loaded]);
 
@@ -45,13 +47,18 @@ export function SettingsView(): JSX.Element {
     e.preventDefault();
     setSaving(true);
     try {
+      const trimmedKey = anthropicApiKey.trim();
       await saveConfig({
         dataDir: dataDir.trim() || "~/StudyLoop",
         libraryRoots: splitPaths(libraryRoots),
         transcriptRoots: splitPaths(transcriptRoots),
         conceptDocs: splitPaths(conceptDocs),
-        anthropicApiKey: anthropicApiKey.trim() || null,
+        // Omit entirely when left blank — sending `null` here would clear an
+        // already-saved key just because the field wasn't touched. Use the
+        // "Clear key" button for that instead.
+        ...(trimmedKey ? { anthropicApiKey: trimmedKey } : {}),
       });
+      setAnthropicApiKey("");
       pushToast("Settings saved", "success");
       await rescanLibrary();
       navigate({ view: "library" });
@@ -59,6 +66,16 @@ export function SettingsView(): JSX.Element {
       // store already toasted the error
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleClearKey = async () => {
+    try {
+      await saveConfig({ anthropicApiKey: null });
+      setAnthropicApiKey("");
+      pushToast("API key cleared", "success");
+    } catch {
+      // store already toasted the error
     }
   };
 
@@ -122,15 +139,25 @@ export function SettingsView(): JSX.Element {
 
         <label className={styles.field}>
           <span className={styles.label}>Anthropic API key</span>
-          <span className={styles.hint}>Optional. Not required for playback, notes, or transcripts.</span>
+          <span className={styles.hint}>
+            Optional. Not required for playback, notes, or transcripts.{" "}
+            {config?.anthropicApiKeySet
+              ? "A key is currently saved — leave blank to keep it, or type a new one to replace it."
+              : "No key saved yet."}
+          </span>
           <input
             type="password"
             className={styles.input}
             value={anthropicApiKey}
             onChange={(e) => setAnthropicApiKey(e.target.value)}
-            placeholder="sk-ant-…"
+            placeholder={config?.anthropicApiKeySet ? "•••••••• (leave blank to keep)" : "sk-ant-…"}
             autoComplete="off"
           />
+          {config?.anthropicApiKeySet && (
+            <button type="button" className={styles.secondaryButton} onClick={() => void handleClearKey()}>
+              Clear key
+            </button>
+          )}
         </label>
 
         <div className={styles.actions}>

@@ -2,8 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { getConfig } from "../config.js";
-import { isInsideAnyRoot } from "../lib/paths.js";
+import { getConfig, resolveRoots } from "../config.js";
+import { isInsideAnyRootCanonical } from "../lib/paths.js";
 
 const QuerySchema = z.object({ path: z.string().min(1) });
 
@@ -16,6 +16,54 @@ const MIME_BY_EXT: Record<string, string> = {
   ".avi": "video/x-msvideo",
 };
 
+interface ParsedRange {
+  start: number;
+  end: number;
+}
+
+/**
+ * Parses a single-range `Range: bytes=...` header per RFC 7233 §2.1/§3.1.
+ * Returns:
+ *  - `"none"` if there was no Range header (caller should send the full file),
+ *  - `"unsupported"` if the header requests multiple ranges (comma-separated)
+ *    — servers MAY ignore these and fall back to a full 200 response,
+ *  - `"invalid"` if the header is malformed or unsatisfiable for `size` —
+ *    caller should respond 416,
+ *  - a `{start, end}` pair (inclusive, clamped to `size`) otherwise.
+ */
+export function parseRangeHeader(
+  rangeHeader: string | undefined,
+  size: number
+): "none" | "unsupported" | "invalid" | ParsedRange {
+  if (!rangeHeader) return "none";
+  const trimmed = rangeHeader.trim();
+  if (trimmed.includes(",")) return "unsupported";
+
+  const match = /^bytes=(\d*)-(\d*)$/.exec(trimmed);
+  if (!match) return "invalid";
+  const [, startStr, endStr] = match;
+  if (startStr === "" && endStr === "") return "invalid";
+
+  let start: number;
+  let end: number;
+  if (startStr === "") {
+    // Suffix range: bytes=-N -> the final N bytes of the resource.
+    const suffixLength = Number(endStr);
+    if (!Number.isFinite(suffixLength) || suffixLength <= 0) return "invalid";
+    if (size === 0) return "invalid";
+    start = Math.max(0, size - suffixLength);
+    end = size - 1;
+  } else {
+    start = Number(startStr);
+    end = endStr === "" ? size - 1 : Number(endStr);
+  }
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start > end || start >= size) {
+    return "invalid";
+  }
+  return { start, end: Math.min(end, size - 1) };
+}
+
 export async function videoRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/video/stream", async (request, reply) => {
     const parsed = QuerySchema.safeParse(request.query);
@@ -25,7 +73,8 @@ export async function videoRoutes(app: FastifyInstance): Promise<void> {
     const filePath = parsed.data.path;
 
     const config = await getConfig();
-    if (!isInsideAnyRoot(filePath, config.libraryRoots)) {
+    const { libraryRoots } = resolveRoots(config);
+    if (!(await isInsideAnyRootCanonical(filePath, libraryRoots))) {
       return reply.status(403).send({ error: "Path is outside configured library roots" });
     }
 
@@ -40,27 +89,20 @@ export async function videoRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const contentType = MIME_BY_EXT[path.extname(filePath).toLowerCase()] ?? "application/octet-stream";
-    const range = request.headers.range;
+    const range = parseRangeHeader(request.headers.range, stat.size);
 
-    if (!range) {
+    if (range === "none" || range === "unsupported") {
       reply.header("Content-Type", contentType);
       reply.header("Content-Length", stat.size);
       reply.header("Accept-Ranges", "bytes");
       return reply.send(fs.createReadStream(filePath));
     }
-
-    const match = /^bytes=(\d*)-(\d*)$/.exec(range);
-    if (!match) {
-      reply.header("Content-Range", `bytes */${stat.size}`);
-      return reply.status(416).send();
-    }
-    const start = match[1] ? Number(match[1]) : 0;
-    const end = match[2] ? Number(match[2]) : stat.size - 1;
-    if (Number.isNaN(start) || Number.isNaN(end) || start > end || end >= stat.size) {
+    if (range === "invalid") {
       reply.header("Content-Range", `bytes */${stat.size}`);
       return reply.status(416).send();
     }
 
+    const { start, end } = range;
     const chunkSize = end - start + 1;
     reply.status(206);
     reply.header("Content-Type", contentType);

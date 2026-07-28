@@ -47,7 +47,7 @@ export async function compileRoutes(app: FastifyInstance): Promise<void> {
       notes,
       bubbles,
       concepts,
-      watchedUpTo: project.lastPosition,
+      watchedUpTo: project.watchedUpTo ?? project.lastPosition,
     });
 
     const dateStr = new Date().toISOString().slice(0, 10);

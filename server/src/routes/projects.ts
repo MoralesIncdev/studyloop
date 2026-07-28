@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { getConfig, resolveDataDir } from "../config.js";
-import { isInsideAnyRoot, isPathAllowed } from "../lib/paths.js";
+import { getConfig, resolveDataDir, resolveRoots } from "../config.js";
+import { isInsideAnyRootCanonical, isPathAllowedCanonical } from "../lib/paths.js";
+import { assertValidYoutubeUrl, InvalidYoutubeUrlError } from "../lib/ytdlp.js";
 import {
   BubbleSchema,
   CreateBubbleBodySchema,
@@ -11,7 +12,18 @@ import {
   type Bubble,
   type Project,
 } from "../lib/models.js";
-import { newId, readBubbles, readNotes, readProject, listProjectIds, writeBubbles, writeNotes, writeProject } from "../lib/store.js";
+import {
+  newId,
+  nextWatchedUpTo,
+  readBubbles,
+  readNotes,
+  readProject,
+  listProjectIds,
+  withProjectLock,
+  writeBubbles,
+  writeNotes,
+  writeProject,
+} from "../lib/store.js";
 
 const IdParamSchema = z.object({ id: z.string().min(1) });
 
@@ -29,14 +41,25 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
     const body = parsed.data;
     const config = await getConfig();
     const dataDir = resolveDataDir(config);
+    const roots = resolveRoots(config);
 
-    if (body.source.type === "local" && !isInsideAnyRoot(body.source.path, config.libraryRoots)) {
+    if (body.source.type === "local" && !(await isInsideAnyRootCanonical(body.source.path, roots.libraryRoots))) {
       return reply.status(403).send({ error: "source.path is outside configured library roots" });
     }
-    if (body.transcriptPath && !isPathAllowed(body.transcriptPath, config)) {
+    if (body.source.type === "youtube") {
+      try {
+        assertValidYoutubeUrl(body.source.url);
+      } catch (err) {
+        if (err instanceof InvalidYoutubeUrlError) {
+          return reply.status(400).send({ error: err.message });
+        }
+        throw err;
+      }
+    }
+    if (body.transcriptPath && !(await isPathAllowedCanonical(body.transcriptPath, roots))) {
       return reply.status(403).send({ error: "transcriptPath is outside configured roots" });
     }
-    if (body.conceptDocPath && !isPathAllowed(body.conceptDocPath, config)) {
+    if (body.conceptDocPath && !(await isPathAllowedCanonical(body.conceptDocPath, roots))) {
       return reply.status(403).send({ error: "conceptDocPath is outside configured roots" });
     }
 
@@ -50,6 +73,7 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
       createdAt: now,
       updatedAt: now,
       lastPosition: 0,
+      watchedUpTo: 0,
     };
     await writeProject(dataDir, project);
     return reply.status(201).send(project);
@@ -82,16 +106,34 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
     }
     const config = await getConfig();
     const dataDir = resolveDataDir(config);
-    const existing = await readProject(dataDir, params.data.id);
-    if (!existing) return reply.status(404).send({ error: "Project not found" });
+    const roots = resolveRoots(config);
 
-    const updated: Project = {
-      ...existing,
-      ...parsed.data,
-      updatedAt: new Date().toISOString(),
-    };
-    await writeProject(dataDir, updated);
-    return updated;
+    // Revalidate any path-bearing fields exactly like project creation does —
+    // otherwise PATCH is a second, unguarded way to point a project at an
+    // arbitrary file on disk.
+    const patch = parsed.data;
+    if (patch.conceptDoc?.path && !(await isPathAllowedCanonical(patch.conceptDoc.path, roots))) {
+      return reply.status(403).send({ error: "conceptDoc.path is outside configured roots" });
+    }
+    if (patch.transcript?.type === "file" && !(await isPathAllowedCanonical(patch.transcript.path, roots))) {
+      return reply.status(403).send({ error: "transcript.path is outside configured roots" });
+    }
+
+    const result = await withProjectLock(params.data.id, async () => {
+      const existing = await readProject(dataDir, params.data.id);
+      if (!existing) return null;
+
+      const updated: Project = {
+        ...existing,
+        ...patch,
+        watchedUpTo: nextWatchedUpTo(existing.watchedUpTo, patch.watchedUpTo),
+        updatedAt: new Date().toISOString(),
+      };
+      await writeProject(dataDir, updated);
+      return updated;
+    });
+    if (!result) return reply.status(404).send({ error: "Project not found" });
+    return result;
   });
 
   // --- notes ---------------------------------------------------------------
@@ -118,9 +160,14 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
 
     const config = await getConfig();
     const dataDir = resolveDataDir(config);
-    const project = await readProject(dataDir, params.data.id);
-    if (!project) return reply.status(404).send({ error: "Project not found" });
-    await writeNotes(dataDir, params.data.id, content);
+
+    const result = await withProjectLock(params.data.id, async () => {
+      const project = await readProject(dataDir, params.data.id);
+      if (!project) return false;
+      await writeNotes(dataDir, params.data.id, content);
+      return true;
+    });
+    if (!result) return reply.status(404).send({ error: "Project not found" });
     return { ok: true };
   });
 
@@ -146,20 +193,25 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
     }
     const config = await getConfig();
     const dataDir = resolveDataDir(config);
-    const project = await readProject(dataDir, params.data.id);
-    if (!project) return reply.status(404).send({ error: "Project not found" });
 
-    const bubbles = await readBubbles(dataDir, params.data.id);
-    const bubble: Bubble = {
-      id: newId(),
-      t: parsed.data.t,
-      text: parsed.data.text,
-      shot: parsed.data.shot ?? null,
-      createdAt: new Date().toISOString(),
-    };
-    bubbles.push(bubble);
-    await writeBubbles(dataDir, params.data.id, bubbles);
-    return reply.status(201).send(bubble);
+    const result = await withProjectLock(params.data.id, async () => {
+      const project = await readProject(dataDir, params.data.id);
+      if (!project) return null;
+
+      const bubbles = await readBubbles(dataDir, params.data.id);
+      const bubble: Bubble = {
+        id: newId(),
+        t: parsed.data.t,
+        text: parsed.data.text,
+        shot: parsed.data.shot ?? null,
+        createdAt: new Date().toISOString(),
+      };
+      bubbles.push(bubble);
+      await writeBubbles(dataDir, params.data.id, bubbles);
+      return bubble;
+    });
+    if (!result) return reply.status(404).send({ error: "Project not found" });
+    return reply.status(201).send(result);
   });
 
   app.patch("/api/projects/:id/bubbles/:bubbleId", async (request, reply) => {
@@ -171,16 +223,22 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
     }
     const config = await getConfig();
     const dataDir = resolveDataDir(config);
-    const project = await readProject(dataDir, params.data.id);
-    if (!project) return reply.status(404).send({ error: "Project not found" });
 
-    const bubbles = await readBubbles(dataDir, params.data.id);
-    const idx = bubbles.findIndex((b) => b.id === params.data.bubbleId);
-    if (idx === -1) return reply.status(404).send({ error: "Bubble not found" });
-    const updated: Bubble = BubbleSchema.parse({ ...bubbles[idx], ...parsed.data });
-    bubbles[idx] = updated;
-    await writeBubbles(dataDir, params.data.id, bubbles);
-    return updated;
+    const result = await withProjectLock(params.data.id, async () => {
+      const project = await readProject(dataDir, params.data.id);
+      if (!project) return { kind: "no-project" as const };
+
+      const bubbles = await readBubbles(dataDir, params.data.id);
+      const idx = bubbles.findIndex((b) => b.id === params.data.bubbleId);
+      if (idx === -1) return { kind: "no-bubble" as const };
+      const updated: Bubble = BubbleSchema.parse({ ...bubbles[idx], ...parsed.data });
+      bubbles[idx] = updated;
+      await writeBubbles(dataDir, params.data.id, bubbles);
+      return { kind: "ok" as const, bubble: updated };
+    });
+    if (result.kind === "no-project") return reply.status(404).send({ error: "Project not found" });
+    if (result.kind === "no-bubble") return reply.status(404).send({ error: "Bubble not found" });
+    return result.bubble;
   });
 
   app.delete("/api/projects/:id/bubbles/:bubbleId", async (request, reply) => {
@@ -188,13 +246,19 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
     if (!params.success) return reply.status(400).send({ error: "Invalid id" });
     const config = await getConfig();
     const dataDir = resolveDataDir(config);
-    const project = await readProject(dataDir, params.data.id);
-    if (!project) return reply.status(404).send({ error: "Project not found" });
 
-    const bubbles = await readBubbles(dataDir, params.data.id);
-    const next = bubbles.filter((b) => b.id !== params.data.bubbleId);
-    if (next.length === bubbles.length) return reply.status(404).send({ error: "Bubble not found" });
-    await writeBubbles(dataDir, params.data.id, next);
+    const result = await withProjectLock(params.data.id, async () => {
+      const project = await readProject(dataDir, params.data.id);
+      if (!project) return "no-project" as const;
+
+      const bubbles = await readBubbles(dataDir, params.data.id);
+      const next = bubbles.filter((b) => b.id !== params.data.bubbleId);
+      if (next.length === bubbles.length) return "no-bubble" as const;
+      await writeBubbles(dataDir, params.data.id, next);
+      return "ok" as const;
+    });
+    if (result === "no-project") return reply.status(404).send({ error: "Project not found" });
+    if (result === "no-bubble") return reply.status(404).send({ error: "Bubble not found" });
     return { ok: true };
   });
 }

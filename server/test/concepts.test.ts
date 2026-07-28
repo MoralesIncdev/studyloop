@@ -74,6 +74,27 @@ describe("bjj-curriculum profile", () => {
     const anchors = extractBjjAnchors("Seated Vol 1 @ 1:00", null);
     expect(anchors).toEqual([{ t: null }]);
   });
+
+  it("a bare @ mm:ss cluster with no volume keyword on its line applies to every project", () => {
+    // No "Seated/Supine Vol N" citation anywhere on this line, so there's no
+    // volume to restrict it to — it should be a real (non-null) anchor
+    // regardless of the project's identity, per SPEC.
+    const anchors = extractBjjAnchors("General note @ 2:30, 3:45", { type: "Seated", volume: 1 });
+    expect(anchors).toEqual([{ t: 2 * 60 + 30 }, { t: 3 * 60 + 45 }]);
+  });
+
+  it("a bare @ mm:ss cluster applies even with no project identity at all", () => {
+    const anchors = extractBjjAnchors("General note @ 2:30", null);
+    expect(anchors).toEqual([{ t: 2 * 60 + 30 }]);
+  });
+
+  it("a bare cluster on its own line still applies even when another line has a non-matching citation", () => {
+    const body = "Supine V3 [file 02] @ 5:15\nGeneral note @ 2:30";
+    const anchors = extractBjjAnchors(body, { type: "Seated", volume: 1 });
+    // First cluster is owned by the Supine V3 keyword (doesn't match Seated Vol 1) -> null.
+    // Second cluster has no keyword on its own line -> applies.
+    expect(anchors).toEqual([{ t: null }, { t: 2 * 60 + 30 }]);
+  });
 });
 
 describe("headings profile", () => {

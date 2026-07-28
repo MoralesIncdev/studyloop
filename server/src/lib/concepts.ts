@@ -139,7 +139,13 @@ export function extractBjjAnchors(body: string, project: ProjectVideoIdentity | 
       if (occ.index > m.index) break;
       if (occ.lineStart === lineStart) owner = occ;
     }
-    const matches = !!(owner && project && owner.type === project.type && owner.volume === project.volume);
+    // A cluster preceded by a "Seated/Supine Vol N" citation only applies if
+    // that citation matches this project's video. A *bare* `@ mm:ss` with no
+    // preceding volume keyword on the line isn't restricted to any volume, so
+    // it applies universally (t set) rather than being marked unmatched.
+    const matches = owner
+      ? !!(project && owner.type === project.type && owner.volume === project.volume)
+      : true;
     for (const timeStr of times) {
       const seconds = parseTimestamp(timeStr);
       if (seconds === null) continue;
@@ -191,15 +197,25 @@ export function parseHeadings(markdown: string): ConceptCard[] {
   return sectionsToCards(sections, (body) => extractHeadingAnchors(body));
 }
 
-/** Try bjj-curriculum first; fall back to headings if fewer than 2 cards have a real anchor. */
+/**
+ * Try bjj-curriculum first; fall back to headings if fewer than 2 cards have
+ * a real anchor. Since bare `@ mm:ss` clusters (no volume keyword) always
+ * produce a real anchor now, a plain markdown doc that merely happens to
+ * contain a couple of timestamp mentions would otherwise look
+ * "bjj-anchored" — so bjj-curriculum is only even attempted when the doc
+ * contains at least one genuine `Seated/Supine Vol N` citation.
+ */
 export function detectProfileAndParse(
   markdown: string,
   videoPath: string | null | undefined
 ): { profile: ConceptProfile; cards: ConceptCard[] } {
-  const bjjCards = parseBjjCurriculum(markdown, videoPath);
-  const anchoredCount = bjjCards.filter((c) => c.anchors.some((a) => a.t !== null)).length;
-  if (anchoredCount >= 2) {
-    return { profile: "bjj-curriculum", cards: bjjCards };
+  const hasVolumeCitation = new RegExp(KEYWORD_VOLUME_RE.source, "i").test(markdown);
+  if (hasVolumeCitation) {
+    const bjjCards = parseBjjCurriculum(markdown, videoPath);
+    const anchoredCount = bjjCards.filter((c) => c.anchors.some((a) => a.t !== null)).length;
+    if (anchoredCount >= 2) {
+      return { profile: "bjj-curriculum", cards: bjjCards };
+    }
   }
   return { profile: "headings", cards: parseHeadings(markdown) };
 }

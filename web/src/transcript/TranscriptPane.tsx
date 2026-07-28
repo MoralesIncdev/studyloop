@@ -46,6 +46,15 @@ export function TranscriptPane({ segments, loading }: Props): JSX.Element {
 
   const visibleList = filteredIndices ?? segments.map((_, i) => i);
 
+  // Reset scroll position when the search query changes — the old scrollTop
+  // was measured against a different (unfiltered, or differently-filtered)
+  // row count and no longer means anything for the new list.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (el) el.scrollTop = 0;
+    setScrollTop(0);
+  }, [query]);
+
   // Measure the scroll container so we know how many rows fit.
   useEffect(() => {
     const el = containerRef.current;
@@ -93,10 +102,14 @@ export function TranscriptPane({ segments, loading }: Props): JSX.Element {
     [controller, filteredIndices, segments]
   );
 
+  // Windowed the same way whether we're showing the full list or search
+  // results — a match list can be long too (a common word in an hour-long
+  // transcript), and rendering it in full defeated the point of virtualizing
+  // the main list in the first place.
   const rowCount = visibleList.length;
-  const startRow = filteredIndices ? 0 : Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
-  const visibleRows = filteredIndices ? rowCount : Math.ceil(viewportHeight / ROW_HEIGHT) + OVERSCAN * 2;
-  const endRow = filteredIndices ? rowCount : Math.min(rowCount, startRow + visibleRows);
+  const startRow = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
+  const visibleRows = Math.ceil(viewportHeight / ROW_HEIGHT) + OVERSCAN * 2;
+  const endRow = Math.min(rowCount, startRow + visibleRows);
 
   const topSpacer = startRow * ROW_HEIGHT;
 

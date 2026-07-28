@@ -67,6 +67,12 @@ export function LocalVideoPlayer({ src, startAt = 0 }: Props): JSX.Element {
     };
     setController(handle);
 
+    // Apply the persisted playback rate immediately — a fresh <video> element
+    // always starts at 1x regardless of what the store (and the visible
+    // speed control) says, so without this a rate set on a previous
+    // video/mount silently stopped applying to the next one.
+    video.playbackRate = useStudyLoopStore.getState().playbackRate;
+
     const onLoadedMetadata = () => {
       const d = Number.isFinite(video.duration) ? video.duration : 0;
       setDuration(d);
@@ -75,6 +81,9 @@ export function LocalVideoPlayer({ src, startAt = 0 }: Props): JSX.Element {
         appliedStartRef.current = true;
         video.currentTime = Math.min(startAt, d || startAt);
       }
+      // Some browsers reset playbackRate once real metadata/source info loads
+      // (or a new <source> resolves); reassert it here too.
+      video.playbackRate = useStudyLoopStore.getState().playbackRate;
     };
     const onPlay = () => {
       setIsPlaying(true);

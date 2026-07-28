@@ -94,3 +94,19 @@
   opacity: 0.6;
   cursor: default;
 }
+
+.secondaryButton {
+  margin-top: 6px;
+  background: transparent;
+  color: var(--text-secondary, inherit);
+  border: 1px solid var(--border, currentColor);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.secondaryButton:hover {
+  filter: brightness(1.15);
+}

@@ -51,6 +51,34 @@ export function resolveDataDir(config: StudyLoopConfig): string {
   return expandHome(config.dataDir);
 }
 
+export interface ResolvedRoots {
+  libraryRoots: string[];
+  transcriptRoots: string[];
+  conceptDocs: string[];
+}
+
+/**
+ * Expands `~` in every configured root/doc path, not just dataDir. Every route
+ * that validates or scans against libraryRoots/transcriptRoots/conceptDocs
+ * should use this rather than reading the raw config arrays directly, or a
+ * `~`-prefixed root silently never matches anything.
+ */
+export function resolveRoots(config: StudyLoopConfig): ResolvedRoots {
+  return {
+    libraryRoots: config.libraryRoots.map(expandHome),
+    transcriptRoots: config.transcriptRoots.map(expandHome),
+    conceptDocs: config.conceptDocs.map(expandHome),
+  };
+}
+
+/** Public (redacted) shape of the config, safe to send to the browser. */
+export type PublicConfig = Omit<StudyLoopConfig, "anthropicApiKey"> & { anthropicApiKeySet: boolean };
+
+export function redactConfig(config: StudyLoopConfig): PublicConfig {
+  const { anthropicApiKey, ...rest } = config;
+  return { ...rest, anthropicApiKeySet: Boolean(anthropicApiKey) };
+}
+
 export function configPath(): string {
   return CONFIG_PATH;
 }

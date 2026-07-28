@@ -67,6 +67,34 @@ export function newId(): string {
 }
 
 // ---------------------------------------------------------------------------
+// Per-project mutex: serializes read-modify-write operations against a single
+// project's on-disk state (project.json, bubbles.json, notes.md) so two
+// concurrent requests (e.g. two bubble POSTs in flight at once) can't clobber
+// each other via a read-then-write race. Simple promise-chain lock, keyed by
+// project id — no external deps, adequate for a single-process local server.
+// ---------------------------------------------------------------------------
+
+const projectLocks = new Map<string, Promise<unknown>>();
+
+export function withProjectLock<T>(projectId: string, fn: () => Promise<T>): Promise<T> {
+  const previous = projectLocks.get(projectId) ?? Promise.resolve();
+  const run = previous.then(fn, fn);
+  // Chain link used purely for ordering; never rejects, so it can't poison
+  // the next waiter's `.then()` regardless of whether `fn` throws.
+  const chained = run.then(
+    () => undefined,
+    () => undefined
+  );
+  projectLocks.set(projectId, chained);
+  void chained.finally(() => {
+    // Only remove the entry if nothing queued behind us — avoids unbounded
+    // growth of the map while a project sees no more concurrent writers.
+    if (projectLocks.get(projectId) === chained) projectLocks.delete(projectId);
+  });
+  return run;
+}
+
+// ---------------------------------------------------------------------------
 // Project folder persistence: <dataDir>/projects/<id>/
 // ---------------------------------------------------------------------------
 
@@ -106,9 +134,25 @@ export async function listProjectIds(dataDir: string): Promise<string[]> {
 }
 
 export async function readProject(dataDir: string, id: string): Promise<Project | null> {
-  const raw = await readJsonIfExists<unknown>(projectJsonPath(dataDir, id));
+  const raw = await readJsonIfExists<Record<string, unknown>>(projectJsonPath(dataDir, id));
   if (raw === null) return null;
-  return ProjectSchema.parse(raw);
+  const parsed = ProjectSchema.parse(raw);
+  // Migration: older project.json files predate `watchedUpTo`. Rather than
+  // silently defaulting to 0 (which would make previously-covered concepts
+  // vanish from the compiled doc), seed it from lastPosition on first read.
+  if (raw.watchedUpTo === undefined) {
+    return { ...parsed, watchedUpTo: parsed.lastPosition };
+  }
+  return parsed;
+}
+
+/**
+ * `watchedUpTo` is a monotonic high-water mark: a PATCH must never move it
+ * backwards, regardless of what the client computed client-side (client bugs,
+ * stale reads, or out-of-order requests shouldn't be able to erase progress).
+ */
+export function nextWatchedUpTo(existing: number, patchValue: number | undefined): number {
+  return patchValue !== undefined ? Math.max(existing, patchValue) : existing;
 }
 
 export async function writeProject(dataDir: string, project: Project): Promise<void> {
