@@ -1,0 +1,14 @@
+{
+  "text": "What's up guys? So before we start, I just want to give you guys a little intro to the intro.",
+  "language": "en",
+  "timestamps": [
+    { "start": 9.44, "end": 10.72, "text": "What's up guys?", "kind": "segment" },
+    { "start": 11.12, "end": 16.72, "text": "So before we start, I just want to give you guys a little intro to the intro.", "kind": "segment" },
+    { "start": 17.68, "end": 22.16, "text": "This has been the hardest instructional that I've had to film so far.", "kind": "segment" }
+  ],
+  "model": "parakeet-mlx",
+  "duration_seconds": 6452.412633,
+  "source_video": "/Volumes/SSD2025/Library/BJJ/Gordon Ryan/Gordon Ryan - Systematically Attacking From Open Guard Seated Position/OpenGuardSeatedVolume1.mp4",
+  "created_at": "2026-01-01T00:00:00Z",
+  "asr_engine": "parakeet-mlx-continuous"
+}

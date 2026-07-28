@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.*
+*.log
+.DS_Store
+coverage/
+
+# On case-insensitive filesystems (default macOS APFS), ~/StudyLoop resolves to
+# this same repo directory as ~/studyloop. The default dataDir writes project
+# data under <dataDir>/projects — never commit runtime study data.
+/projects/
