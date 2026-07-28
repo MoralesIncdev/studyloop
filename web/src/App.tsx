@@ -1,5 +1,18 @@
-// Minimal placeholder skeleton — the real UI (Library | Study, player, transcript
-// sync, notes, bubbles, concept ticker) is built by a later agent per SPEC.md.
+import { useStudyLoopStore } from "./state/store";
+import { LibraryView } from "./library/LibraryView";
+import { SettingsView } from "./library/SettingsView";
+import { StudyView } from "./study/StudyView";
+import { ToastHost } from "./components/ToastHost";
+
 export default function App(): JSX.Element {
-  return <div style={{ fontFamily: "system-ui", padding: "2rem" }}>StudyLoop</div>;
+  const route = useStudyLoopStore((s) => s.route);
+
+  return (
+    <>
+      {route.view === "library" && <LibraryView />}
+      {route.view === "settings" && <SettingsView />}
+      {route.view === "study" && <StudyView key={route.projectId} projectId={route.projectId} />}
+      <ToastHost />
+    </>
+  );
 }

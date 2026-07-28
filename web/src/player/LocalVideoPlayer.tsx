@@ -1,0 +1,148 @@
+// Wraps a plain <video> element and exposes it as a PlayerHandle (SPEC "Player
+// interface"), registering itself with the store's `controller` slot so hotkeys and
+// UI controls never touch the DOM node directly. Also drives the sync engine: an
+// rAF loop reads currentTime at ~4Hz and pushes it into the store, enforcing an
+// A/B loop in the same tick (per SPEC: "enforcement in the sync loop").
+import { useEffect, useRef } from "react";
+import { useStudyLoopStore } from "../state/store";
+import type { PlayerEvent, PlayerEventPayloads, PlayerHandle } from "./types";
+import styles from "./LocalVideoPlayer.module.css";
+
+const SYNC_INTERVAL_MS = 250; // ~4Hz, per SPEC sync engine contract
+
+interface Props {
+  src: string;
+  /** Seconds to seek to once metadata is ready (resume support). Applied once. */
+  startAt?: number;
+}
+
+type Listeners = { [E in PlayerEvent]?: Set<(payload: PlayerEventPayloads[E]) => void> };
+
+export function LocalVideoPlayer({ src, startAt = 0 }: Props): JSX.Element {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const listenersRef = useRef<Listeners>({});
+  const rafRef = useRef<number | null>(null);
+  const lastSyncRef = useRef(0);
+  const lastReportedTimeRef = useRef(-1);
+  const appliedStartRef = useRef(false);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return undefined;
+
+    const setController = useStudyLoopStore.getState().setController;
+    const setCurrentTime = useStudyLoopStore.getState().setCurrentTime;
+    const setDuration = useStudyLoopStore.getState().setDuration;
+    const setIsPlaying = useStudyLoopStore.getState().setIsPlaying;
+    const pushToast = useStudyLoopStore.getState().pushToast;
+
+    function emit<E extends PlayerEvent>(event: E, payload: PlayerEventPayloads[E]): void {
+      listenersRef.current[event]?.forEach((cb) => cb(payload));
+    }
+
+    const handle: PlayerHandle = {
+      play: () => {
+        video.play().catch((err: unknown) => {
+          pushToast(`Playback failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+        });
+      },
+      pause: () => video.pause(),
+      seek: (t) => {
+        const max = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : Infinity;
+        const clamped = Math.max(0, Math.min(t, max));
+        video.currentTime = clamped;
+        setCurrentTime(clamped);
+        lastReportedTimeRef.current = clamped;
+      },
+      getCurrentTime: () => video.currentTime,
+      getDuration: () => (Number.isFinite(video.duration) ? video.duration : 0),
+      setRate: (r) => {
+        video.playbackRate = r;
+      },
+      on: (event, cb) => {
+        const bucket = (listenersRef.current[event] ??= new Set() as NonNullable<Listeners[typeof event]>);
+        bucket.add(cb as never);
+        return () => bucket.delete(cb as never);
+      },
+    };
+    setController(handle);
+
+    const onLoadedMetadata = () => {
+      const d = Number.isFinite(video.duration) ? video.duration : 0;
+      setDuration(d);
+      emit("durationchange", { duration: d });
+      if (!appliedStartRef.current && startAt > 0) {
+        appliedStartRef.current = true;
+        video.currentTime = Math.min(startAt, d || startAt);
+      }
+    };
+    const onPlay = () => {
+      setIsPlaying(true);
+      emit("play", undefined);
+    };
+    const onPause = () => {
+      setIsPlaying(false);
+      emit("pause", undefined);
+    };
+    const onEnded = () => {
+      setIsPlaying(false);
+      emit("ended", undefined);
+    };
+    const onError = () => {
+      const message = video.error?.message || "Video failed to load. Check the file still exists at its path.";
+      pushToast(message, "error");
+      emit("error", { message });
+    };
+
+    video.addEventListener("loadedmetadata", onLoadedMetadata);
+    video.addEventListener("play", onPlay);
+    video.addEventListener("pause", onPause);
+    video.addEventListener("ended", onEnded);
+    video.addEventListener("error", onError);
+
+    const tick = (now: number) => {
+      if (now - lastSyncRef.current >= SYNC_INTERVAL_MS) {
+        lastSyncRef.current = now;
+        let t = video.currentTime;
+        const { loopA, loopB } = useStudyLoopStore.getState();
+        if (loopA != null && loopB != null && t >= loopB) {
+          video.currentTime = loopA;
+          t = loopA;
+        }
+        if (Math.abs(t - lastReportedTimeRef.current) > 0.01) {
+          lastReportedTimeRef.current = t;
+          setCurrentTime(t);
+          emit("timeupdate", { currentTime: t });
+        }
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      video.removeEventListener("loadedmetadata", onLoadedMetadata);
+      video.removeEventListener("play", onPlay);
+      video.removeEventListener("pause", onPause);
+      video.removeEventListener("ended", onEnded);
+      video.removeEventListener("error", onError);
+      setController(null);
+      listenersRef.current = {};
+    };
+    // Intentionally run once per mount — StudyView remounts this component (via
+    // React `key`) when the project changes, so `src`/`startAt` are effectively
+    // constant for the lifetime of a given mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <video
+      ref={videoRef}
+      className={styles.video}
+      src={src}
+      controls={false}
+      preload="metadata"
+      playsInline
+    />
+  );
+}

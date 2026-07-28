@@ -1,0 +1,165 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
+}
+
+.status {
+  padding: 40px;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.backButton {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.backButton:hover {
+  color: var(--text);
+}
+
+.headerTitles {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subtitle {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.videoColumn {
+  width: 60%;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+}
+
+.videoArea {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.transcriptColumn {
+  width: 40%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dockRow {
+  height: 240px;
+  flex-shrink: 0;
+}
+
+.youtubePlaceholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 14px;
+  text-align: center;
+  padding: 40px;
+}
+
+.youtubePlaceholderSub {
+  font-size: 12px;
+}
+
+.youtubePlaceholderSub a {
+  color: var(--accent);
+}
+
+.resumeOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.resumeCard {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 24px;
+  text-align: center;
+}
+
+.resumeCard p {
+  margin: 0 0 14px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.resumeActions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.primaryButton {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.secondaryButton {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}

@@ -1,0 +1,111 @@
+// Thin typed client for the StudyLoop server API. Every function throws ApiError on
+// failure; call sites are expected to catch and surface via the toast store.
+import type {
+  Bubble,
+  ConceptCard,
+  ConceptProfile,
+  CreateProjectBody,
+  LibraryResponse,
+  PatchProjectBody,
+  Project,
+  StudyLoopConfig,
+  TranscriptResponse,
+  YoutubeResolveResponse,
+} from "./types";
+
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      ...init,
+      headers: {
+        ...(init?.body && typeof init.body === "string" ? { "Content-Type": "application/json" } : {}),
+        ...init?.headers,
+      },
+    });
+  } catch (err) {
+    throw new ApiError(err instanceof Error ? err.message : "Network error", 0);
+  }
+  if (!res.ok) {
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body?.error) message = body.error;
+    } catch {
+      // ignore non-JSON error bodies
+    }
+    throw new ApiError(message, res.status);
+  }
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    return (await res.json()) as T;
+  }
+  return (await res.text()) as unknown as T;
+}
+
+export const api = {
+  getLibrary: () => request<LibraryResponse>("/api/library"),
+  rescanLibrary: () => request<LibraryResponse>("/api/library/rescan", { method: "POST" }),
+
+  getConfig: () => request<StudyLoopConfig>("/api/config"),
+  putConfig: (patch: Partial<StudyLoopConfig>) =>
+    request<StudyLoopConfig>("/api/config", { method: "PUT", body: JSON.stringify(patch) }),
+
+  getTranscript: (path: string) =>
+    request<TranscriptResponse>(`/api/transcript?path=${encodeURIComponent(path)}`),
+
+  listProjects: () => request<{ projects: Project[] }>("/api/projects"),
+  getProject: (id: string) => request<Project>(`/api/projects/${encodeURIComponent(id)}`),
+  createProject: (body: CreateProjectBody) =>
+    request<Project>("/api/projects", { method: "POST", body: JSON.stringify(body) }),
+  patchProject: (id: string, patch: PatchProjectBody) =>
+    request<Project>(`/api/projects/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(patch) }),
+
+  getNotes: (id: string) => request<string>(`/api/projects/${encodeURIComponent(id)}/notes`),
+  putNotes: (id: string, content: string) =>
+    request<{ ok: true }>(`/api/projects/${encodeURIComponent(id)}/notes`, {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    }),
+
+  listBubbles: (id: string) => request<{ bubbles: Bubble[] }>(`/api/projects/${encodeURIComponent(id)}/bubbles`),
+  createBubble: (id: string, body: { t: number; text: string; shot?: string | null }) =>
+    request<Bubble>(`/api/projects/${encodeURIComponent(id)}/bubbles`, { method: "POST", body: JSON.stringify(body) }),
+  patchBubble: (id: string, bubbleId: string, patch: { t?: number; text?: string; shot?: string | null }) =>
+    request<Bubble>(`/api/projects/${encodeURIComponent(id)}/bubbles/${encodeURIComponent(bubbleId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  deleteBubble: (id: string, bubbleId: string) =>
+    request<{ ok: true }>(`/api/projects/${encodeURIComponent(id)}/bubbles/${encodeURIComponent(bubbleId)}`, {
+      method: "DELETE",
+    }),
+
+  captureShot: (id: string, t: number) =>
+    request<{ shot: string | null; error?: string }>(`/api/projects/${encodeURIComponent(id)}/shots`, {
+      method: "POST",
+      body: JSON.stringify({ t }),
+    }),
+
+  getConcepts: (id: string) =>
+    request<{ profile?: ConceptProfile; concepts: ConceptCard[] }>(`/api/projects/${encodeURIComponent(id)}/concepts`),
+
+  compile: (id: string) =>
+    request<{ path: string; markdown: string }>(`/api/projects/${encodeURIComponent(id)}/compile`, { method: "POST" }),
+
+  resolveYoutube: (url: string) =>
+    request<YoutubeResolveResponse>("/api/youtube/resolve", { method: "POST", body: JSON.stringify({ url }) }),
+
+  videoStreamUrl: (path: string) => `/api/video/stream?path=${encodeURIComponent(path)}`,
+  shotUrl: (projectId: string, shot: string) =>
+    `/api/media/${encodeURIComponent(projectId)}/${shot.replace(/^\/+/, "")}`,
+};

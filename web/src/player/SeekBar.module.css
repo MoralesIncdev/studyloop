@@ -1,0 +1,86 @@
+.wrapper {
+  padding: 6px 0 2px;
+}
+
+.track {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  cursor: pointer;
+}
+
+.track:hover {
+  height: 8px;
+}
+
+.fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  border-radius: 3px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.loopRange {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  pointer-events: none;
+}
+
+.playhead {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 2px var(--bg);
+  pointer-events: none;
+}
+
+.bubblePin {
+  position: absolute;
+  top: -6px;
+  width: 2px;
+  height: 6px;
+  background: var(--warn);
+  pointer-events: none;
+}
+
+.conceptTick {
+  position: absolute;
+  bottom: -6px;
+  width: 2px;
+  height: 6px;
+  background: var(--success);
+  pointer-events: none;
+}
+
+.loopMarker {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--text);
+  pointer-events: none;
+}
+
+.tooltip {
+  position: absolute;
+  bottom: 16px;
+  transform: translateX(-50%);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+}
