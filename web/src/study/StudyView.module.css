@@ -1,8 +1,5 @@
 .page {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  min-height: 0;
+  min-height: calc(100vh - var(--topbar-height));
 }
 
 .status {
@@ -11,108 +8,143 @@
   font-size: 14px;
 }
 
-.header {
+.watchGrid {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+  align-items: flex-start;
+  gap: 24px;
+  max-width: 1750px;
+  margin: 0 auto;
+  padding: 20px 24px 64px;
 }
 
-.backButton {
-  background: transparent;
-  border: none;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.backButton:hover {
-  color: var(--text);
-}
-
-.headerTitles {
+.leftCol {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  flex: 1;
 }
 
-.tickerMuteButton {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-dim);
-  border-radius: 999px;
-  padding: 5px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  white-space: nowrap;
+.rightCol {
+  width: 402px;
   flex-shrink: 0;
 }
 
-.tickerMuteButton:hover {
-  color: var(--text);
-  background: var(--bg-hover);
+.playerFrame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: var(--radius-card);
+  overflow: hidden;
 }
 
-.tickerMuteButton[aria-pressed="true"] {
-  color: var(--text-dim);
-  border-color: var(--border);
+.playerFrame:fullscreen {
+  border-radius: 0;
 }
 
 .title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 14px 0 0;
+  color: var(--text);
+}
+
+.channelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.channelIdentity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg-chip);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.channelText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.channelName {
   font-size: 14px;
   font-weight: 600;
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--text);
 }
 
-.subtitle {
-  font-size: 11px;
+.channelSource {
+  font-size: 12px;
   color: var(--text-dim);
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 420px;
 }
 
-.main {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-}
-
-.videoColumn {
-  width: 60%;
-  display: flex;
-  flex-direction: column;
-  padding: 12px 16px;
-  min-width: 0;
-  border-right: 1px solid var(--border);
-}
-
-.videoArea {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  background: #000;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.transcriptColumn {
-  width: 40%;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.dockRow {
-  height: 240px;
+.analyzePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
   flex-shrink: 0;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.actionPills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.pillButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-chip);
+  border: none;
+  color: var(--text);
+  border-radius: var(--radius-pill);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: not-allowed;
+  opacity: 0.5;
+  white-space: nowrap;
+}
+
+.descriptionBox {
+  margin-top: 16px;
 }
 
 .resumeOverlay {
@@ -122,13 +154,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: 20;
 }
 
 .resumeCard {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   padding: 20px 24px;
   text-align: center;
 }
@@ -149,7 +181,7 @@
   background: var(--accent);
   color: var(--accent-contrast);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-pill);
   padding: 8px 16px;
   font-size: 13px;
   font-weight: 600;
@@ -160,8 +192,18 @@
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 6px;
+  border-radius: var(--radius-pill);
   padding: 8px 16px;
   font-size: 13px;
   cursor: pointer;
+}
+
+@media (max-width: 1100px) {
+  .watchGrid {
+    flex-direction: column;
+  }
+
+  .rightCol {
+    width: 100%;
+  }
 }

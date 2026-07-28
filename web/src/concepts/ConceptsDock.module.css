@@ -37,7 +37,7 @@
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text-dim);
-  border-radius: 6px;
+  border-radius: var(--radius-pill);
   padding: 6px 10px;
   font-size: 12px;
   cursor: pointer;
@@ -140,10 +140,10 @@
 
 .docButton {
   text-align: left;
-  background: var(--bg);
+  background: var(--bg-chip);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 8px 10px;
   font-size: 12px;
   cursor: pointer;
@@ -184,7 +184,7 @@
   background: var(--accent);
   color: var(--accent-contrast);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-pill);
   padding: 6px 14px;
   font-size: 13px;
   font-weight: 600;

@@ -82,9 +82,6 @@ export function SettingsView(): JSX.Element {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <button type="button" className={styles.backButton} onClick={() => navigate({ view: "library" })}>
-          ← Library
-        </button>
         <h1 className={styles.title}>Settings</h1>
       </header>
 

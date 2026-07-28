@@ -65,6 +65,13 @@ export function LocalVideoPlayer({ src, startAt = 0 }: Props): JSX.Element {
         // of truth for what rate actually ended up in effect" contract.
         useStudyLoopStore.getState().setPlaybackRate(video.playbackRate);
       },
+      getVolume: () => (video.muted ? 0 : video.volume),
+      setVolume: (v) => {
+        const clamped = Math.min(1, Math.max(0, v));
+        video.volume = clamped;
+        video.muted = clamped === 0;
+        useStudyLoopStore.getState().setVolume(clamped);
+      },
       on: (event, cb) => {
         const bucket = (listenersRef.current[event] ??= new Set() as NonNullable<Listeners[typeof event]>);
         bucket.add(cb as never);
@@ -78,6 +85,7 @@ export function LocalVideoPlayer({ src, startAt = 0 }: Props): JSX.Element {
     // speed control) says, so without this a rate set on a previous
     // video/mount silently stopped applying to the next one.
     video.playbackRate = useStudyLoopStore.getState().playbackRate;
+    video.volume = useStudyLoopStore.getState().volume;
 
     const onLoadedMetadata = () => {
       const d = Number.isFinite(video.duration) ? video.duration : 0;
@@ -90,6 +98,7 @@ export function LocalVideoPlayer({ src, startAt = 0 }: Props): JSX.Element {
       // Some browsers reset playbackRate once real metadata/source info loads
       // (or a new <source> resolves); reassert it here too.
       video.playbackRate = useStudyLoopStore.getState().playbackRate;
+      video.volume = useStudyLoopStore.getState().volume;
     };
     const onPlay = () => {
       setIsPlaying(true);

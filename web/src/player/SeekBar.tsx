@@ -1,8 +1,9 @@
-// Custom seek bar: progress fill, hover time tooltip, click-to-seek, and marker
-// layers rendered purely from props — bubble pins and concept ticks are wired up
-// here so a later chunk can pass real data without touching this component.
+// YouTube-style progress bar: red played-portion, hover time tooltip, click-to-seek,
+// and marker layers rendered purely from props — bubble pins and concept ticks —
+// plus an optional heatmap density strip (SPEC "Player chrome" — see HeatmapStrip).
 import { useCallback, useRef, useState } from "react";
 import { formatTimestamp } from "../lib/time";
+import { HeatmapStrip } from "./HeatmapStrip";
 import styles from "./SeekBar.module.css";
 
 export interface SeekBarMarker {
@@ -31,6 +32,8 @@ interface Props {
   onSeek: (t: number) => void;
   /** Called when a bubble pin is clicked, instead of onSeek. Defaults to onSeek. */
   onSeekBubble?: (t: number) => void;
+  /** Density buckets in [0,1] for the heatmap strip above the bar (SPEC "Player chrome"). */
+  heatmap?: number[];
 }
 
 export function SeekBar({
@@ -42,6 +45,7 @@ export function SeekBar({
   loopB = null,
   onSeek,
   onSeekBubble,
+  heatmap,
 }: Props): JSX.Element {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<{ x: number; t: number } | null>(null);
@@ -92,6 +96,7 @@ export function SeekBar({
         aria-valuemax={Math.max(0, Math.round(duration))}
         aria-valuenow={Math.round(currentTime)}
       >
+        {heatmap && <HeatmapStrip buckets={heatmap} />}
         {loopA != null && loopB != null && (
           <div
             className={styles.loopRange}

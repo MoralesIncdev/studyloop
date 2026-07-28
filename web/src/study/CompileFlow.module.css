@@ -1,11 +1,14 @@
 .compileButton {
-  background: transparent;
-  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-chip);
+  border: none;
   color: var(--text);
-  border-radius: 999px;
-  padding: 5px 14px;
-  font-size: 12px;
-  font-weight: 600;
+  border-radius: var(--radius-pill);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
@@ -27,14 +30,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 300;
   padding: 24px;
 }
 
 .card {
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   width: min(560px, 100%);
   max-height: min(80vh, 640px);
   display: flex;
@@ -46,8 +49,8 @@
 
 .previewCard {
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   width: min(680px, 100%);
   max-height: min(85vh, 720px);
   display: flex;
@@ -183,7 +186,7 @@
   background: var(--accent);
   color: var(--accent-contrast);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-pill);
   padding: 8px 16px;
   font-size: 13px;
   font-weight: 600;
@@ -199,7 +202,7 @@
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 6px;
+  border-radius: var(--radius-pill);
   padding: 8px 16px;
   font-size: 13px;
   cursor: pointer;

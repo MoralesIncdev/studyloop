@@ -1,0 +1,234 @@
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  height: var(--topbar-height);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 6px 4px;
+  flex-shrink: 0;
+}
+
+.logoMark {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--red);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.logoText {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.searchWrap {
+  position: relative;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.searchForm {
+  display: flex;
+  width: 100%;
+  max-width: 560px;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-right: none;
+  color: var(--text);
+  border-radius: var(--radius-pill) 0 0 var(--radius-pill);
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.searchButton {
+  flex-shrink: 0;
+  width: 56px;
+  background: var(--bg-chip);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.searchButton:hover {
+  background: var(--bg-hover);
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, 90vw);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 8px 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.dropdownSection + .dropdownSection {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 6px;
+  padding-top: 6px;
+}
+
+.dropdownLabel {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  padding: 6px 16px;
+}
+
+.dropdownEmpty {
+  padding: 8px 16px 12px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.dropdownItem:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.dropdownItem:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dropdownItemThumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--bg-chip);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.dropdownItemBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dropdownItemTitle {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdownItemMeta {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.menuWrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.avatarButton {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-chip);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatarButton:hover {
+  background: var(--bg-hover);
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 180px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.menuItem:hover {
+  background: var(--bg-hover);
+}

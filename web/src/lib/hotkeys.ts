@@ -73,6 +73,9 @@ export function useHotkeys(enabled: boolean): void {
         case "s":
           void store.captureScreenshotOnly();
           break;
+        case "c":
+          store.toggleCcEnabled();
+          break;
         default:
           break;
       }

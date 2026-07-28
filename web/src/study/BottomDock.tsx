@@ -1,18 +1,15 @@
-// Bottom dock: tabs Notes | Bubbles | Concepts. Notes and Bubbles stay mounted
-// under both tabs (hidden via CSS rather than unmounted) so an in-progress note
-// edit or the bubble list's scroll position survives switching tabs; Concepts
-// is mounted lazily (only while active) since its content depends on
-// currentTime and there's no persisted UI state worth keeping warm.
+// SPEC V2 "description box (YT-style, tabs): [Notes | Bubbles]" — Concepts moved
+// out into the right-rail Concepts card (see RightRail.tsx). Both tabs stay
+// mounted (hidden via CSS, not unmounted) so an in-progress note edit or the
+// bubble list's scroll position survives switching tabs.
 import { useStudyLoopStore, type DockTab } from "../state/store";
 import { NotesPane } from "../notes/NotesPane";
 import { BubbleRail } from "../notes/BubbleRail";
-import { ConceptsDock } from "../concepts/ConceptsDock";
 import styles from "./BottomDock.module.css";
 
 const TABS: { id: DockTab; label: string }[] = [
   { id: "notes", label: "Notes" },
   { id: "bubbles", label: "Bubbles" },
-  { id: "concepts", label: "Concepts" },
 ];
 
 export function BottomDock(): JSX.Element {
@@ -40,11 +37,6 @@ export function BottomDock(): JSX.Element {
         <div className={styles.tabPanel} hidden={activeDockTab !== "bubbles"}>
           <BubbleRail />
         </div>
-        {activeDockTab === "concepts" && (
-          <div className={styles.tabPanel}>
-            <ConceptsDock />
-          </div>
-        )}
       </div>
     </div>
   );

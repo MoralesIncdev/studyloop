@@ -18,7 +18,10 @@ import type {
 } from "../lib/types";
 import type { PlayerHandle } from "../player/types";
 
-export type DockTab = "notes" | "bubbles" | "concepts";
+// "concepts" moved out of the bottom dock into the V2 right-rail Concepts
+// card (see study/RightRail.tsx) — the description box below the player now
+// only hosts Notes/Bubbles, matching YouTube's description-box tabs.
+export type DockTab = "notes" | "bubbles";
 
 export interface Toast {
   id: string;
@@ -81,6 +84,35 @@ const MIN_RATE = 0.5;
 const MAX_RATE = 2.5;
 export function clampRate(r: number): number {
   return Math.min(MAX_RATE, Math.max(MIN_RATE, Math.round(r * 100) / 100));
+}
+
+export function clampVolume(v: number): number {
+  return Math.min(1, Math.max(0, v));
+}
+
+// CC-on/off is persisted client-side only (V2-A chunk — the project model's
+// PATCH surface isn't touched this chunk; see SPEC "CC overlay" note). Keyed
+// per project so it doesn't leak across videos.
+const CC_STORAGE_PREFIX = "studyloop:ccEnabled:";
+function ccStorageKey(projectId: string): string {
+  return `${CC_STORAGE_PREFIX}${projectId}`;
+}
+function readCcEnabled(projectId: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(ccStorageKey(projectId)) === "1";
+  } catch {
+    return false;
+  }
+}
+function writeCcEnabled(projectId: string, value: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ccStorageKey(projectId), value ? "1" : "0");
+  } catch {
+    // Storage can throw (private browsing, quota) — CC toggling still works
+    // for the session, it just won't persist. Not worth a toast.
+  }
 }
 
 export interface StudyLoopStore {
@@ -147,6 +179,13 @@ export interface StudyLoopStore {
   setDuration: (d: number) => void;
   setIsPlaying: (p: boolean) => void;
   setPlaybackRate: (r: number) => void;
+  volume: number;
+  setVolume: (v: number) => void;
+
+  // --- CC overlay (V2-A; persisted client-side only, see ccStorageKey) -----------
+  ccEnabled: boolean;
+  setCcEnabled: (v: boolean) => void;
+  toggleCcEnabled: () => void;
 
   // --- A/B loop -----------------------------------------------------------------
   loopA: number | null;
@@ -391,6 +430,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       currentTime: 0,
       duration: 0,
       isPlaying: false,
+      volume: get().volume,
+      ccEnabled: false,
       loopA: null,
       loopB: null,
       controller: null,
@@ -416,7 +457,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       return;
     }
     if (!isCurrent()) return;
-    set({ currentProject: project, currentProjectLoading: false });
+    set({ currentProject: project, currentProjectLoading: false, ccEnabled: readCcEnabled(project.id) });
 
     const bubblesPromise = (async () => {
       set({ bubblesLoading: true });
@@ -482,6 +523,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       currentTime: 0,
       duration: 0,
       isPlaying: false,
+      ccEnabled: false,
       loopA: null,
       loopB: null,
       bubbles: [],
@@ -569,6 +611,17 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   setDuration: (d) => set({ duration: d }),
   setIsPlaying: (p) => set({ isPlaying: p }),
   setPlaybackRate: (r) => set({ playbackRate: clampRate(r) }),
+  volume: 1,
+  setVolume: (v) => set({ volume: clampVolume(v) }),
+
+  // --- CC overlay (V2-A) ----------------------------------------------------------
+  ccEnabled: false,
+  setCcEnabled: (v) => {
+    set({ ccEnabled: v });
+    const project = get().currentProject;
+    if (project) writeCcEnabled(project.id, v);
+  },
+  toggleCcEnabled: () => get().setCcEnabled(!get().ccEnabled),
 
   // --- A/B loop -----------------------------------------------------------------
   loopA: null,

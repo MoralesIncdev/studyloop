@@ -4,6 +4,7 @@ import { LibraryView } from "./library/LibraryView";
 import { SettingsView } from "./library/SettingsView";
 import { StudyView } from "./study/StudyView";
 import { ToastHost } from "./components/ToastHost";
+import { TopBar } from "./components/TopBar";
 
 export default function App(): JSX.Element {
   const route = useStudyLoopStore((s) => s.route);
@@ -16,6 +17,7 @@ export default function App(): JSX.Element {
 
   return (
     <>
+      <TopBar />
       {route.view === "library" && <LibraryView />}
       {route.view === "settings" && <SettingsView />}
       {route.view === "study" && <StudyView key={route.projectId} projectId={route.projectId} />}

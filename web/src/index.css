@@ -1,16 +1,23 @@
 :root {
   color-scheme: dark;
-  --bg: #111214;
-  --bg-elevated: #1a1c1f;
-  --bg-hover: #24272b;
-  --border: #2c2f34;
-  --text: #e8e9ea;
-  --text-dim: #9a9ea4;
-  --accent: #5b9dff;
-  --accent-contrast: #0b1220;
+  /* YouTube-native dark palette (SPEC V2 "Player chrome" / "V2 layout"). */
+  --bg: #0f0f0f;
+  --bg-elevated: #212121;
+  --bg-chip: #272727;
+  --bg-hover: #3f3f3f;
+  --border: #3f3f3f;
+  --border-subtle: #303030;
+  --text: #f1f1f1;
+  --text-dim: #aaaaaa;
+  --accent: #3ea6ff;
+  --accent-contrast: #0f0f0f;
   --warn: #e0a83e;
   --success: #4bb779;
-  --danger: #e0605a;
+  --danger: #f44336;
+  --red: #ff0033;
+  --radius-card: 12px;
+  --radius-pill: 18px;
+  --topbar-height: 56px;
 }
 
 * {
@@ -20,14 +27,14 @@
 html,
 body,
 #root {
-  height: 100%;
+  min-height: 100%;
 }
 
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+  font-family: "Roboto", "Arial", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 

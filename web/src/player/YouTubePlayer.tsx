@@ -55,6 +55,7 @@ export function YouTubePlayer({ videoId, startAt = 0 }: Props): JSX.Element {
     const setDuration = useStudyLoopStore.getState().setDuration;
     const setIsPlaying = useStudyLoopStore.getState().setIsPlaying;
     const setPlaybackRate = useStudyLoopStore.getState().setPlaybackRate;
+    const setVolume = useStudyLoopStore.getState().setVolume;
     const pushToast = useStudyLoopStore.getState().pushToast;
 
     function emit<E extends PlayerEvent>(event: E, payload: PlayerEventPayloads[E]): void {
@@ -131,6 +132,14 @@ export function YouTubePlayer({ videoId, startAt = 0 }: Props): JSX.Element {
                   setPlaybackRate(ytPlayer.getPlaybackRate());
                 },
                 getAvailableRates: () => ytPlayer.getAvailablePlaybackRates(),
+                getVolume: () => (ytPlayer.isMuted() ? 0 : ytPlayer.getVolume() / 100),
+                setVolume: (v) => {
+                  const clamped = Math.min(1, Math.max(0, v));
+                  ytPlayer.setVolume(Math.round(clamped * 100));
+                  if (clamped === 0) ytPlayer.mute();
+                  else ytPlayer.unMute();
+                  setVolume(clamped);
+                },
                 on: (event, cb) => {
                   const bucket = (listenersRef.current[event] ??= new Set() as NonNullable<Listeners[typeof event]>);
                   bucket.add(cb as never);
@@ -140,6 +149,9 @@ export function YouTubePlayer({ videoId, startAt = 0 }: Props): JSX.Element {
               setController(handle);
 
               ytPlayer.setPlaybackRate(useStudyLoopStore.getState().playbackRate);
+              const initialVolume = useStudyLoopStore.getState().volume;
+              ytPlayer.setVolume(Math.round(initialVolume * 100));
+              if (initialVolume === 0) ytPlayer.mute();
               const d = ytPlayer.getDuration();
               if (Number.isFinite(d) && d > 0) {
                 setDuration(d);

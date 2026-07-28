@@ -35,6 +35,15 @@ export interface PlayerHandle {
    * UI falls back to its own full default option list in that case.
    */
   getAvailableRates?(): number[];
+  /** Current volume, normalized 0–1 regardless of the underlying player's own scale. */
+  getVolume(): number;
+  /**
+   * Applies a new volume (0–1, clamped) and syncs the store with it itself —
+   * mirrors setRate's "the player is the source of truth for what actually
+   * took effect" contract, even though neither implementation currently
+   * snaps the requested value.
+   */
+  setVolume(v: number): void;
   /** Subscribe to a player event; returns an unsubscribe function. */
   on<E extends PlayerEvent>(event: E, cb: (payload: PlayerEventPayloads[E]) => void): () => void;
 }

@@ -1,50 +1,80 @@
 .page {
-  max-width: 960px;
+  max-width: 1750px;
   margin: 0 auto;
-  padding: 32px 24px 64px;
+  padding: 20px 24px 64px;
 }
 
-.header {
+.youtubeBar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.title {
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  margin: 0;
-}
-
-.headerActions {
-  display: flex;
   gap: 8px;
+  max-width: 640px;
+  margin: 0 auto 20px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 4px 6px 4px 14px;
 }
 
-.primaryButton {
+.youtubeBarIcon {
+  color: var(--text-dim);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.youtubeInput {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 8px 4px;
+  font-size: 13px;
+}
+
+.youtubeInput:focus {
+  outline: none;
+}
+
+.youtubeSubmit {
   background: var(--accent);
   color: var(--accent-contrast);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-pill);
   padding: 8px 16px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
 }
 
-.primaryButton:hover {
-  filter: brightness(1.08);
+.youtubeSubmit:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.youtubeSubmit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.toolbarCount {
+  font-size: 13px;
+  color: var(--text-dim);
 }
 
 .secondaryButton {
-  background: var(--bg-elevated);
+  background: var(--bg-chip);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
+  border-radius: var(--radius-pill);
+  padding: 7px 14px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -57,43 +87,19 @@
   cursor: default;
 }
 
-.youtubeBox {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 24px;
-}
-
-.youtubeInput {
-  flex: 1;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 6px;
-  padding: 10px 12px;
-  font-size: 14px;
-}
-
-.youtubeInput:focus {
-  outline: 1px solid var(--accent);
-}
-
-.youtubeSubmit {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 6px;
-  padding: 0 18px;
+.primaryButton {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 8px 16px;
   font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
 }
 
-.youtubeSubmit:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.youtubeSubmit:disabled {
-  opacity: 0.5;
-  cursor: default;
+.primaryButton:hover {
+  filter: brightness(1.08);
 }
 
 .warnings {
@@ -121,7 +127,7 @@
 .emptyCard {
   border: 1px solid var(--border);
   background: var(--bg-elevated);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   padding: 32px;
   text-align: center;
   max-width: 480px;
@@ -157,69 +163,113 @@
 }
 
 .seriesGroup {
-  margin-bottom: 16px;
+  margin-bottom: 24px;
 }
 
 .seriesTitle {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-dim);
-  margin: 0 0 8px;
+  margin: 0 0 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
-.itemGrid {
+.grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px 12px;
 }
 
-.itemCard {
+.card {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: stretch;
   text-align: left;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  padding: 0;
   cursor: pointer;
   color: var(--text);
 }
 
-.itemCard:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: var(--accent);
-}
-
-.itemCard:disabled {
-  opacity: 0.6;
+.card:disabled {
+  opacity: 0.7;
   cursor: default;
 }
 
-.itemTitle {
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.4;
-}
-
-.itemMeta {
+.thumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: linear-gradient(135deg, #3a2a5c 0%, #1c2a52 45%, #0f0f0f 100%);
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+}
+
+.thumbGlyph {
+  font-size: 32px;
+  opacity: 0.55;
+}
+
+.durationBadge {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
   font-size: 11px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
 }
 
-.badgeMatched {
-  color: var(--success);
+.thumbOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 13px;
 }
 
-.badgeMissing {
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 2px 0;
+}
+
+.cardTitle {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cardInstructor {
+  font-size: 12px;
   color: var(--text-dim);
 }
 
-.opening {
-  color: var(--accent);
+.badgeMatched {
+  align-self: flex-start;
+  font-size: 11px;
+  color: var(--success);
+  margin-top: 2px;
+}
+
+.badgeMissing {
+  align-self: flex-start;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
 }

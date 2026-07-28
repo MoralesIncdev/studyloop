@@ -76,7 +76,7 @@ export function CompileFlow(): JSX.Element | null {
   return (
     <>
       <button type="button" className={styles.compileButton} onClick={handleCompileClick} disabled={compiling}>
-        {compiling ? "Compiling…" : "Compile"}
+        🔖 {compiling ? "Compiling…" : "Compile"}
       </button>
 
       {captionPassBubbles && (

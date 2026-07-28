@@ -1,8 +1,11 @@
-// F1: fetches /api/library, groups by instructor → series, shows a transcript-match
-// badge, and opens (or creates) a project on click. Also hosts the YouTube URL
-// paste box and the first-run empty state.
+// F1 (restyled V2-A "home grid" per SPEC): fetches /api/library, groups by
+// instructor → series, and renders each video as a YouTube-home-style thumbnail
+// card (gradient placeholder + film glyph — real server-side thumbnails are out of
+// scope this chunk). Also hosts the YouTube URL paste bar (now a slim bar under
+// the global TopBar) and the first-run empty state.
 import { useEffect, useMemo, useState } from "react";
 import { useStudyLoopStore } from "../state/store";
+import { formatTimestamp } from "../lib/time";
 import type { LibraryItem } from "../lib/types";
 import styles from "./LibraryView.module.css";
 
@@ -39,7 +42,7 @@ function groupLibrary(items: LibraryItem[]): InstructorGroup[] {
     }));
 }
 
-function YoutubeBox(): JSX.Element {
+function YoutubeBar(): JSX.Element {
   const createYoutubeProject = useStudyLoopStore((s) => s.createYoutubeProject);
   const navigate = useStudyLoopStore((s) => s.navigate);
   const [url, setUrl] = useState("");
@@ -61,7 +64,10 @@ function YoutubeBox(): JSX.Element {
   };
 
   return (
-    <form className={styles.youtubeBox} onSubmit={handleSubmit}>
+    <form className={styles.youtubeBar} onSubmit={handleSubmit}>
+      <span className={styles.youtubeBarIcon} aria-hidden="true">
+        ▶
+      </span>
       <input
         type="url"
         className={styles.youtubeInput}
@@ -74,6 +80,31 @@ function YoutubeBox(): JSX.Element {
         {submitting ? "Adding…" : "Add"}
       </button>
     </form>
+  );
+}
+
+function VideoCard({ item, onOpen, opening }: { item: LibraryItem; onOpen: () => void; opening: boolean }): JSX.Element {
+  return (
+    <button type="button" className={styles.card} onClick={onOpen} disabled={opening}>
+      <div className={styles.thumb}>
+        <span className={styles.thumbGlyph} aria-hidden="true">
+          🎞
+        </span>
+        {item.durationSeconds != null && (
+          <span className={styles.durationBadge}>{formatTimestamp(item.durationSeconds)}</span>
+        )}
+        {opening && <span className={styles.thumbOverlay}>Opening…</span>}
+      </div>
+      <div className={styles.cardBody}>
+        <span className={styles.cardTitle}>{item.title}</span>
+        <span className={styles.cardInstructor}>{item.instructor ?? "Unsorted"}</span>
+        {item.transcriptPath ? (
+          <span className={styles.badgeMatched}>Transcript</span>
+        ) : (
+          <span className={styles.badgeMissing}>No transcript</span>
+        )}
+      </div>
+    </button>
   );
 }
 
@@ -114,24 +145,16 @@ export function LibraryView(): JSX.Element {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>StudyLoop</h1>
-        <div className={styles.headerActions}>
-          <button type="button" className={styles.secondaryButton} onClick={() => navigate({ view: "settings" })}>
-            Settings
-          </button>
-          <button
-            type="button"
-            className={styles.secondaryButton}
-            onClick={() => void rescanLibrary()}
-            disabled={libraryLoading}
-          >
-            {libraryLoading ? "Scanning…" : "Rescan library"}
-          </button>
-        </div>
-      </header>
+      <YoutubeBar />
 
-      <YoutubeBox />
+      <div className={styles.toolbar}>
+        <span className={styles.toolbarCount}>
+          {libraryItems.length} video{libraryItems.length === 1 ? "" : "s"}
+        </span>
+        <button type="button" className={styles.secondaryButton} onClick={() => void rescanLibrary()} disabled={libraryLoading}>
+          {libraryLoading ? "Scanning…" : "Rescan library"}
+        </button>
+      </div>
 
       {libraryWarnings.length > 0 && (
         <div className={styles.warnings}>
@@ -167,25 +190,14 @@ export function LibraryView(): JSX.Element {
             {group.series.map((series) => (
               <div key={series.series} className={styles.seriesGroup}>
                 <h3 className={styles.seriesTitle}>{series.series}</h3>
-                <div className={styles.itemGrid}>
+                <div className={styles.grid}>
                   {series.items.map((item) => (
-                    <button
+                    <VideoCard
                       key={item.videoPath}
-                      type="button"
-                      className={styles.itemCard}
-                      onClick={() => void handleOpen(item)}
-                      disabled={openingPath === item.videoPath}
-                    >
-                      <span className={styles.itemTitle}>{item.title}</span>
-                      <span className={styles.itemMeta}>
-                        {item.transcriptPath ? (
-                          <span className={styles.badgeMatched}>Transcript matched</span>
-                        ) : (
-                          <span className={styles.badgeMissing}>No transcript</span>
-                        )}
-                        {openingPath === item.videoPath && <span className={styles.opening}>Opening…</span>}
-                      </span>
-                    </button>
+                      item={item}
+                      opening={openingPath === item.videoPath}
+                      onOpen={() => void handleOpen(item)}
+                    />
                   ))}
                 </div>
               </div>

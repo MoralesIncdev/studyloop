@@ -13,6 +13,12 @@ import { ConceptCard } from "./ConceptCard";
 import { ConceptOverlay } from "./ConceptOverlay";
 import styles from "./ConceptTicker.module.css";
 
+/** Concepts now live in the right-rail Concepts card (see study/RightRail.tsx),
+ *  not a bottom-dock tab — the ticker's overflow chip scrolls it into view. */
+function scrollToConceptsRail(): void {
+  document.getElementById("concepts-rail")?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
 const MAX_VISIBLE = 2;
 
 function tickerKey(conceptId: string, anchorT: number): string {
@@ -28,7 +34,6 @@ export function ConceptTicker(): JSX.Element {
   const concepts = useStudyLoopStore((s) => s.concepts);
   const currentTime = useStudyLoopStore((s) => s.currentTime);
   const muted = useStudyLoopStore((s) => s.conceptTickerMuted);
-  const setActiveDockTab = useStudyLoopStore((s) => s.setActiveDockTab);
 
   const [entries, setEntries] = useState<Entry[]>([]);
   const [expanded, setExpanded] = useState<ConceptCardType | null>(null);
@@ -89,7 +94,7 @@ export function ConceptTicker(): JSX.Element {
             />
           ))}
           {overflowCount > 0 && (
-            <button type="button" className={styles.moreChip} onClick={() => setActiveDockTab("concepts")}>
+            <button type="button" className={styles.moreChip} onClick={scrollToConceptsRail}>
               +{overflowCount} more
             </button>
           )}
