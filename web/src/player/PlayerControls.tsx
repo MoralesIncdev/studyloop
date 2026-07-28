@@ -18,6 +18,11 @@ export function PlayerControls(): JSX.Element {
   const clearLoop = useStudyLoopStore((s) => s.clearLoop);
   const openNotation = useStudyLoopStore((s) => s.openNotation);
   const captureScreenshotOnly = useStudyLoopStore((s) => s.captureScreenshotOnly);
+  const health = useStudyLoopStore((s) => s.health);
+
+  // `health === null` means the check hasn't resolved yet — don't disable on
+  // a guess; only disable once we positively know ffmpeg is missing.
+  const ffmpegMissing = health?.ffmpeg === false;
 
   const togglePlay = () => {
     if (!controller) return;
@@ -46,8 +51,8 @@ export function PlayerControls(): JSX.Element {
         type="button"
         className={styles.captureButton}
         onClick={() => void captureScreenshotOnly()}
-        disabled={!controller}
-        title="Screenshot (S)"
+        disabled={!controller || ffmpegMissing}
+        title={ffmpegMissing ? "ffmpeg not found on PATH — screenshots are disabled" : "Screenshot (S)"}
       >
         📷 Shot
       </button>

@@ -9,6 +9,7 @@ import { formatTimestamp } from "../lib/time";
 import type {
   Bubble,
   ConceptCard,
+  HealthResponse,
   LibraryItem,
   Project,
   StudyLoopConfig,
@@ -77,6 +78,11 @@ export interface StudyLoopStore {
   configLoading: boolean;
   loadConfig: () => Promise<StudyLoopConfig | null>;
   saveConfig: (patch: StudyLoopConfigPatch) => Promise<StudyLoopConfig>;
+
+  // --- health (out-of-box polish: ffmpeg/yt-dlp availability) -----------------
+  /** `null` until loadHealth() resolves once — see App.tsx mount effect. */
+  health: HealthResponse | null;
+  loadHealth: () => Promise<void>;
 
   // --- projects ----------------------------------------------------------------
   projects: Project[];
@@ -238,6 +244,19 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     } catch (err) {
       get().pushToast(`Could not save settings: ${errorMessage(err)}`, "error");
       throw err;
+    }
+  },
+
+  // --- health ------------------------------------------------------------------
+  health: null,
+  loadHealth: async () => {
+    try {
+      const health = await api.getHealth();
+      set({ health });
+    } catch {
+      // Non-critical: screenshot controls just won't be able to explain
+      // *why* they're disabled. No toast — this runs once on app mount and
+      // a health-check failure shouldn't greet the user with an error.
     }
   },
 

@@ -117,6 +117,13 @@ export interface YoutubeResolveResponse {
   ytdlpMissing?: boolean;
 }
 
+/** GET /api/health — lets the UI disable ffmpeg/yt-dlp-dependent controls with a clear reason. */
+export interface HealthResponse {
+  ok: boolean;
+  ffmpeg: boolean;
+  ytdlp: boolean;
+}
+
 export interface RevealResponse {
   ok: boolean;
   message?: string;

@@ -15,6 +15,8 @@ import { youtubeRoutes } from "./routes/youtube.js";
 import { configRoutes } from "./routes/config.js";
 import { mediaRoutes } from "./routes/media.js";
 import { revealRoutes } from "./routes/reveal.js";
+import { isFfmpegAvailable } from "./lib/frames.js";
+import { isYtdlpAvailable } from "./lib/ytdlp.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? process.env.STUDYLOOP_PORT ?? 4600);
@@ -52,7 +54,14 @@ async function main(): Promise<void> {
   await app.register(mediaRoutes);
   await app.register(revealRoutes);
 
-  app.get("/api/health", async () => ({ ok: true }));
+  // Out-of-box polish: lets the web app disable screenshot controls with a
+  // clear tooltip instead of a failed request when ffmpeg/yt-dlp aren't on
+  // PATH. Checked live (not cached) — installing either mid-session and
+  // reloading the app should pick it up without a server restart.
+  app.get("/api/health", async () => {
+    const [ffmpeg, ytdlp] = await Promise.all([isFfmpegAvailable(), isYtdlpAvailable()]);
+    return { ok: true, ffmpeg, ytdlp };
+  });
 
   // In production, serve the built web app for anything that isn't an /api route.
   const fsSync = await import("node:fs");

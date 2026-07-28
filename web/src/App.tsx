@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useStudyLoopStore } from "./state/store";
 import { LibraryView } from "./library/LibraryView";
 import { SettingsView } from "./library/SettingsView";
@@ -6,6 +7,12 @@ import { ToastHost } from "./components/ToastHost";
 
 export default function App(): JSX.Element {
   const route = useStudyLoopStore((s) => s.route);
+  const loadHealth = useStudyLoopStore((s) => s.loadHealth);
+
+  // Checked once per app load (not per-project) — see store.ts loadHealth.
+  useEffect(() => {
+    void loadHealth();
+  }, [loadHealth]);
 
   return (
     <>

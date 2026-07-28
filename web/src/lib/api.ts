@@ -5,6 +5,7 @@ import type {
   ConceptCard,
   ConceptProfile,
   CreateProjectBody,
+  HealthResponse,
   LibraryResponse,
   PatchProjectBody,
   Project,
@@ -66,6 +67,8 @@ export const api = {
     request<TranscriptResponse>(
       `/api/transcript?path=${encodeURIComponent(path)}${projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""}`
     ),
+
+  getHealth: () => request<HealthResponse>("/api/health"),
 
   listProjects: () => request<{ projects: Project[] }>("/api/projects"),
   getProject: (id: string) => request<Project>(`/api/projects/${encodeURIComponent(id)}`),

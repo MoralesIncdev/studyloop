@@ -4,7 +4,7 @@ import { z } from "zod";
 import { pathExists, readJsonIfExists, writeJsonAtomic } from "./lib/store.js";
 
 export const ConfigSchema = z.object({
-  dataDir: z.string().default("~/StudyLoop"),
+  dataDir: z.string().default("~/StudyLoopData"),
   libraryRoots: z.array(z.string()).default([]),
   transcriptRoots: z.array(z.string()).default([]),
   conceptDocs: z.array(z.string()).default([]),
@@ -22,8 +22,13 @@ export function expandHome(p: string): string {
   return p;
 }
 
+// "~/StudyLoopData", not "~/StudyLoop": on macOS's default case-insensitive
+// APFS volume, "~/StudyLoop" resolves to the very same directory as a repo
+// cloned to "~/studyloop" — writing project data there corrupts the working
+// tree. Only affects fresh installs; an existing config.json's dataDir is
+// never touched by this default (see loadConfig below).
 const DEFAULT_CONFIG: StudyLoopConfig = {
-  dataDir: "~/StudyLoop",
+  dataDir: "~/StudyLoopData",
   libraryRoots: [],
   transcriptRoots: [],
   conceptDocs: [],

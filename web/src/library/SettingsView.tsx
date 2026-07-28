@@ -49,7 +49,7 @@ export function SettingsView(): JSX.Element {
     try {
       const trimmedKey = anthropicApiKey.trim();
       await saveConfig({
-        dataDir: dataDir.trim() || "~/StudyLoop",
+        dataDir: dataDir.trim() || "~/StudyLoopData",
         libraryRoots: splitPaths(libraryRoots),
         transcriptRoots: splitPaths(transcriptRoots),
         conceptDocs: splitPaths(conceptDocs),
@@ -97,7 +97,7 @@ export function SettingsView(): JSX.Element {
             className={styles.input}
             value={dataDir}
             onChange={(e) => setDataDir(e.target.value)}
-            placeholder="~/StudyLoop"
+            placeholder="~/StudyLoopData"
           />
         </label>
 

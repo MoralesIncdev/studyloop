@@ -91,6 +91,16 @@ function run(args: string[]): Promise<{ code: number | null; stdout: string; std
   });
 }
 
+/** True if the yt-dlp binary is reachable on PATH (or STUDYLOOP_YTDLP_BIN). Used by GET /api/health. */
+export async function isYtdlpAvailable(): Promise<boolean> {
+  try {
+    const { code } = await run(["--version"]);
+    return code === 0;
+  } catch {
+    return false;
+  }
+}
+
 export function extractVideoId(url: string): string | null {
   try {
     const u = new URL(url);
