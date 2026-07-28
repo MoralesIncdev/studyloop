@@ -335,3 +335,119 @@ BJJ-style formatting); of those, fall back to headings if <2 anchored cards.
 - UI: dark theme default, clean/minimal, keyboard-first. No component library; plain
   CSS modules. Layout: header (title/source) · main = video (left 60%) + transcript
   (right 40%) · bottom dock = tabs [Notes | Bubbles | Concepts] resizable.
+
+---
+
+# V2 — YouTube-Native UI + Analysis Layer (2026-07-28)
+*Supersedes the v1 "Quality bar → UI/Layout" paragraph. Reference: `design/reference-youtube.png`
+(standard YouTube watch page). Design intent: deliberately hug YouTube's native watch UI so
+the broad user base (mostly studying YouTube content) feels zero learning curve. Local
+videos are first-class: every feature except YouTube search / related-videos works
+identically for local files.*
+
+## V2 layout (YouTube watch-page mapping)
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ TopBar: [logo StudyLoop]   [centered search + 🔍]            [⚙ avatar] │
+├──────────────────────────────────────────────┬───────────────────────────┤
+│ Player (16:9, fills left column)             │ RightRail (~402px)        │
+│  • CC subtitle overlay (transcript segments) │  ┌ Transcript panel      │
+│  • hover chrome (see Player chrome)          │  │  (collapsed header →  │
+│  • red progress bar + heatmap strip          │  │  expands, virtualized,│
+│                                              │  │  search, click-seek)  │
+│ Title (YT h1 style)                          │  ├ Concepts list         │
+│ Channel row: [instructor avatar] name        │  │  (card per concept,   │
+│   [Analyze ✨ primary pill]                  │  │  active highlighted,  │
+│ Action pills: 🔖 Compile · ↗ Share ·        │  │  covered ✓, click-seek│
+│   ⤓ Import analysis · 👁 Overlays           │  ├ Up-next cabinet       │
+│ Description box (YT-style, tabs):            │  │  (related videos —    │
+│   [Notes | Bubbles]                          │  │  YouTube only, hover/ │
+│                                              │  │  click drawer)        │
+└──────────────────────────────────────────────┴───────────────────────────┘
+```
+- Look: replicate YouTube dark theme metrics closely — Roboto font stack, 12px card
+  radii, #0f0f0f bg / #272727 chips / #f1f1f1 text / #aaa secondary, pill buttons
+  (18px radius), 10px gap grid in right rail, thumbnail 168×94 rounded 8px.
+- Old Library view becomes the "home grid" (YT home style: thumbnail cards w/ title,
+  instructor, duration badge, transcript badge). Settings via avatar menu.
+
+## Player chrome (hover, YouTube-style)
+- Bottom gradient scrim; controls fade in on hover/pause: ▶/⏸, volume, time
+  `current / duration`, spacer, then the right cluster: **✎ Note · 📷 Shot ·
+  ✨ Analyze · CC · ⚙(speed/loop) · ⛶ fullscreen**. (Notes+screenshot live exactly
+  where YouTube floats CC/settings — per design directive.)
+- CC button toggles subtitle overlay: active transcript segment rendered as YouTube
+  CC (bottom-center, black 75% bg, white text, max 2 lines). Persist per project.
+- Progress bar: red played-portion, chapter-tick support, bubble pins (dots) and
+  pearl markers (diamonds) above; **heatmap strip** (see Heatmap) rendered as a
+  translucent area curve directly above the bar, YouTube "most replayed" style.
+- Keyboard map unchanged from v1 (space/J/K/L/arrows/,/./N/S/A/B) + `C` toggles CC.
+
+## Fast YouTube layer (youtubei.js — replaces yt-dlp for metadata/captions)
+- Server lib `innertube.ts` using `youtubei.js` (npm, no API key): metadata + captions
+  + related + search. yt-dlp remains ONLY for frame-grab stream URLs (screenshots).
+- `POST /api/youtube/resolve` now answers from Innertube (target < 2s warm): title,
+  author, durationSeconds, captions (normalized segments incl. auto-generated),
+  related: [{videoId, title, author, durationSeconds, viewCountText, thumbnailUrl}].
+  Captions persisted to `captions.json` as before. Related list cached in project.json
+  (`related` field) and refreshable via `POST /api/youtube/related {videoId}`.
+- `GET /api/search?q=` → `{library: LibraryItem[], youtube: RelatedVideo[]}` — fuzzy
+  match over library titles/instructors + Innertube search (youtube section omitted
+  for empty/failed Innertube). TopBar search dropdown shows both sections; picking a
+  YouTube result creates/opens a project for it ("search acts as the pointer toward a
+  video").
+- Up-next cabinet: right-rail section listing `related`; hover expands full cards
+  (thumbnail, title, author, duration); click → create/open project for that video.
+  Graceful empty state for local videos (cabinet hidden).
+
+## Analysis engine ("pearls & concept breakdown")
+- Trigger: ✨ Analyze button (player cluster + channel-row pill). Requires transcript
+  + `anthropicApiKey` in config (else pill opens Settings with a hint).
+- `POST /api/projects/:id/analyze` → server chunks the transcript (~8-min windows,
+  1-min overlap), calls Claude (model `claude-sonnet-5`, via @anthropic-ai/sdk,
+  temperature 0.2, JSON tool-output per chunk), then a final merge pass produces:
+  ```
+  analysis.json {
+    generatedAt, model, version: 2,
+    pearls: [{ t, label (≤60c), insight (1-3 sentences), importance: 1|2|3 }],
+    concepts: [{ id, title, summary, anchors: [{t}], body (markdown) }],
+    themes: [{ title, body }]        // overarching, unanchored
+  }
+  ```
+- Progress: SSE or polling endpoint `GET /api/projects/:id/analyze/status`
+  (states: idle|running {pct}|done|error). UI shows YT-style thin progress under the
+  Analyze pill; toast on completion. Analysis is idempotent-cached: re-run only on
+  explicit "Re-analyze" (confirm dialog).
+- Rendering: pearls → diamond markers on timeline + "Pearls" group at top of the
+  right-rail Concepts panel (importance-sorted, click-seek); concepts/themes fill the
+  Concepts panel alongside (analysis concepts and attached concept-doc cards coexist,
+  analysis section labeled "AI breakdown", doc section labeled by filename).
+- Compile v2: study doc gains "Pearls" (timestamped, importance-starred) and
+  "Concept breakdown" sections after the user-notes sections. Never blocks without
+  analysis — sections simply absent.
+
+## Heatmap + shareable analysis (the data layer)
+- `GET /api/projects/:id/heatmap` → 200-bucket density array over video duration.
+  Sources: bubbles (weight 1), pearls (weight = importance), imported overlay
+  analyses (their bubbles/pearls, weight ×0.5). Gaussian-smoothed server-side.
+- Share: `POST /api/projects/:id/export-analysis` → `exports/<title>.studyloop.json`
+  — self-contained bundle: source ref (videoId/url or filename+duration hash — never
+  the video bytes), author handle (config `shareHandle`, default "anonymous"), notes
+  md, bubbles (shots embedded as base64 thumbnails ≤ 480px wide), pearls, concepts,
+  themes, createdAt. Share pill → writes bundle + Reveal in Finder + Copy path.
+- Import: Import-analysis pill (file picker or drop) → validated (zod, version
+  gate, source match warning if videoId/duration mismatch) → stored under
+  `<project>/overlays/<handle>-<hash>.studyloop.json`.
+- Overlays toggle (👁 pill): renders imported analyses as a second pin/marker layer
+  (distinct color per handle, legend chip row), merges into heatmap, and adds an
+  "Others' analysis" right-rail section grouped by handle. This is the local
+  foundation for the future community aggregation service (out of scope in v2) —
+  the bundle format IS the wire format, so keep it versioned and stable.
+
+## V2 out-of-box requirements
+- Everything in v1 holds. youtubei.js failures (network-blocked, API drift) degrade:
+  resolve falls back to yt-dlp path, search shows library-only, cabinet hides.
+- No Anthropic key → app fully usable; only Analyze is gated (with a clear one-line
+  "add key in Settings" hint).
+- Local-video projects: identical UI minus YouTube-only sections (no dead space —
+  rail sections collapse).
