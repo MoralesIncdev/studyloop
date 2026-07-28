@@ -48,6 +48,8 @@ export interface CreateProjectBody {
   transcriptPath?: string;
   conceptDocPath?: string;
   conceptDocProfile?: ConceptProfile;
+  /** Pre-resolved YouTube captions to persist as captions.json — youtube sources only. */
+  captions?: TranscriptSegment[];
 }
 
 export interface PatchProjectBody {
@@ -113,4 +115,9 @@ export interface YoutubeResolveResponse {
   error?: string;
   /** True if yt-dlp isn't installed — the project should still be created (title = URL). */
   ytdlpMissing?: boolean;
+}
+
+export interface RevealResponse {
+  ok: boolean;
+  message?: string;
 }

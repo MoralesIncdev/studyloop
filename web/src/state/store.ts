@@ -158,6 +158,15 @@ export interface StudyLoopStore {
   // --- F5 screenshot-only ---------------------------------------------------------------
   captureScreenshotOnly: () => Promise<void>;
 
+  // --- F10 compile ------------------------------------------------------------------
+  compiling: boolean;
+  /** Set once POST /api/projects/:id/compile succeeds; drives the preview modal. */
+  compileResult: { path: string; markdown: string } | null;
+  runCompile: () => Promise<void>;
+  clearCompileResult: () => void;
+  /** `path` defaults to the project's exports/ directory when omitted. */
+  revealExport: (path?: string) => Promise<void>;
+
   // --- toasts -----------------------------------------------------------------------
   toasts: Toast[];
   pushToast: (message: string, kind?: Toast["kind"]) => void;
@@ -280,6 +289,11 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       const created = await api.createProject({
         title: resolved.title ?? url,
         source: { type: "youtube", videoId: resolved.videoId, url },
+        // Persisted server-side as captions.json and wired up as the
+        // project's transcript (see server/src/routes/projects.ts) — the
+        // TranscriptPane then "just works" for YouTube projects with no
+        // further client-side plumbing.
+        captions: resolved.captions,
       });
       set((state) => ({ projects: [...state.projects, created] }));
       return created;
@@ -327,6 +341,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       conceptsLoading: false,
       notationModal: null,
       notationGeneration: get().notationGeneration + 1,
+      compiling: false,
+      compileResult: null,
     });
     let project: Project;
     try {
@@ -382,7 +398,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     if (project.transcript.type === "file") {
       set({ transcriptLoading: true });
       try {
-        const res = await api.getTranscript(project.transcript.path);
+        const res = await api.getTranscript(project.transcript.path, project.id);
         if (!isCurrent()) return;
         set({ transcriptSegments: res.segments, transcriptLoading: false });
       } catch (err) {
@@ -413,6 +429,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       conceptsLoading: false,
       notationModal: null,
       notationGeneration: state.notationGeneration + 1,
+      compiling: false,
+      compileResult: null,
     }));
   },
   patchCurrentProject: async (patch) => {
@@ -661,6 +679,34 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       }
     } catch (err) {
       get().pushToast(`Could not capture: ${errorMessage(err)}`, "error");
+    }
+  },
+
+  // --- F10 compile --------------------------------------------------------------------
+  compiling: false,
+  compileResult: null,
+  runCompile: async () => {
+    const project = get().currentProject;
+    if (!project) return;
+    set({ compiling: true });
+    try {
+      const result = await api.compile(project.id);
+      set({ compiling: false, compileResult: result });
+      get().pushToast("Compiled study document", "success");
+    } catch (err) {
+      set({ compiling: false });
+      get().pushToast(`Could not compile: ${errorMessage(err)}`, "error");
+    }
+  },
+  clearCompileResult: () => set({ compileResult: null }),
+  revealExport: async (path) => {
+    const project = get().currentProject;
+    if (!project) return;
+    try {
+      const res = await api.reveal(project.id, path);
+      if (!res.ok) get().pushToast(res.message ?? "Could not reveal in Finder", "info");
+    } catch (err) {
+      get().pushToast(`Could not reveal in Finder: ${errorMessage(err)}`, "error");
     }
   },
 

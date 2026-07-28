@@ -1,0 +1,19 @@
+.wrap {
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+
+.iframeHost {
+  width: 100%;
+  height: 100%;
+}
+
+/* The YT IFrame API replaces .iframeHost in-place with its own <iframe>, so
+   this has to target the resulting element globally rather than by class. */
+.wrap :global(iframe) {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0;
+}

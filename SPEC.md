@@ -45,13 +45,19 @@ studyloop/
 ## Config — `~/.studyloop/config.json` (auto-created on first run)
 ```json
 {
-  "dataDir": "~/StudyLoop",
+  "dataDir": "~/StudyLoopData",
   "libraryRoots": [],
   "transcriptRoots": [],
   "conceptDocs": [],
   "anthropicApiKey": null
 }
 ```
+- Default `dataDir` is `~/StudyLoopData`, not `~/StudyLoop` — on macOS's default
+  case-insensitive APFS volume, `~/StudyLoop` resolves to the same directory as a repo
+  cloned to `~/studyloop`, so the old default silently wrote project data into a git
+  working tree. This only affects fresh installs: an existing `config.json`'s `dataDir`
+  is never rewritten by this default — see README "Migrating from `~/StudyLoop`" if you
+  were on the old default.
 - Missing/unmounted roots are skipped with a warning in the library response, never a crash.
 - `GET /api/config` and `PUT /api/config` let the web app edit this (Settings screen).
   **`anthropicApiKey` is write-only from the browser's point of view:** `GET
@@ -73,6 +79,10 @@ project.json   { id, title, source: {type:"local"|"youtube", path?|videoId?, url
                  createdAt, updatedAt, lastPosition, watchedUpTo }
 notes.md       long-running notes (markdown; ^t:123.4 tokens rendered as timestamp links)
 bubbles.json   [{ id, t, text, shot?: "shots/<file>.jpg", createdAt }]
+captions.json  YouTube auto-captions, if resolve returned any: {segments:[{start,end,text}]}
+               (whisper-style JSON — the existing generic loader reads it, no new parser).
+               Written once at project creation; project.transcript points at it as
+               {type:"file", path:"captions.json"}.
 shots/         extracted JPEG frames, named shot-<t-in-ms>.jpg
 exports/       compiled documents
 ```
@@ -100,13 +110,24 @@ The periodic PATCH is serialized client-side (skipped if one is already in fligh
   string prefix check) inside a configured root; otherwise 403. Supports standard
   `bytes=start-end` and suffix (`bytes=-N`, last N bytes) ranges; malformed ranges get
   416, multi-range requests fall back to a full 200 response (both per RFC 7233).
-- `GET /api/transcript?path=<abs>` → normalized `{ segments: [{start, end, text}] }`.
-  Loaders: (a) BJJ-corpus JSON `{timestamps:[{start,end,text}]}`, (b) .srt, (c) .vtt.
-  Same realpath-canonical root guard as video streaming.
-- `POST /api/projects` `{source, transcriptPath?, conceptDocPath?}` → creates project.
-  Same realpath-canonical guard on `source.path`/`transcriptPath`/`conceptDocPath`;
-  `source.type: "youtube"` URLs are validated (https, allowlisted YouTube hosts) the
-  same way `/api/youtube/resolve` does.
+- `GET /api/transcript?path=<...>&projectId=<id>` → normalized `{ segments: [{start, end,
+  text}] }`. Loaders: (a) BJJ-corpus JSON `{timestamps:[{start,end,text}]}`, (b) generic
+  whisper-style JSON `{segments:[{start,end,text}]}`, (c) .srt, (d) .vtt. `projectId` is
+  optional; when present *and* `path` is not absolute, `path` is resolved inside that
+  project's own folder (realpath-canonical, can't escape it) instead of against the
+  configured roots — this is how a YouTube project's `captions.json` (project-relative,
+  server-managed data) gets read without needing to live under a `transcriptRoot`. An
+  absolute `path` always goes through the standard root-allowlist guard regardless of
+  whether `projectId` was also passed, so local-project transcripts (always absolute) are
+  unaffected.
+- `POST /api/projects` `{source, transcriptPath?, conceptDocPath?, captions?}` → creates
+  project. Same realpath-canonical guard on `source.path`/`transcriptPath`/
+  `conceptDocPath`; `source.type: "youtube"` URLs are validated (https, allowlisted
+  YouTube hosts) the same way `/api/youtube/resolve` does. `captions` (segments from a
+  prior `/api/youtube/resolve` call) is only used for `source.type: "youtube"`; when
+  present and non-empty it's written to `captions.json` (see Data model) and
+  `transcript` is set to `{type:"file", path:"captions.json"}`, overriding
+  `transcriptPath` for that call.
 - `GET /api/projects` / `GET /api/projects/:id` / `PATCH /api/projects/:id`
   (`lastPosition`, `watchedUpTo`, etc.) — PATCH revalidates any path-bearing fields
   (`conceptDoc.path`, `transcript.path`) against the configured roots exactly like
@@ -137,6 +158,15 @@ The periodic PATCH is serialized client-side (skipped if one is already in fligh
   locally from the URL, `title`/`captions` are `null`, `ytdlpMissing: true`; the web
   app creates the project anyway with `title = url`.
 - `GET /api/media/:projectId/shots/<file>` — serves shot images.
+- `POST /api/projects/:id/reveal` `{path?}` → `{ok, message?}`. macOS-only: runs `open -R
+  <path>` to reveal a file (or the whole `exports/` folder, if `path` omitted) in Finder.
+  `path`, if given, must resolve (realpath-canonical) inside that project's `exports/`
+  directory — otherwise 403. On non-macOS platforms, returns `{ok: false, message}`
+  rather than attempting anything (no-op, not an error).
+- `GET /api/health` → `{ok: true, ffmpeg: boolean, ytdlp: boolean}`. Checked live on
+  every call (not cached), so installing either binary mid-session and reloading picks
+  it up without a server restart. The web app calls this once on load and disables
+  ffmpeg-dependent controls (screenshots) with a tooltip when `ffmpeg` is false.
 
 ## Concept-doc profiles (`server/src/lib/concepts.ts`)
 1. `bjj-curriculum`: split on `##`/`###` headings; extract time anchors from citation
@@ -187,8 +217,12 @@ BJJ-style formatting); of those, fall back to headings if <2 anchored cards.
   become clickable seek links; drag bubble → appends `^t` + text + shot ref.
 - **BubbleRail:** right-side chronological list; click seeks to t−5s; edit/delete;
   uncaptioned shots show a subtle "no caption" badge.
-- **Compile button:** calls compile, shows the markdown in a modal with "Reveal in
-  Finder" (opens exports/) and Copy buttons.
+- **Compile button:** if any bubble has a shot but empty text, first shows a skippable
+  "caption these?" pass (uncaptioned shots + inline text inputs) before compiling.
+  Then calls compile and shows the rendered markdown in a preview modal (a small
+  markdown-lite renderer, not the raw text) with "Reveal in Finder" (opens the compiled
+  file's location, or the whole exports/ folder — no-op toast with a message on
+  non-macOS) and "Copy markdown" buttons.
 - **Resume:** `{lastPosition, watchedUpTo}` PATCHed every 10s (serialized — skipped if
   a previous PATCH is still in flight); reopening a project offers resume from
   `lastPosition`.

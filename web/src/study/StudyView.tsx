@@ -5,12 +5,14 @@ import { useEffect, useRef, useState } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { useHotkeys } from "../lib/hotkeys";
 import { LocalVideoPlayer } from "../player/LocalVideoPlayer";
+import { YouTubePlayer } from "../player/YouTubePlayer";
 import { SeekBar } from "../player/SeekBar";
 import { PlayerControls } from "../player/PlayerControls";
 import { TranscriptPane } from "../transcript/TranscriptPane";
 import { BottomDock } from "./BottomDock";
 import { NotationModal } from "../notes/NotationModal";
 import { ConceptTicker } from "../concepts/ConceptTicker";
+import { CompileFlow } from "./CompileFlow";
 import { api } from "../lib/api";
 import { formatTimestamp } from "../lib/time";
 import styles from "./StudyView.module.css";
@@ -46,6 +48,12 @@ export function StudyView({ projectId }: Props): JSX.Element {
   const [startAt, setStartAt] = useState<number | undefined>(undefined);
 
   const isLocal = currentProject?.source.type === "local";
+  const isYoutube = currentProject?.source.type === "youtube";
+  // Both source types are fully playable (YouTube via the IFrame API) — kept
+  // as its own flag rather than inlined so a future non-playable source type
+  // (e.g. a not-yet-resolved project) fails closed instead of falling
+  // through to `true`.
+  const canPlay = isLocal || isYoutube;
   const isSameProjectLoaded = currentProject?.id === projectId;
 
   useEffect(() => {
@@ -56,23 +64,22 @@ export function StudyView({ projectId }: Props): JSX.Element {
   }, [projectId]);
 
   useEffect(() => {
-    if (!isSameProjectLoaded || !currentProject) return;
-    if (currentProject.source.type !== "local") return;
+    if (!isSameProjectLoaded || !currentProject || !canPlay) return;
     if (startAt !== undefined) return;
     if (currentProject.lastPosition > RESUME_THRESHOLD_SECONDS) return; // wait for user choice
     setStartAt(0);
-  }, [isSameProjectLoaded, currentProject, startAt]);
+  }, [isSameProjectLoaded, currentProject, startAt, canPlay]);
 
   // Persist lastPosition (and the monotonic watchedUpTo high-water mark)
-  // every 10s while a local project is open. Serialized: if a patch is still
-  // in flight when the next tick (or unmount) fires, that tick is skipped
-  // rather than firing a second overlapping PATCH — an out-of-order response
-  // to an earlier request could otherwise stomp a later position.
+  // every 10s while a playable project is open. Serialized: if a patch is
+  // still in flight when the next tick (or unmount) fires, that tick is
+  // skipped rather than firing a second overlapping PATCH — an out-of-order
+  // response to an earlier request could otherwise stomp a later position.
   const patchRef = useRef(patchCurrentProject);
   patchRef.current = patchCurrentProject;
   const patchInFlightRef = useRef(false);
   useEffect(() => {
-    if (!isLocal || !isSameProjectLoaded) return undefined;
+    if (!canPlay || !isSameProjectLoaded) return undefined;
     const doPatch = () => {
       if (patchInFlightRef.current) return;
       const t = useStudyLoopStore.getState().currentTime;
@@ -89,7 +96,7 @@ export function StudyView({ projectId }: Props): JSX.Element {
       const t = useStudyLoopStore.getState().currentTime;
       if (t > 0) doPatch();
     };
-  }, [isLocal, isSameProjectLoaded, projectId]);
+  }, [canPlay, isSameProjectLoaded, projectId]);
 
   useHotkeys(isSameProjectLoaded && startAt !== undefined);
 
@@ -97,29 +104,6 @@ export function StudyView({ projectId }: Props): JSX.Element {
     return (
       <div className={styles.page}>
         <div className={styles.status}>Loading project…</div>
-      </div>
-    );
-  }
-
-  if (currentProject.source.type === "youtube") {
-    return (
-      <div className={styles.page}>
-        <header className={styles.header}>
-          <button type="button" className={styles.backButton} onClick={() => navigate({ view: "library" })}>
-            ← Library
-          </button>
-          <h1 className={styles.title}>{currentProject.title}</h1>
-        </header>
-        <div className={styles.youtubePlaceholder}>
-          <p>YouTube playback arrives in the next build.</p>
-          <p className={styles.youtubePlaceholderSub}>
-            This project was created from{" "}
-            <a href={currentProject.source.url} target="_blank" rel="noreferrer">
-              {currentProject.source.url}
-            </a>
-            .
-          </p>
-        </div>
       </div>
     );
   }
@@ -134,8 +118,11 @@ export function StudyView({ projectId }: Props): JSX.Element {
         </button>
         <div className={styles.headerTitles}>
           <h1 className={styles.title}>{currentProject.title}</h1>
-          <span className={styles.subtitle}>{currentProject.source.path}</span>
+          <span className={styles.subtitle}>
+            {currentProject.source.type === "local" ? currentProject.source.path : currentProject.source.url}
+          </span>
         </div>
+        <CompileFlow />
         <button
           type="button"
           className={styles.tickerMuteButton}
@@ -165,8 +152,11 @@ export function StudyView({ projectId }: Props): JSX.Element {
                 </div>
               </div>
             )}
-            {startAt !== undefined && (
+            {startAt !== undefined && currentProject.source.type === "local" && (
               <LocalVideoPlayer key={currentProject.id} src={api.videoStreamUrl(currentProject.source.path)} startAt={startAt} />
+            )}
+            {startAt !== undefined && currentProject.source.type === "youtube" && (
+              <YouTubePlayer key={currentProject.id} videoId={currentProject.source.videoId} startAt={startAt} />
             )}
             {startAt !== undefined && <ConceptTicker />}
           </div>

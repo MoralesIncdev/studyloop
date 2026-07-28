@@ -122,6 +122,25 @@ export function exportsDir(dataDir: string, id: string): string {
   return path.join(projectDir(dataDir, id), "exports");
 }
 
+function captionsPath(dataDir: string, id: string): string {
+  return path.join(projectDir(dataDir, id), "captions.json");
+}
+
+/**
+ * Persists YouTube auto-captions as `<project>/captions.json`, in the
+ * generic whisper-style shape (`{segments: [{start,end,text}]}`) that
+ * lib/transcripts.ts's loadTranscriptFromText already parses for any
+ * `.json` transcript — no new loader needed, GET /api/transcript picks this
+ * up the same way it reads any other project transcript file.
+ */
+export async function writeCaptions(
+  dataDir: string,
+  id: string,
+  segments: readonly { start: number; end: number; text: string }[]
+): Promise<void> {
+  await writeJsonAtomic(captionsPath(dataDir, id), { segments });
+}
+
 export async function listProjectIds(dataDir: string): Promise<string[]> {
   const projectsRoot = path.join(dataDir, "projects");
   try {

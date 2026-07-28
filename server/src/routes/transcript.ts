@@ -1,11 +1,11 @@
 import fs from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { getConfig, resolveRoots } from "../config.js";
-import { isPathAllowedCanonical } from "../lib/paths.js";
+import { getConfig, resolveDataDir, resolveRoots } from "../config.js";
+import { resolveTranscriptPath } from "../lib/transcriptResolve.js";
 import { loadTranscriptFromText, TranscriptParseError } from "../lib/transcripts.js";
 
-const QuerySchema = z.object({ path: z.string().min(1) });
+const QuerySchema = z.object({ path: z.string().min(1), projectId: z.string().min(1).optional() });
 
 export async function transcriptRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/transcript", async (request, reply) => {
@@ -13,12 +13,12 @@ export async function transcriptRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: "Missing or invalid ?path=" });
     }
-    const filePath = parsed.data.path;
 
     const config = await getConfig();
-    if (!(await isPathAllowedCanonical(filePath, resolveRoots(config)))) {
-      return reply.status(403).send({ error: "Path is outside configured roots" });
-    }
+    const dataDir = resolveDataDir(config);
+    const resolved = await resolveTranscriptPath(dataDir, resolveRoots(config), parsed.data.path, parsed.data.projectId);
+    if (!resolved.ok) return reply.status(resolved.status).send({ error: resolved.error });
+    const filePath = resolved.filePath;
 
     let raw: string;
     try {

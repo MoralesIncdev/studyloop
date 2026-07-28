@@ -8,6 +8,7 @@ import type {
   LibraryResponse,
   PatchProjectBody,
   Project,
+  RevealResponse,
   StudyLoopConfig,
   StudyLoopConfigPatch,
   TranscriptResponse,
@@ -61,8 +62,10 @@ export const api = {
   putConfig: (patch: StudyLoopConfigPatch) =>
     request<StudyLoopConfig>("/api/config", { method: "PUT", body: JSON.stringify(patch) }),
 
-  getTranscript: (path: string) =>
-    request<TranscriptResponse>(`/api/transcript?path=${encodeURIComponent(path)}`),
+  getTranscript: (path: string, projectId?: string) =>
+    request<TranscriptResponse>(
+      `/api/transcript?path=${encodeURIComponent(path)}${projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""}`
+    ),
 
   listProjects: () => request<{ projects: Project[] }>("/api/projects"),
   getProject: (id: string) => request<Project>(`/api/projects/${encodeURIComponent(id)}`),
@@ -102,6 +105,11 @@ export const api = {
 
   compile: (id: string) =>
     request<{ path: string; markdown: string }>(`/api/projects/${encodeURIComponent(id)}/compile`, { method: "POST" }),
+  reveal: (id: string, path?: string) =>
+    request<RevealResponse>(`/api/projects/${encodeURIComponent(id)}/reveal`, {
+      method: "POST",
+      body: JSON.stringify(path ? { path } : {}),
+    }),
 
   resolveYoutube: (url: string) =>
     request<YoutubeResolveResponse>("/api/youtube/resolve", { method: "POST", body: JSON.stringify({ url }) }),

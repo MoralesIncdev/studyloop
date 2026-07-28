@@ -1,0 +1,64 @@
+.doc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.h1 {
+  font-size: 18px;
+  margin: 0 0 10px;
+}
+
+.h2 {
+  font-size: 15px;
+  margin: 18px 0 8px;
+  color: var(--text);
+}
+
+.h3 {
+  font-size: 13px;
+  margin: 14px 0 6px;
+  color: var(--text-dim);
+}
+
+.hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+
+.paragraph {
+  margin: 0 0 4px;
+  white-space: pre-wrap;
+}
+
+.list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.listItem {
+  margin: 0 0 10px;
+}
+
+.image {
+  display: block;
+  max-width: 220px;
+  border-radius: 6px;
+  margin-top: 6px;
+  border: 1px solid var(--border);
+}
+
+.link {
+  color: var(--accent);
+}
+
+.seekLink {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+}

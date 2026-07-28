@@ -32,12 +32,25 @@ export const ProjectSchema = z.object({
 });
 export type Project = z.infer<typeof ProjectSchema>;
 
+export const TranscriptSegmentSchema = z.object({
+  start: z.number().nonnegative(),
+  end: z.number().nonnegative(),
+  text: z.string(),
+});
+export type TranscriptSegmentInput = z.infer<typeof TranscriptSegmentSchema>;
+
 export const CreateProjectBodySchema = z.object({
   title: z.string().optional(),
   source: SourceSchema,
   transcriptPath: z.string().optional(),
   conceptDocPath: z.string().optional(),
   conceptDocProfile: z.enum(["bjj-curriculum", "headings"]).optional(),
+  /**
+   * Pre-resolved YouTube captions (from POST /api/youtube/resolve, called by
+   * the client before project creation) to persist as captions.json — only
+   * used when source.type === "youtube". See lib/store.ts writeCaptions.
+   */
+  captions: z.array(TranscriptSegmentSchema).optional(),
 });
 export type CreateProjectBody = z.infer<typeof CreateProjectBodySchema>;
 

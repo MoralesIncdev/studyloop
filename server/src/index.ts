@@ -14,6 +14,7 @@ import { compileRoutes } from "./routes/compile.js";
 import { youtubeRoutes } from "./routes/youtube.js";
 import { configRoutes } from "./routes/config.js";
 import { mediaRoutes } from "./routes/media.js";
+import { revealRoutes } from "./routes/reveal.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? process.env.STUDYLOOP_PORT ?? 4600);
@@ -49,6 +50,7 @@ async function main(): Promise<void> {
   await app.register(youtubeRoutes);
   await app.register(configRoutes);
   await app.register(mediaRoutes);
+  await app.register(revealRoutes);
 
   app.get("/api/health", async () => ({ ok: true }));
 

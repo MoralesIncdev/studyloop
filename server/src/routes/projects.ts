@@ -21,6 +21,7 @@ import {
   listProjectIds,
   withProjectLock,
   writeBubbles,
+  writeCaptions,
   writeNotes,
   writeProject,
 } from "../lib/store.js";
@@ -63,18 +64,32 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(403).send({ error: "conceptDocPath is outside configured roots" });
     }
 
+    // YouTube captions (resolved client-side via POST /api/youtube/resolve
+    // before this call) get persisted as captions.json and wired up as the
+    // project's transcript, same as any other transcript file — the client
+    // never sees or manages a separate "captions" concept after this point.
+    const hasYoutubeCaptions = body.source.type === "youtube" && !!body.captions && body.captions.length > 0;
+
     const now = new Date().toISOString();
+    const id = newId();
     const project: Project = {
-      id: newId(),
+      id,
       title: body.title ?? (body.source.type === "local" ? titleFromLocalPath(body.source.path) : "YouTube video"),
       source: body.source,
-      transcript: body.transcriptPath ? { type: "file", path: body.transcriptPath } : { type: "none" },
+      transcript: hasYoutubeCaptions
+        ? { type: "file", path: "captions.json" }
+        : body.transcriptPath
+          ? { type: "file", path: body.transcriptPath }
+          : { type: "none" },
       conceptDoc: body.conceptDocPath ? { path: body.conceptDocPath, profile: body.conceptDocProfile } : undefined,
       createdAt: now,
       updatedAt: now,
       lastPosition: 0,
       watchedUpTo: 0,
     };
+    if (hasYoutubeCaptions && body.captions) {
+      await writeCaptions(dataDir, id, body.captions);
+    }
     await writeProject(dataDir, project);
     return reply.status(201).send(project);
   });
