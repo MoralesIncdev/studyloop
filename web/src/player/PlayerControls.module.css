@@ -39,6 +39,25 @@
   flex: 1;
 }
 
+.captureButton {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.captureButton:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.captureButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .loopBadge {
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--accent) 15%, transparent);

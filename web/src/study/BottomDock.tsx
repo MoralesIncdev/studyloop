@@ -1,6 +1,10 @@
-// Bottom dock: tabs Notes | Bubbles | Concepts. Content is an empty placeholder in
-// this chunk — NotesPane, BubbleRail, and ConceptTicker land in a later build.
+// Bottom dock: tabs Notes | Bubbles | Concepts. Notes and Bubbles stay mounted
+// under both tabs (hidden via CSS rather than unmounted) so an in-progress note
+// edit or the bubble list's scroll position survives switching tabs; Concepts
+// is still a placeholder (arrives in a later build).
 import { useStudyLoopStore, type DockTab } from "../state/store";
+import { NotesPane } from "../notes/NotesPane";
+import { BubbleRail } from "../notes/BubbleRail";
 import styles from "./BottomDock.module.css";
 
 const TABS: { id: DockTab; label: string }[] = [
@@ -8,12 +12,6 @@ const TABS: { id: DockTab; label: string }[] = [
   { id: "bubbles", label: "Bubbles" },
   { id: "concepts", label: "Concepts" },
 ];
-
-const PLACEHOLDER_COPY: Record<DockTab, string> = {
-  notes: "Long-running notes with timestamp links arrive in a later build.",
-  bubbles: "Time-anchored notation bubbles arrive in a later build.",
-  concepts: "The concept ticker and cards arrive in a later build.",
-};
 
 export function BottomDock(): JSX.Element {
   const activeDockTab = useStudyLoopStore((s) => s.activeDockTab);
@@ -34,7 +32,15 @@ export function BottomDock(): JSX.Element {
         ))}
       </div>
       <div className={styles.panel}>
-        <p className={styles.placeholder}>{PLACEHOLDER_COPY[activeDockTab]}</p>
+        <div className={styles.tabPanel} hidden={activeDockTab !== "notes"}>
+          <NotesPane />
+        </div>
+        <div className={styles.tabPanel} hidden={activeDockTab !== "bubbles"}>
+          <BubbleRail />
+        </div>
+        {activeDockTab === "concepts" && (
+          <p className={styles.placeholder}>The concept ticker and cards arrive in a later build.</p>
+        )}
       </div>
     </div>
   );

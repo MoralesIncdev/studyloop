@@ -69,10 +69,10 @@ export function useHotkeys(enabled: boolean): void {
           store.setLoopB(controller.getCurrentTime());
           break;
         case "n":
-          store.pushToast("Notation capture arrives in a later build", "info");
+          store.openNotation();
           break;
         case "s":
-          store.pushToast("Screenshot capture arrives in a later build", "info");
+          void store.captureScreenshotOnly();
           break;
         default:
           break;

@@ -38,6 +38,19 @@
   min-height: 0;
   overflow-y: auto;
   padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.tabPanel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tabPanel[hidden] {
+  display: none;
 }
 
 .placeholder {

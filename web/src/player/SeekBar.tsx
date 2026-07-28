@@ -10,14 +10,22 @@ export interface SeekBarMarker {
   t: number;
 }
 
+/** A bubble pin also carries enough to render a hover preview (text snippet + thumbnail). */
+export interface SeekBarBubbleMarker extends SeekBarMarker {
+  text?: string;
+  thumbnailUrl?: string | null;
+}
+
 interface Props {
   currentTime: number;
   duration: number;
-  bubbles?: SeekBarMarker[];
+  bubbles?: SeekBarBubbleMarker[];
   conceptTicks?: SeekBarMarker[];
   loopA?: number | null;
   loopB?: number | null;
   onSeek: (t: number) => void;
+  /** Called when a bubble pin is clicked, instead of onSeek. Defaults to onSeek. */
+  onSeekBubble?: (t: number) => void;
 }
 
 export function SeekBar({
@@ -28,9 +36,11 @@ export function SeekBar({
   loopA = null,
   loopB = null,
   onSeek,
+  onSeekBubble,
 }: Props): JSX.Element {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<{ x: number; t: number } | null>(null);
+  const [hoverBubble, setHoverBubble] = useState<SeekBarBubbleMarker | null>(null);
 
   const timeAtClientX = useCallback(
     (clientX: number): number => {
@@ -88,12 +98,28 @@ export function SeekBar({
           <div key={tick.id} className={styles.conceptTick} style={{ left: pct(tick.t) }} title={formatTimestamp(tick.t)} />
         ))}
         {bubbles.map((bubble) => (
-          <div key={bubble.id} className={styles.bubblePin} style={{ left: pct(bubble.t) }} title={formatTimestamp(bubble.t)} />
+          <div
+            key={bubble.id}
+            className={styles.bubblePin}
+            style={{ left: pct(bubble.t) }}
+            onMouseEnter={() => setHoverBubble(bubble)}
+            onMouseLeave={() => setHoverBubble((cur) => (cur?.id === bubble.id ? null : cur))}
+            onClick={(e) => {
+              e.stopPropagation();
+              (onSeekBubble ?? onSeek)(bubble.t);
+            }}
+          />
         ))}
         {loopA != null && <div className={styles.loopMarker} style={{ left: pct(loopA) }} title={`A: ${formatTimestamp(loopA)}`} />}
         {loopB != null && <div className={styles.loopMarker} style={{ left: pct(loopB) }} title={`B: ${formatTimestamp(loopB)}`} />}
         <div className={styles.playhead} style={{ left: pct(currentTime) }} />
-        {hover && (
+        {hoverBubble && (
+          <div className={styles.bubbleTooltip} style={{ left: pct(hoverBubble.t) }}>
+            {hoverBubble.thumbnailUrl && <img className={styles.bubbleTooltipImg} src={hoverBubble.thumbnailUrl} alt="" />}
+            <span className={styles.bubbleTooltipText}>{hoverBubble.text || formatTimestamp(hoverBubble.t)}</span>
+          </div>
+        )}
+        {!hoverBubble && hover && (
           <div className={styles.tooltip} style={{ left: hover.x }}>
             {formatTimestamp(hover.t)}
           </div>

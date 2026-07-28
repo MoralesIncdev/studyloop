@@ -4,7 +4,9 @@
 import { create } from "zustand";
 import { api, ApiError } from "../lib/api";
 import { parseHash, routeToHash, type Route } from "../lib/router";
-import type { LibraryItem, Project, StudyLoopConfig, TranscriptSegment } from "../lib/types";
+import { activeSegmentIndex } from "../lib/selectors";
+import { formatTimestamp } from "../lib/time";
+import type { Bubble, LibraryItem, Project, StudyLoopConfig, TranscriptSegment } from "../lib/types";
 import type { PlayerHandle } from "../player/types";
 
 export type DockTab = "notes" | "bubbles" | "concepts";
@@ -24,6 +26,21 @@ function errorMessage(err: unknown): string {
 function makeId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function sortBubbles(bubbles: readonly Bubble[]): Bubble[] {
+  return [...bubbles].sort((a, b) => a.t - b.t);
+}
+
+/** F4 Notation modal state — a shot capture is in flight the moment the modal opens. */
+export interface NotationModalState {
+  t: number;
+  /** Prefilled quote of the active transcript segment at t, if any. Removable, not saved if cleared. */
+  quote: string | null;
+  shot: string | null;
+  shotLoading: boolean;
+  shotFailed: boolean;
+  saving: boolean;
 }
 
 const MIN_RATE = 0.5;
@@ -93,6 +110,29 @@ export interface StudyLoopStore {
   // --- bottom dock ----------------------------------------------------------------
   activeDockTab: DockTab;
   setActiveDockTab: (tab: DockTab) => void;
+
+  // --- notes (F6) -------------------------------------------------------------------
+  notes: string;
+  notesLoaded: boolean;
+  saveNotes: (content: string) => Promise<void>;
+
+  // --- bubbles (F4/F5/F6) -------------------------------------------------------------
+  bubbles: Bubble[];
+  bubblesLoading: boolean;
+  patchBubble: (bubbleId: string, patch: { t?: number; text?: string; shot?: string | null }) => Promise<void>;
+  deleteBubble: (bubbleId: string) => Promise<void>;
+  appendBubbleToNotes: (bubbleId: string) => Promise<void>;
+
+  // --- F4 notation modal --------------------------------------------------------------
+  notationModal: NotationModalState | null;
+  notationGeneration: number;
+  openNotation: () => void;
+  removeNotationQuote: () => void;
+  cancelNotation: () => void;
+  saveNotation: (text: string) => Promise<void>;
+
+  // --- F5 screenshot-only ---------------------------------------------------------------
+  captureScreenshotOnly: () => Promise<void>;
 
   // --- toasts -----------------------------------------------------------------------
   toasts: Toast[];
@@ -236,6 +276,12 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       loopA: null,
       loopB: null,
       controller: null,
+      bubbles: [],
+      bubblesLoading: false,
+      notes: "",
+      notesLoaded: false,
+      notationModal: null,
+      notationGeneration: get().notationGeneration + 1,
     });
     let project: Project;
     try {
@@ -247,6 +293,27 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     }
     set({ currentProject: project, currentProjectLoading: false });
 
+    const bubblesPromise = (async () => {
+      set({ bubblesLoading: true });
+      try {
+        const res = await api.listBubbles(id);
+        set({ bubbles: sortBubbles(res.bubbles), bubblesLoading: false });
+      } catch (err) {
+        set({ bubblesLoading: false });
+        get().pushToast(`Could not load bubbles: ${errorMessage(err)}`, "error");
+      }
+    })();
+
+    const notesPromise = (async () => {
+      try {
+        const content = await api.getNotes(id);
+        set({ notes: content, notesLoaded: true });
+      } catch (err) {
+        set({ notesLoaded: true });
+        get().pushToast(`Could not load notes: ${errorMessage(err)}`, "error");
+      }
+    })();
+
     if (project.transcript.type === "file") {
       set({ transcriptLoading: true });
       try {
@@ -257,9 +324,11 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
         get().pushToast(`Could not load transcript: ${errorMessage(err)}`, "error");
       }
     }
+
+    await Promise.all([bubblesPromise, notesPromise]);
   },
   clearProjectSession: () => {
-    set({
+    set((state) => ({
       currentProject: null,
       transcriptSegments: [],
       controller: null,
@@ -268,7 +337,13 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       isPlaying: false,
       loopA: null,
       loopB: null,
-    });
+      bubbles: [],
+      bubblesLoading: false,
+      notes: "",
+      notesLoaded: false,
+      notationModal: null,
+      notationGeneration: state.notationGeneration + 1,
+    }));
   },
   patchCurrentProject: async (patch) => {
     const project = get().currentProject;
@@ -321,6 +396,146 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   // --- bottom dock ----------------------------------------------------------------
   activeDockTab: "notes",
   setActiveDockTab: (tab) => set({ activeDockTab: tab }),
+
+  // --- notes (F6) -------------------------------------------------------------------
+  notes: "",
+  notesLoaded: false,
+  saveNotes: async (content) => {
+    const project = get().currentProject;
+    if (!project) return;
+    try {
+      await api.putNotes(project.id, content);
+      set({ notes: content });
+    } catch (err) {
+      get().pushToast(`Could not save notes: ${errorMessage(err)}`, "error");
+      throw err;
+    }
+  },
+
+  // --- bubbles (F4/F5/F6) -------------------------------------------------------------
+  bubbles: [],
+  bubblesLoading: false,
+  patchBubble: async (bubbleId, patch) => {
+    const project = get().currentProject;
+    if (!project) return;
+    const prev = get().bubbles;
+    set({ bubbles: sortBubbles(prev.map((b) => (b.id === bubbleId ? { ...b, ...patch } : b))) });
+    try {
+      const updated = await api.patchBubble(project.id, bubbleId, patch);
+      set((state) => ({ bubbles: sortBubbles(state.bubbles.map((b) => (b.id === bubbleId ? updated : b))) }));
+    } catch (err) {
+      set({ bubbles: prev });
+      get().pushToast(`Could not update capture: ${errorMessage(err)}`, "error");
+    }
+  },
+  deleteBubble: async (bubbleId) => {
+    const project = get().currentProject;
+    if (!project) return;
+    const prev = get().bubbles;
+    set({ bubbles: prev.filter((b) => b.id !== bubbleId) });
+    try {
+      await api.deleteBubble(project.id, bubbleId);
+    } catch (err) {
+      set({ bubbles: prev });
+      get().pushToast(`Could not delete capture: ${errorMessage(err)}`, "error");
+    }
+  },
+  appendBubbleToNotes: async (bubbleId) => {
+    const bubble = get().bubbles.find((b) => b.id === bubbleId);
+    const project = get().currentProject;
+    if (!bubble || !project) return;
+    const line = `^t:${bubble.t}${bubble.text ? ` ${bubble.text}` : ""}`;
+    const shotLine = bubble.shot ? `\n![shot](${bubble.shot})` : "";
+    const separator = get().notes.length > 0 && !get().notes.endsWith("\n") ? "\n" : "";
+    const nextNotes = `${get().notes}${separator}\n${line}${shotLine}\n`;
+    try {
+      await api.putNotes(project.id, nextNotes);
+      set({ notes: nextNotes });
+      get().pushToast("Added to notes", "success");
+    } catch (err) {
+      get().pushToast(`Could not update notes: ${errorMessage(err)}`, "error");
+    }
+  },
+
+  // --- F4 notation modal --------------------------------------------------------------
+  notationModal: null,
+  notationGeneration: 0,
+  openNotation: () => {
+    const controller = get().controller;
+    const project = get().currentProject;
+    if (!controller || !project || get().notationModal) return;
+    controller.pause();
+    const t = controller.getCurrentTime();
+    const idx = activeSegmentIndex(get().transcriptSegments, t);
+    const quote = idx >= 0 ? get().transcriptSegments[idx].text : null;
+    const gen = get().notationGeneration + 1;
+    set({
+      notationGeneration: gen,
+      notationModal: { t, quote, shot: null, shotLoading: true, shotFailed: false, saving: false },
+    });
+    api.captureShot(project.id, t).then(
+      (res) => {
+        set((state) => {
+          if (state.notationGeneration !== gen || !state.notationModal) return {};
+          return res.shot
+            ? { notationModal: { ...state.notationModal, shot: res.shot, shotLoading: false } }
+            : { notationModal: { ...state.notationModal, shotLoading: false, shotFailed: true } };
+        });
+      },
+      () => {
+        set((state) => {
+          if (state.notationGeneration !== gen || !state.notationModal) return {};
+          return { notationModal: { ...state.notationModal, shotLoading: false, shotFailed: true } };
+        });
+      }
+    );
+  },
+  removeNotationQuote: () =>
+    set((state) => (state.notationModal ? { notationModal: { ...state.notationModal, quote: null } } : {})),
+  cancelNotation: () => {
+    set((state) => ({ notationGeneration: state.notationGeneration + 1, notationModal: null }));
+    get().controller?.play();
+  },
+  saveNotation: async (text) => {
+    const state = get();
+    const modal = state.notationModal;
+    const project = state.currentProject;
+    if (!modal || !project) return;
+    set({ notationModal: { ...modal, saving: true } });
+    const finalText = modal.quote ? `${modal.quote}${text.trim() ? `\n\n${text.trim()}` : ""}` : text.trim();
+    try {
+      const bubble = await api.createBubble(project.id, { t: modal.t, text: finalText, shot: modal.shot });
+      set((s) => ({
+        bubbles: sortBubbles([...s.bubbles, bubble]),
+        notationGeneration: s.notationGeneration + 1,
+        notationModal: null,
+      }));
+      get().controller?.play();
+    } catch (err) {
+      get().pushToast(`Could not save note: ${errorMessage(err)}`, "error");
+      set((s) => ({ notationModal: s.notationModal ? { ...s.notationModal, saving: false } : null }));
+    }
+  },
+
+  // --- F5 screenshot-only ---------------------------------------------------------------
+  captureScreenshotOnly: async () => {
+    const controller = get().controller;
+    const project = get().currentProject;
+    if (!controller || !project) return;
+    const t = controller.getCurrentTime();
+    try {
+      const res = await api.captureShot(project.id, t);
+      const bubble = await api.createBubble(project.id, { t, text: "", shot: res.shot ?? null });
+      set((state) => ({ bubbles: sortBubbles([...state.bubbles, bubble]) }));
+      if (res.shot) {
+        get().pushToast(`Captured ${formatTimestamp(t)}`, "success");
+      } else {
+        get().pushToast(`Screenshot failed (${res.error ?? "unknown error"}) — capture saved without image`, "error");
+      }
+    } catch (err) {
+      get().pushToast(`Could not capture: ${errorMessage(err)}`, "error");
+    }
+  },
 
   // --- toasts -----------------------------------------------------------------------
   toasts: [],

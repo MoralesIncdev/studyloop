@@ -9,6 +9,7 @@ import { SeekBar } from "../player/SeekBar";
 import { PlayerControls } from "../player/PlayerControls";
 import { TranscriptPane } from "../transcript/TranscriptPane";
 import { BottomDock } from "./BottomDock";
+import { NotationModal } from "../notes/NotationModal";
 import { api } from "../lib/api";
 import { formatTimestamp } from "../lib/time";
 import styles from "./StudyView.module.css";
@@ -34,6 +35,7 @@ export function StudyView({ projectId }: Props): JSX.Element {
   const loopA = useStudyLoopStore((s) => s.loopA);
   const loopB = useStudyLoopStore((s) => s.loopB);
   const controller = useStudyLoopStore((s) => s.controller);
+  const bubbles = useStudyLoopStore((s) => s.bubbles);
 
   // `undefined` = not yet decided (show resume prompt if applicable), a number =
   // the position the player should start at.
@@ -142,7 +144,20 @@ export function StudyView({ projectId }: Props): JSX.Element {
               <LocalVideoPlayer key={currentProject.id} src={api.videoStreamUrl(currentProject.source.path)} startAt={startAt} />
             )}
           </div>
-          <SeekBar currentTime={currentTime} duration={duration} loopA={loopA} loopB={loopB} onSeek={(t) => controller?.seek(t)} />
+          <SeekBar
+            currentTime={currentTime}
+            duration={duration}
+            loopA={loopA}
+            loopB={loopB}
+            bubbles={bubbles.map((b) => ({
+              id: b.id,
+              t: b.t,
+              text: b.text,
+              thumbnailUrl: b.shot ? api.shotUrl(currentProject.id, b.shot) : null,
+            }))}
+            onSeek={(t) => controller?.seek(t)}
+            onSeekBubble={(t) => controller?.seek(Math.max(0, t - 5))}
+          />
           <PlayerControls />
         </div>
         <div className={styles.transcriptColumn}>
@@ -153,6 +168,8 @@ export function StudyView({ projectId }: Props): JSX.Element {
       <div className={styles.dockRow}>
         <BottomDock />
       </div>
+
+      <NotationModal />
     </div>
   );
 }

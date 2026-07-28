@@ -16,6 +16,8 @@ export function PlayerControls(): JSX.Element {
   const loopA = useStudyLoopStore((s) => s.loopA);
   const loopB = useStudyLoopStore((s) => s.loopB);
   const clearLoop = useStudyLoopStore((s) => s.clearLoop);
+  const openNotation = useStudyLoopStore((s) => s.openNotation);
+  const captureScreenshotOnly = useStudyLoopStore((s) => s.captureScreenshotOnly);
 
   const togglePlay = () => {
     if (!controller) return;
@@ -37,6 +39,18 @@ export function PlayerControls(): JSX.Element {
       <span className={styles.time}>
         {formatTimestamp(currentTime)} / {formatTimestamp(duration)}
       </span>
+      <button type="button" className={styles.captureButton} onClick={openNotation} disabled={!controller} title="Add notation (N)">
+        ✎ Note
+      </button>
+      <button
+        type="button"
+        className={styles.captureButton}
+        onClick={() => void captureScreenshotOnly()}
+        disabled={!controller}
+        title="Screenshot (S)"
+      >
+        📷 Shot
+      </button>
       <div className={styles.spacer} />
       {loopA != null && (
         <button type="button" className={styles.loopBadge} onClick={clearLoop} title="Clear A/B loop">
