@@ -10,3 +10,4 @@ coverage/
 # this same repo directory as ~/studyloop. The default dataDir writes project
 # data under <dataDir>/projects — never commit runtime study data.
 /projects/
+.claude/
