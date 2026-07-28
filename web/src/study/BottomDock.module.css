@@ -52,9 +52,3 @@
 .tabPanel[hidden] {
   display: none;
 }
-
-.placeholder {
-  color: var(--text-dim);
-  font-size: 13px;
-  margin: 0;
-}

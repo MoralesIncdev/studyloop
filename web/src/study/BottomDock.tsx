@@ -1,10 +1,12 @@
 // Bottom dock: tabs Notes | Bubbles | Concepts. Notes and Bubbles stay mounted
 // under both tabs (hidden via CSS rather than unmounted) so an in-progress note
 // edit or the bubble list's scroll position survives switching tabs; Concepts
-// is still a placeholder (arrives in a later build).
+// is mounted lazily (only while active) since its content depends on
+// currentTime and there's no persisted UI state worth keeping warm.
 import { useStudyLoopStore, type DockTab } from "../state/store";
 import { NotesPane } from "../notes/NotesPane";
 import { BubbleRail } from "../notes/BubbleRail";
+import { ConceptsDock } from "../concepts/ConceptsDock";
 import styles from "./BottomDock.module.css";
 
 const TABS: { id: DockTab; label: string }[] = [
@@ -39,7 +41,9 @@ export function BottomDock(): JSX.Element {
           <BubbleRail />
         </div>
         {activeDockTab === "concepts" && (
-          <p className={styles.placeholder}>The concept ticker and cards arrive in a later build.</p>
+          <div className={styles.tabPanel}>
+            <ConceptsDock />
+          </div>
         )}
       </div>
     </div>

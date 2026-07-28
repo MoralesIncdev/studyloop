@@ -37,6 +37,29 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
+}
+
+.tickerMuteButton {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tickerMuteButton:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.tickerMuteButton[aria-pressed="true"] {
+  color: var(--text-dim);
+  border-color: var(--border);
 }
 
 .title {

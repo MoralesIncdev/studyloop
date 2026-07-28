@@ -16,11 +16,16 @@ export interface SeekBarBubbleMarker extends SeekBarMarker {
   thumbnailUrl?: string | null;
 }
 
+/** A concept tick carries its card title for a hover tooltip (F7). */
+export interface SeekBarConceptTick extends SeekBarMarker {
+  title?: string;
+}
+
 interface Props {
   currentTime: number;
   duration: number;
   bubbles?: SeekBarBubbleMarker[];
-  conceptTicks?: SeekBarMarker[];
+  conceptTicks?: SeekBarConceptTick[];
   loopA?: number | null;
   loopB?: number | null;
   onSeek: (t: number) => void;
@@ -95,7 +100,16 @@ export function SeekBar({
         )}
         <div className={styles.fill} style={{ width: pct(currentTime) }} />
         {conceptTicks.map((tick) => (
-          <div key={tick.id} className={styles.conceptTick} style={{ left: pct(tick.t) }} title={formatTimestamp(tick.t)} />
+          <div
+            key={tick.id}
+            className={styles.conceptTick}
+            style={{ left: pct(tick.t) }}
+            title={tick.title ? `${tick.title} — ${formatTimestamp(tick.t)}` : formatTimestamp(tick.t)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSeek(tick.t);
+            }}
+          />
         ))}
         {bubbles.map((bubble) => (
           <div

@@ -10,6 +10,7 @@ import { PlayerControls } from "../player/PlayerControls";
 import { TranscriptPane } from "../transcript/TranscriptPane";
 import { BottomDock } from "./BottomDock";
 import { NotationModal } from "../notes/NotationModal";
+import { ConceptTicker } from "../concepts/ConceptTicker";
 import { api } from "../lib/api";
 import { formatTimestamp } from "../lib/time";
 import styles from "./StudyView.module.css";
@@ -36,6 +37,9 @@ export function StudyView({ projectId }: Props): JSX.Element {
   const loopB = useStudyLoopStore((s) => s.loopB);
   const controller = useStudyLoopStore((s) => s.controller);
   const bubbles = useStudyLoopStore((s) => s.bubbles);
+  const concepts = useStudyLoopStore((s) => s.concepts);
+  const conceptTickerMuted = useStudyLoopStore((s) => s.conceptTickerMuted);
+  const setConceptTickerMuted = useStudyLoopStore((s) => s.setConceptTickerMuted);
 
   // `undefined` = not yet decided (show resume prompt if applicable), a number =
   // the position the player should start at.
@@ -132,6 +136,15 @@ export function StudyView({ projectId }: Props): JSX.Element {
           <h1 className={styles.title}>{currentProject.title}</h1>
           <span className={styles.subtitle}>{currentProject.source.path}</span>
         </div>
+        <button
+          type="button"
+          className={styles.tickerMuteButton}
+          onClick={() => setConceptTickerMuted(!conceptTickerMuted)}
+          title={conceptTickerMuted ? "Unmute concept ticker" : "Mute concept ticker"}
+          aria-pressed={conceptTickerMuted}
+        >
+          {conceptTickerMuted ? "🔕 Ticker muted" : "🔔 Ticker"}
+        </button>
       </header>
 
       <div className={styles.main}>
@@ -155,6 +168,7 @@ export function StudyView({ projectId }: Props): JSX.Element {
             {startAt !== undefined && (
               <LocalVideoPlayer key={currentProject.id} src={api.videoStreamUrl(currentProject.source.path)} startAt={startAt} />
             )}
+            {startAt !== undefined && <ConceptTicker />}
           </div>
           <SeekBar
             currentTime={currentTime}
@@ -167,6 +181,11 @@ export function StudyView({ projectId }: Props): JSX.Element {
               text: b.text,
               thumbnailUrl: b.shot ? api.shotUrl(currentProject.id, b.shot) : null,
             }))}
+            conceptTicks={concepts.flatMap((c) =>
+              c.anchors
+                .map((a, i) => (a.t != null ? { id: `${c.id}-${i}`, t: a.t, title: c.title } : null))
+                .filter((tick): tick is { id: string; t: number; title: string } => tick !== null)
+            )}
             onSeek={(t) => controller?.seek(t)}
             onSeekBubble={(t) => controller?.seek(Math.max(0, t - 5))}
           />

@@ -15,6 +15,7 @@ export function NotationModal(): JSX.Element | null {
   const currentProject = useStudyLoopStore((s) => s.currentProject);
   const cancelNotation = useStudyLoopStore((s) => s.cancelNotation);
   const removeNotationQuote = useStudyLoopStore((s) => s.removeNotationQuote);
+  const removeNotationConcept = useStudyLoopStore((s) => s.removeNotationConcept);
   const saveNotation = useStudyLoopStore((s) => s.saveNotation);
 
   const [text, setText] = useState("");
@@ -63,6 +64,21 @@ export function NotationModal(): JSX.Element | null {
         </div>
         <div className={styles.fields}>
           <div className={styles.timestamp}>{formatTimestamp(modal.t)}</div>
+
+          {modal.conceptTitle && (
+            <div className={styles.conceptChip}>
+              <span className={styles.conceptChipText}>re: {modal.conceptTitle}</span>
+              <button
+                type="button"
+                className={styles.quoteRemove}
+                onClick={removeNotationConcept}
+                aria-label="Remove concept reference"
+                title="Remove concept reference"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {modal.quote && (
             <div className={styles.quote}>

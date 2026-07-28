@@ -64,6 +64,26 @@ describe("activeConcepts", () => {
   it("does not surface concepts before their anchor", () => {
     expect(activeConcepts(concepts, 10)).toEqual([]);
   });
+
+  it("is active exactly at the anchor (left edge, inclusive)", () => {
+    expect(activeConcepts(concepts, 29.999).map((c) => c.card.id)).toEqual([]);
+    expect(activeConcepts(concepts, 30).map((c) => c.card.id)).toEqual(["c1"]);
+  });
+
+  it("stays active up to anchor + 90s exactly (right edge, inclusive), then drops", () => {
+    expect(activeConcepts(concepts, 120).map((c) => c.card.id)).toEqual(["c1"]);
+    expect(activeConcepts(concepts, 120.001).map((c) => c.card.id)).toEqual([]);
+  });
+
+  it("returns the matching anchor's own time as anchorT", () => {
+    const result = activeConcepts(concepts, 30);
+    expect(result[0].anchorT).toBe(30);
+  });
+
+  it("surfaces a card once even if it has multiple anchors inside the window", () => {
+    const multi = [{ id: "m1", title: "Multi", body: "", anchors: [{ t: 10 }, { t: 20 }], raw: "" }];
+    expect(activeConcepts(multi, 25).map((c) => c.card.id)).toEqual(["m1"]);
+  });
 });
 
 describe("passedConcepts", () => {
@@ -71,5 +91,15 @@ describe("passedConcepts", () => {
     expect(passedConcepts(concepts, 30).map((c) => c.id)).toEqual(["c1"]);
     expect(passedConcepts(concepts, 200).map((c) => c.id)).toEqual(["c1", "c3"]);
     expect(passedConcepts(concepts, 0)).toEqual([]);
+  });
+
+  it("is exclusive just before the anchor, inclusive exactly at it", () => {
+    expect(passedConcepts(concepts, 29.999).map((c) => c.id)).toEqual([]);
+    expect(passedConcepts(concepts, 30).map((c) => c.id)).toEqual(["c1"]);
+  });
+
+  it("never passes a card with no real anchor, however far playback goes", () => {
+    const noAnchor = [{ id: "n1", title: "No anchor", body: "", anchors: [], raw: "" }];
+    expect(passedConcepts(noAnchor, 100000)).toEqual([]);
   });
 });

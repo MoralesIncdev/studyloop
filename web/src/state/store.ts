@@ -4,10 +4,11 @@
 import { create } from "zustand";
 import { api, ApiError } from "../lib/api";
 import { parseHash, routeToHash, type Route } from "../lib/router";
-import { activeSegmentIndex } from "../lib/selectors";
+import { activeConcepts, activeSegmentIndex } from "../lib/selectors";
 import { formatTimestamp } from "../lib/time";
 import type {
   Bubble,
+  ConceptCard,
   LibraryItem,
   Project,
   StudyLoopConfig,
@@ -44,6 +45,8 @@ export interface NotationModalState {
   t: number;
   /** Prefilled quote of the active transcript segment at t, if any. Removable, not saved if cleared. */
   quote: string | null;
+  /** Title of the concept active at t, if any (F7). Removable, like the quote. */
+  conceptTitle: string | null;
   shot: string | null;
   shotLoading: boolean;
   shotFailed: boolean;
@@ -94,6 +97,16 @@ export interface StudyLoopStore {
   clearProjectSession: () => void;
   patchCurrentProject: (patch: Partial<Pick<Project, "title" | "lastPosition" | "watchedUpTo">>) => Promise<void>;
 
+  // --- concepts (F7) ---------------------------------------------------------------
+  concepts: ConceptCard[];
+  conceptsLoading: boolean;
+  conceptTickerMuted: boolean;
+  setConceptTickerMuted: (muted: boolean) => void;
+  /** PATCHes the project's conceptDoc then loads its parsed concepts. */
+  attachConceptDoc: (path: string) => Promise<void>;
+  /** Clears the project's conceptDoc and its loaded concepts. */
+  detachConceptDoc: () => Promise<void>;
+
   // --- player + sync engine -------------------------------------------------------
   controller: PlayerHandle | null;
   setController: (c: PlayerHandle | null) => void;
@@ -138,6 +151,7 @@ export interface StudyLoopStore {
   notationGeneration: number;
   openNotation: () => void;
   removeNotationQuote: () => void;
+  removeNotationConcept: () => void;
   cancelNotation: () => void;
   saveNotation: (text: string) => Promise<void>;
 
@@ -309,6 +323,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       bubblesLoading: false,
       notes: "",
       notesLoaded: false,
+      concepts: [],
+      conceptsLoading: false,
       notationModal: null,
       notationGeneration: get().notationGeneration + 1,
     });
@@ -349,6 +365,20 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       }
     })();
 
+    const conceptsPromise = (async () => {
+      if (!project.conceptDoc?.path) return;
+      set({ conceptsLoading: true });
+      try {
+        const res = await api.getConcepts(id);
+        if (!isCurrent()) return;
+        set({ concepts: res.concepts, conceptsLoading: false });
+      } catch (err) {
+        if (!isCurrent()) return;
+        set({ conceptsLoading: false });
+        get().pushToast(`Could not load concepts: ${errorMessage(err)}`, "error");
+      }
+    })();
+
     if (project.transcript.type === "file") {
       set({ transcriptLoading: true });
       try {
@@ -362,7 +392,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       }
     }
 
-    await Promise.all([bubblesPromise, notesPromise]);
+    await Promise.all([bubblesPromise, notesPromise, conceptsPromise]);
   },
   clearProjectSession: () => {
     set((state) => ({
@@ -379,6 +409,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       bubblesLoading: false,
       notes: "",
       notesLoaded: false,
+      concepts: [],
+      conceptsLoading: false,
       notationModal: null,
       notationGeneration: state.notationGeneration + 1,
     }));
@@ -394,6 +426,53 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       }));
     } catch (err) {
       get().pushToast(`Could not save progress: ${errorMessage(err)}`, "error");
+    }
+  },
+
+  // --- concepts (F7) ---------------------------------------------------------------
+  concepts: [],
+  conceptsLoading: false,
+  conceptTickerMuted: false,
+  setConceptTickerMuted: (muted) => set({ conceptTickerMuted: muted }),
+  attachConceptDoc: async (path) => {
+    const project = get().currentProject;
+    if (!project) return;
+    try {
+      const updated = await api.patchProject(project.id, { conceptDoc: { path } });
+      set((state) => ({
+        currentProject: state.currentProject?.id === updated.id ? updated : state.currentProject,
+        projects: state.projects.map((p) => (p.id === updated.id ? updated : p)),
+      }));
+    } catch (err) {
+      get().pushToast(`Could not attach concept doc: ${errorMessage(err)}`, "error");
+      throw err;
+    }
+    set({ conceptsLoading: true });
+    try {
+      const res = await api.getConcepts(project.id);
+      // The project could have been navigated away from while this GET was
+      // in flight — only apply if we're still looking at the same project.
+      if (get().currentProject?.id !== project.id) return;
+      set({ concepts: res.concepts, conceptsLoading: false });
+    } catch (err) {
+      if (get().currentProject?.id !== project.id) return;
+      set({ conceptsLoading: false });
+      get().pushToast(`Could not load concepts: ${errorMessage(err)}`, "error");
+    }
+  },
+  detachConceptDoc: async () => {
+    const project = get().currentProject;
+    if (!project) return;
+    try {
+      const updated = await api.patchProject(project.id, { conceptDoc: {} });
+      set((state) => ({
+        currentProject: state.currentProject?.id === updated.id ? updated : state.currentProject,
+        projects: state.projects.map((p) => (p.id === updated.id ? updated : p)),
+        concepts: [],
+      }));
+    } catch (err) {
+      get().pushToast(`Could not detach concept doc: ${errorMessage(err)}`, "error");
+      throw err;
     }
   },
 
@@ -506,10 +585,12 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     const t = controller.getCurrentTime();
     const idx = activeSegmentIndex(get().transcriptSegments, t);
     const quote = idx >= 0 ? get().transcriptSegments[idx].text : null;
+    const activeAtT = activeConcepts(get().concepts, t);
+    const conceptTitle = activeAtT.length > 0 ? activeAtT[0].card.title : null;
     const gen = get().notationGeneration + 1;
     set({
       notationGeneration: gen,
-      notationModal: { t, quote, shot: null, shotLoading: true, shotFailed: false, saving: false },
+      notationModal: { t, quote, conceptTitle, shot: null, shotLoading: true, shotFailed: false, saving: false },
     });
     api.captureShot(project.id, t).then(
       (res) => {
@@ -530,6 +611,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   },
   removeNotationQuote: () =>
     set((state) => (state.notationModal ? { notationModal: { ...state.notationModal, quote: null } } : {})),
+  removeNotationConcept: () =>
+    set((state) => (state.notationModal ? { notationModal: { ...state.notationModal, conceptTitle: null } } : {})),
   cancelNotation: () => {
     set((state) => ({ notationGeneration: state.notationGeneration + 1, notationModal: null }));
     get().controller?.play();
@@ -540,7 +623,13 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     const project = state.currentProject;
     if (!modal || !project) return;
     set({ notationModal: { ...modal, saving: true } });
-    const finalText = modal.quote ? `${modal.quote}${text.trim() ? `\n\n${text.trim()}` : ""}` : text.trim();
+    // "re: <concept title>" (if any) is its own line above the quote (if any);
+    // the free-text note follows as a separate paragraph, mirroring how the
+    // quote alone used to be joined to the text.
+    const header = [modal.conceptTitle ? `re: ${modal.conceptTitle}` : null, modal.quote].filter(
+      (line): line is string => line != null
+    ).join("\n");
+    const finalText = header ? `${header}${text.trim() ? `\n\n${text.trim()}` : ""}` : text.trim();
     try {
       const bubble = await api.createBubble(project.id, { t: modal.t, text: finalText, shot: modal.shot });
       set((s) => ({
