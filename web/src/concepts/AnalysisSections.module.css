@@ -1,0 +1,163 @@
+.section {
+  margin-top: 14px;
+}
+
+.section:first-child {
+  margin-top: 0;
+}
+
+.sectionHeader {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin: 0 0 8px;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pearlRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.pearlRow:hover {
+  background: var(--bg-hover);
+}
+
+.pearlHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stars {
+  color: var(--accent);
+  font-size: 11px;
+  flex-shrink: 0;
+  letter-spacing: 1px;
+}
+
+.timeChip {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border: none;
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.timeChip:hover {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.pearlLabel {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pearlInsight {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.4;
+  padding-left: 8px;
+}
+
+.conceptRow {
+  padding: 8px;
+  border-radius: 6px;
+}
+
+.conceptTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+
+.conceptSummary {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0 0 6px;
+  line-height: 1.4;
+}
+
+.anchorRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.themeRow {
+  padding: 8px;
+}
+
+.themeTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+
+.themeBody {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.handleGroup {
+  margin-bottom: 12px;
+}
+
+.handleHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 6px;
+}
+
+.handleSwatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.othersNotes {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.4;
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+}
+
+.empty {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0;
+}

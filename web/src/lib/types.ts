@@ -115,6 +115,10 @@ export interface StudyLoopConfig {
   transcriptRoots: string[];
   conceptDocs: string[];
   anthropicApiKeySet: boolean;
+  /** V2-C: analysis engine model override; null => server default ("claude-opus-5"). */
+  analysisModel: string | null;
+  /** V2-C: author handle embedded in exported .studyloop.json bundles. */
+  shareHandle: string;
 }
 
 /** Body accepted by PUT /api/config — this is the only place the plaintext key travels. */
@@ -124,6 +128,84 @@ export interface StudyLoopConfigPatch {
   transcriptRoots?: string[];
   conceptDocs?: string[];
   anthropicApiKey?: string | null;
+  analysisModel?: string | null;
+  shareHandle?: string;
+}
+
+// --- V2-C: Analysis engine (SPEC "Analysis engine ('pearls & concept breakdown')") ---
+
+export interface Pearl {
+  t: number;
+  label: string;
+  insight: string;
+  importance: 1 | 2 | 3;
+}
+
+export interface AnalysisConceptAnchor {
+  t: number;
+}
+
+export interface AnalysisConcept {
+  id: string;
+  title: string;
+  summary: string;
+  anchors: AnalysisConceptAnchor[];
+  body: string;
+}
+
+export interface AnalysisTheme {
+  title: string;
+  body: string;
+}
+
+export interface Analysis {
+  generatedAt: string;
+  model: string;
+  version: 2;
+  pearls: Pearl[];
+  concepts: AnalysisConcept[];
+  themes: AnalysisTheme[];
+}
+
+export type AnalyzeStatus =
+  | { state: "idle" }
+  | { state: "running"; pct: number }
+  | { state: "done" }
+  | { state: "error"; message: string };
+
+// --- V2-C: Heatmap + shareable analysis (SPEC) ---
+
+export interface HeatmapResponse {
+  buckets: number[];
+}
+
+export type ShareSourceRef =
+  | { type: "youtube"; videoId: string; url?: string }
+  | { type: "local"; filename: string; durationSeconds?: number | null };
+
+export interface ShareBundleBubble {
+  id: string;
+  t: number;
+  text: string;
+  thumbnailBase64?: string | null;
+}
+
+export interface ShareBundle {
+  version: 1;
+  createdAt: string;
+  shareHandle: string;
+  source: ShareSourceRef;
+  title: string;
+  notes: string;
+  bubbles: ShareBundleBubble[];
+  pearls: Pearl[];
+  concepts: AnalysisConcept[];
+  themes: AnalysisTheme[];
+}
+
+export interface OverlayMeta {
+  fileName: string;
+  bundle: ShareBundle;
 }
 
 export interface YoutubeResolveResponse {

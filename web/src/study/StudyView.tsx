@@ -15,6 +15,10 @@ import { RightRail } from "./RightRail";
 import { NotationModal } from "../notes/NotationModal";
 import { ConceptTicker } from "../concepts/ConceptTicker";
 import { CompileFlow } from "./CompileFlow";
+import { AnalyzeButton } from "./AnalyzeButton";
+import { ShareFlow } from "./ShareFlow";
+import { ImportOverlayFlow } from "./ImportOverlayFlow";
+import { OverlaysPill, OverlayLegend } from "./OverlaysToggle";
 import { BottomDock } from "./BottomDock";
 import { api } from "../lib/api";
 import { formatTimestamp } from "../lib/time";
@@ -181,23 +185,16 @@ export function StudyView({ projectId }: Props): JSX.Element {
                 </span>
               </div>
             </div>
-            <button type="button" className={styles.analyzePill} disabled title="Arrives in next build">
-              ✨ Analyze
-            </button>
+            <AnalyzeButton />
           </div>
 
           <div className={styles.actionPills}>
             <CompileFlow />
-            <button type="button" className={styles.pillButton} disabled title="Arrives in next build">
-              ↗ Share
-            </button>
-            <button type="button" className={styles.pillButton} disabled title="Arrives in next build">
-              ⤓ Import
-            </button>
-            <button type="button" className={styles.pillButton} disabled title="Arrives in next build">
-              👁 Overlays
-            </button>
+            <ShareFlow />
+            <ImportOverlayFlow />
+            <OverlaysPill />
           </div>
+          <OverlayLegend />
 
           <div className={styles.descriptionBox}>
             <BottomDock />

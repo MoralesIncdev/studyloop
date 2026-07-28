@@ -34,6 +34,10 @@ export function PlayerControls({ isFullscreen, onToggleFullscreen, onMenuOpenCha
   const health = useStudyLoopStore((s) => s.health);
   const ccEnabled = useStudyLoopStore((s) => s.ccEnabled);
   const toggleCcEnabled = useStudyLoopStore((s) => s.toggleCcEnabled);
+  const analysis = useStudyLoopStore((s) => s.analysis);
+  const analyzeStatus = useStudyLoopStore((s) => s.analyzeStatus);
+  const startAnalyze = useStudyLoopStore((s) => s.startAnalyze);
+  const confirmReanalyze = useStudyLoopStore((s) => s.confirmReanalyze);
 
   const [menuOpen, setMenuOpenState] = useState(false);
   const menuWrapRef = useRef<HTMLDivElement | null>(null);
@@ -132,7 +136,19 @@ export function PlayerControls({ isFullscreen, onToggleFullscreen, onMenuOpenCha
       >
         📷
       </button>
-      <button type="button" className={styles.iconButton} disabled title="Arrives in next build">
+      <button
+        type="button"
+        className={styles.iconButton}
+        onClick={() => (analysis ? confirmReanalyze() : void startAnalyze())}
+        disabled={analyzeStatus.state === "running"}
+        title={
+          analyzeStatus.state === "running"
+            ? `Analyzing… ${analyzeStatus.pct}%`
+            : analysis
+              ? "Re-analyze"
+              : "Analyze"
+        }
+      >
         ✨
       </button>
       <button

@@ -144,6 +144,70 @@
   pointer-events: none;
 }
 
+/* V2-C: pearl diamonds — a rotated square, distinct from the round bubble pins
+   (above the track) and the rectangular concept ticks (below the track).
+   Sits at track-top, slightly higher than bubble pins so the two never overlap. */
+.pearlMarker {
+  position: absolute;
+  top: -10px;
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  transform: translateX(-50%) rotate(45deg);
+  pointer-events: auto;
+  cursor: pointer;
+  border-radius: 1px;
+}
+
+.pearlMarker[data-importance="3"] {
+  width: 8px;
+  height: 8px;
+  top: -11px;
+}
+
+.pearlMarker[data-importance="1"] {
+  width: 5px;
+  height: 5px;
+  top: -9px;
+  opacity: 0.85;
+}
+
+.pearlMarker::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  right: -5px;
+  bottom: -5px;
+}
+
+.pearlMarker:hover {
+  filter: brightness(1.2);
+}
+
+/* V2-C: overlay layer — imported bubbles/pearls from another viewer, colored per handle. */
+.overlayBubbleMarker {
+  position: absolute;
+  top: -6px;
+  width: 2px;
+  height: 6px;
+  opacity: 0.8;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.overlayPearlMarker {
+  position: absolute;
+  top: -10px;
+  width: 5px;
+  height: 5px;
+  transform: translateX(-50%) rotate(45deg);
+  opacity: 0.8;
+  pointer-events: auto;
+  cursor: pointer;
+  border-radius: 1px;
+}
+
 .tooltip {
   position: absolute;
   bottom: 16px;

@@ -181,6 +181,120 @@ function makeYoutubeProject(id: string, videoId: string): Project {
   };
 }
 
+function baseConfig(overrides: Partial<{ anthropicApiKeySet: boolean; analysisModel: string | null; shareHandle: string }> = {}) {
+  return {
+    dataDir: "~/StudyLoopData",
+    libraryRoots: [],
+    transcriptRoots: [],
+    conceptDocs: [],
+    anthropicApiKeySet: false,
+    analysisModel: null,
+    shareHandle: "anonymous",
+    ...overrides,
+  };
+}
+
+describe("startAnalyze (V2-C)", () => {
+  beforeEach(() => {
+    useStudyLoopStore.setState({
+      currentProject: makeProject("p1", "Project 1"),
+      config: null,
+      analyzeStatus: { state: "idle" },
+      analysis: null,
+      toasts: [],
+      route: { view: "library" },
+    });
+  });
+
+  it("no API key configured → toasts an info message and navigates to Settings, without ever POSTing /analyze", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/config")) return Promise.resolve(jsonResponse(baseConfig({ anthropicApiKeySet: false })));
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().startAnalyze();
+
+    expect(useStudyLoopStore.getState().route).toEqual({ view: "settings" });
+    expect(useStudyLoopStore.getState().toasts.some((t) => /API key/.test(t.message))).toBe(true);
+    expect(fetchMock.mock.calls.every(([input]) => !String(input).includes("/analyze"))).toBe(true);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("API key configured → POSTs /analyze and applies the returned running status", async () => {
+    // Fake timers: applying a "running" status starts the poll loop's
+    // setInterval, which must not survive past this test as a real timer.
+    vi.useFakeTimers();
+    useStudyLoopStore.setState({ config: baseConfig({ anthropicApiKeySet: true }) });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/analyze/status")) return Promise.resolve(jsonResponse({ state: "running", pct: 0 }));
+      if (url.includes("/analyze")) return Promise.resolve(jsonResponse({ state: "running", pct: 0 }));
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().startAnalyze();
+
+    expect(useStudyLoopStore.getState().analyzeStatus).toEqual({ state: "running", pct: 0 });
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/analyze") && !String(input).includes("status"))).toBe(true);
+
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("idempotent path: POST /analyze returns the full Analysis directly (analysis.json already existed) → applies it immediately, marks done", async () => {
+    useStudyLoopStore.setState({ config: baseConfig({ anthropicApiKeySet: true }) });
+    const analysis = {
+      generatedAt: "2026-07-28T00:00:00Z",
+      model: "claude-opus-5",
+      version: 2 as const,
+      pearls: [{ t: 10, label: "L", insight: "I", importance: 3 as const }],
+      concepts: [],
+      themes: [],
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/analyze")) return Promise.resolve(jsonResponse(analysis));
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().startAnalyze();
+
+    expect(useStudyLoopStore.getState().analysis).toEqual(analysis);
+    expect(useStudyLoopStore.getState().analyzeStatus).toEqual({ state: "done" });
+
+    vi.unstubAllGlobals();
+  });
+
+  it("a 409 (already running elsewhere) is treated as running, not an error toast", async () => {
+    // Fake timers so the poll loop's setInterval this triggers (pollAnalyzeStatus)
+    // never actually fires a real, unstubbed fetch after this test tears down.
+    vi.useFakeTimers();
+    useStudyLoopStore.setState({ config: baseConfig({ anthropicApiKeySet: true }) });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/analyze/status")) return Promise.resolve(jsonResponse({ state: "running", pct: 5 }));
+      if (url.includes("/analyze")) {
+        return Promise.resolve(new Response(JSON.stringify({ error: "already running", code: "already_running" }), { status: 409 }));
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().startAnalyze();
+
+    expect(useStudyLoopStore.getState().analyzeStatus.state).toBe("running");
+    expect(useStudyLoopStore.getState().toasts.some((t) => t.kind === "error")).toBe(false);
+
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+});
+
 describe("openOrCreateYoutubeProject (V2-B — search/up-next click target)", () => {
   beforeEach(() => {
     useStudyLoopStore.setState({ projects: [], projectsLoaded: true, toasts: [] });

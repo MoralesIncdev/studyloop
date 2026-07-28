@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import fstatic from "@fastify/static";
 import { ensureDataDirs, getConfig } from "./config.js";
 import { libraryRoutes } from "./routes/library.js";
@@ -16,6 +17,9 @@ import { searchRoutes } from "./routes/search.js";
 import { configRoutes } from "./routes/config.js";
 import { mediaRoutes } from "./routes/media.js";
 import { revealRoutes } from "./routes/reveal.js";
+import { analyzeRoutes } from "./routes/analyze.js";
+import { heatmapRoutes } from "./routes/heatmap.js";
+import { shareRoutes } from "./routes/share.js";
 import { getHealth } from "./lib/health.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -61,6 +65,14 @@ async function main(): Promise<void> {
   await app.register(configRoutes);
   await app.register(mediaRoutes);
   await app.register(revealRoutes);
+  // V2-C: import-analysis accepts a multipart file upload (SPEC: "multipart
+  // or {path}") — registered globally so routes/share.ts's request.file()
+  // works without every other route paying multipart's parsing overhead
+  // (fastify only invokes it for actual multipart/form-data content-types).
+  await app.register(multipart);
+  await app.register(analyzeRoutes);
+  await app.register(heatmapRoutes);
+  await app.register(shareRoutes);
 
   // Out-of-box polish: lets the web app disable screenshot controls with a
   // clear tooltip instead of a failed request when ffmpeg/yt-dlp aren't on

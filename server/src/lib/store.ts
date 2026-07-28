@@ -143,6 +143,43 @@ function captionsPath(dataDir: string, id: string): string {
   return path.join(projectDir(dataDir, id), "captions.json");
 }
 
+/** V2-C: server-computed analysis (pearls/concepts/themes) — see lib/analysis.ts. */
+export function analysisJsonPath(dataDir: string, id: string): string {
+  return path.join(projectDir(dataDir, id), "analysis.json");
+}
+
+/** V2-C: imported `.studyloop.json` overlay bundles from other viewers — see lib/shareBundle.ts. */
+export function overlaysDir(dataDir: string, id: string): string {
+  return path.join(projectDir(dataDir, id), "overlays");
+}
+
+/**
+ * Resolves an overlay file's on-disk path from its (server-generated)
+ * filename, guarding against traversal the same way projectDir() guards
+ * project ids — the filename is attacker-influenced only insofar as it's
+ * echoed back to DELETE /api/projects/:id/overlays, never taken as a raw
+ * filesystem path from the client on write (see lib/shareBundle.ts
+ * overlayFileName()).
+ */
+export function overlayFilePath(dataDir: string, id: string, fileName: string): string {
+  const dir = overlaysDir(dataDir, id);
+  const resolved = path.resolve(dir, fileName);
+  if (!isInsideRoot(resolved, dir)) {
+    throw new Error(`Invalid overlay filename: ${fileName}`);
+  }
+  return resolved;
+}
+
+export async function listOverlayFileNames(dataDir: string, id: string): Promise<string[]> {
+  try {
+    const entries = await fs.readdir(overlaysDir(dataDir, id), { withFileTypes: true });
+    return entries.filter((e) => e.isFile() && e.name.endsWith(".studyloop.json")).map((e) => e.name);
+  } catch (err) {
+    if (isNotFound(err)) return [];
+    throw err;
+  }
+}
+
 /**
  * Persists YouTube auto-captions as `<project>/captions.json`, in the
  * generic whisper-style shape (`{segments: [{start,end,text}]}`) that

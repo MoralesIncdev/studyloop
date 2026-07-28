@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { TranscriptPane } from "../transcript/TranscriptPane";
 import { ConceptsDock } from "../concepts/ConceptsDock";
+import { PearlsSection, AiBreakdownSection, ThemesSection, OthersAnalysisSection } from "../concepts/AnalysisSections";
 import { formatTimestamp } from "../lib/time";
 import type { RelatedVideo, TranscriptSegment } from "../lib/types";
 import styles from "./RightRail.module.css";
@@ -181,11 +182,28 @@ export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
         }
       >
         <div className={styles.conceptsViewport}>
+          <PearlsSection />
           <ConceptsDock />
+          <AiBreakdownSection />
+          <ThemesSection />
         </div>
       </RailCard>
 
+      <OthersAnalysisCard />
+
       <UpNextCabinet />
     </div>
+  );
+}
+
+/** Only renders a card shell at all once there's an overlay to show — otherwise an empty "Others' analysis" header with nothing under it. */
+function OthersAnalysisCard(): JSX.Element | null {
+  const overlays = useStudyLoopStore((s) => s.overlays);
+  const overlaysVisible = useStudyLoopStore((s) => s.overlaysVisible);
+  if (!overlaysVisible || overlays.length === 0) return null;
+  return (
+    <RailCard title="Others' analysis" defaultExpanded>
+      <OthersAnalysisSection />
+    </RailCard>
   );
 }

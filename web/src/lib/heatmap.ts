@@ -1,9 +1,8 @@
-// Client-side stand-in for the future `GET /api/projects/:id/heatmap` (SPEC V2
-// "Heatmap + shareable analysis" — server-side, out of scope this chunk). Buckets
-// existing bubbles (and, once analysis ships, pearls) into a fixed-size density
-// array so PlayerChrome's HeatmapStrip has real-looking data to render today; the
-// component itself only cares about a `number[]` in [0, 1], so swapping this stub
-// for a real fetch later is a one-line change at the call site.
+// SUPERSEDED (V2-C): PlayerChrome now sources the heatmap from the real
+// `GET /api/projects/:id/heatmap` (server-side Gaussian smoothing — see
+// server/src/lib/heatmap.ts) via the store's `heatmapBuckets`/`loadHeatmap`,
+// not this client-side stand-in. Kept only for its unit test coverage of the
+// bucketing math this module pioneered; not imported by any component anymore.
 import type { Bubble } from "./types";
 
 export const HEATMAP_BUCKET_COUNT = 100;

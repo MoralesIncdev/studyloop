@@ -103,6 +103,8 @@ happens to collide with a clone of this repo, move your data (`mv ~/StudyLoop
 | `HOST` | `127.0.0.1` | Interface the server binds to. Loopback-only by default — there's no authentication, so only widen this if you understand the exposure (e.g. reaching it from another device on your LAN). |
 | `STUDYLOOP_FFMPEG_BIN` | `ffmpeg` | Override the ffmpeg binary path/name. |
 | `STUDYLOOP_YTDLP_BIN` | `yt-dlp` | Override the yt-dlp binary path/name. |
+| `STUDYLOOP_FFPROBE_BIN` | `ffprobe` | Override the ffprobe binary path/name (used for local-video duration lookups). |
+| `STUDYLOOP_FAKE_ANALYSIS` | unset | Set to `1` to make the ✨ Analyze pipeline use a deterministic, offline fake generator instead of calling the real Anthropic API — no `anthropicApiKey` required. Same code path as production (chunking, merge, analysis.json), just a fake LLM client underneath. Useful for demos, screenshots, and trying the full analyze → pearls → heatmap → compile flow without an API key. |
 
 ## Hotkeys
 

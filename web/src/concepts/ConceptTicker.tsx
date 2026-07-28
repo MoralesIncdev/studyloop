@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { activeConcepts } from "../lib/selectors";
+import { analysisConceptToConceptCard } from "../lib/analysisFormat";
 import type { ConceptCard as ConceptCardType } from "../lib/types";
 import { ConceptCard } from "./ConceptCard";
 import { ConceptOverlay } from "./ConceptOverlay";
@@ -32,6 +33,7 @@ interface Entry {
 
 export function ConceptTicker(): JSX.Element {
   const concepts = useStudyLoopStore((s) => s.concepts);
+  const analysis = useStudyLoopStore((s) => s.analysis);
   const currentTime = useStudyLoopStore((s) => s.currentTime);
   const muted = useStudyLoopStore((s) => s.conceptTickerMuted);
 
@@ -43,7 +45,13 @@ export function ConceptTicker(): JSX.Element {
   // of the ticker until playback leaves and re-enters the window.
   const dismissedRef = useRef<Set<string>>(new Set());
 
-  const active = useMemo(() => activeConcepts(concepts, currentTime), [concepts, currentTime]);
+  // V2-C: AI-breakdown concepts join the ticker's candidate pool alongside
+  // doc concepts (SPEC: "anchored ones join the ticker windows like doc concepts").
+  const allConcepts = useMemo(
+    () => [...concepts, ...(analysis?.concepts.map(analysisConceptToConceptCard) ?? [])],
+    [concepts, analysis]
+  );
+  const active = useMemo(() => activeConcepts(allConcepts, currentTime), [allConcepts, currentTime]);
   // A stable string to key the effect off — `active` is a fresh array every
   // render even when its contents haven't changed.
   const signature = active.map((a) => tickerKey(a.card.id, a.anchorT)).join("|");

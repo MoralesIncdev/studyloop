@@ -22,16 +22,33 @@ export interface SeekBarConceptTick extends SeekBarMarker {
   title?: string;
 }
 
+/** V2-C: a pearl diamond — distinct from bubble pins/concept ticks (SPEC "Analysis engine"). */
+export interface SeekBarPearlMarker extends SeekBarMarker {
+  label: string;
+  importance: 1 | 2 | 3;
+}
+
+/** V2-C: one marker from an imported overlay bundle — colored per author handle (SPEC "Overlays"). */
+export interface SeekBarOverlayMarker extends SeekBarMarker {
+  handle: string;
+  hue: number;
+  kind: "bubble" | "pearl";
+}
+
 interface Props {
   currentTime: number;
   duration: number;
   bubbles?: SeekBarBubbleMarker[];
   conceptTicks?: SeekBarConceptTick[];
+  pearls?: SeekBarPearlMarker[];
+  overlayMarkers?: SeekBarOverlayMarker[];
   loopA?: number | null;
   loopB?: number | null;
   onSeek: (t: number) => void;
   /** Called when a bubble pin is clicked, instead of onSeek. Defaults to onSeek. */
   onSeekBubble?: (t: number) => void;
+  /** Called when a pearl diamond is clicked, instead of onSeek. Defaults to onSeek. */
+  onSeekPearl?: (t: number) => void;
   /** Density buckets in [0,1] for the heatmap strip above the bar (SPEC "Player chrome"). */
   heatmap?: number[];
 }
@@ -41,15 +58,19 @@ export function SeekBar({
   duration,
   bubbles = [],
   conceptTicks = [],
+  pearls = [],
+  overlayMarkers = [],
   loopA = null,
   loopB = null,
   onSeek,
   onSeekBubble,
+  onSeekPearl,
   heatmap,
 }: Props): JSX.Element {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<{ x: number; t: number } | null>(null);
   const [hoverBubble, setHoverBubble] = useState<SeekBarBubbleMarker | null>(null);
+  const [hoverPearl, setHoverPearl] = useState<SeekBarPearlMarker | null>(null);
 
   const timeAtClientX = useCallback(
     (clientX: number): number => {
@@ -129,16 +150,52 @@ export function SeekBar({
             }}
           />
         ))}
+        {/* V2-C: pearl diamonds — visually distinct from bubble pins (dots above)
+            and concept ticks (bars below); size scales with importance. */}
+        {pearls.map((pearl) => (
+          <div
+            key={pearl.id}
+            className={styles.pearlMarker}
+            style={{ left: pct(pearl.t) }}
+            data-importance={pearl.importance}
+            onMouseEnter={() => setHoverPearl(pearl)}
+            onMouseLeave={() => setHoverPearl((cur) => (cur?.id === pearl.id ? null : cur))}
+            onClick={(e) => {
+              e.stopPropagation();
+              (onSeekPearl ?? onSeek)(pearl.t);
+            }}
+          />
+        ))}
+        {/* V2-C: imported overlay markers — one colored dot per author handle. */}
+        {overlayMarkers.map((marker) => (
+          <div
+            key={marker.id}
+            className={marker.kind === "pearl" ? styles.overlayPearlMarker : styles.overlayBubbleMarker}
+            style={{ left: pct(marker.t), background: `hsl(${marker.hue}, 70%, 55%)` }}
+            title={`${marker.handle} — ${formatTimestamp(marker.t)}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSeek(Math.max(0, marker.t - 5));
+            }}
+          />
+        ))}
         {loopA != null && <div className={styles.loopMarker} style={{ left: pct(loopA) }} title={`A: ${formatTimestamp(loopA)}`} />}
         {loopB != null && <div className={styles.loopMarker} style={{ left: pct(loopB) }} title={`B: ${formatTimestamp(loopB)}`} />}
         <div className={styles.playhead} style={{ left: pct(currentTime) }} />
-        {hoverBubble && (
+        {hoverPearl && (
+          <div className={styles.bubbleTooltip} style={{ left: pct(hoverPearl.t) }}>
+            <span className={styles.bubbleTooltipText}>
+              {"★".repeat(hoverPearl.importance)} {hoverPearl.label}
+            </span>
+          </div>
+        )}
+        {!hoverPearl && hoverBubble && (
           <div className={styles.bubbleTooltip} style={{ left: pct(hoverBubble.t) }}>
             {hoverBubble.thumbnailUrl && <img className={styles.bubbleTooltipImg} src={hoverBubble.thumbnailUrl} alt="" />}
             <span className={styles.bubbleTooltipText}>{hoverBubble.text || formatTimestamp(hoverBubble.t)}</span>
           </div>
         )}
-        {!hoverBubble && hover && (
+        {!hoverPearl && !hoverBubble && hover && (
           <div className={styles.tooltip} style={{ left: hover.x }}>
             {formatTimestamp(hover.t)}
           </div>

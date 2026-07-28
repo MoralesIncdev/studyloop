@@ -9,6 +9,10 @@ export const ConfigSchema = z.object({
   transcriptRoots: z.array(z.string()).default([]),
   conceptDocs: z.array(z.string()).default([]),
   anthropicApiKey: z.string().nullable().default(null),
+  /** V2-C analysis engine model override; null => runtime default "claude-opus-5" (see lib/analysis.ts). */
+  analysisModel: z.string().nullable().default(null),
+  /** V2-C share bundles: author handle embedded in exported .studyloop.json files (SPEC default "anonymous"). */
+  shareHandle: z.string().min(1).default("anonymous"),
 });
 
 export type StudyLoopConfig = z.infer<typeof ConfigSchema>;
@@ -33,6 +37,8 @@ const DEFAULT_CONFIG: StudyLoopConfig = {
   transcriptRoots: [],
   conceptDocs: [],
   anthropicApiKey: null,
+  analysisModel: null,
+  shareHandle: "anonymous",
 };
 
 export async function loadConfig(): Promise<StudyLoopConfig> {

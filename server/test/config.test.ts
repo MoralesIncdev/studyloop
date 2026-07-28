@@ -10,6 +10,8 @@ function baseConfig(overrides: Partial<StudyLoopConfig> = {}): StudyLoopConfig {
     transcriptRoots: [],
     conceptDocs: [],
     anthropicApiKey: null,
+    analysisModel: null,
+    shareHandle: "anonymous",
     ...overrides,
   };
 }

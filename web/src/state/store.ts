@@ -7,11 +7,15 @@ import { parseHash, routeToHash, type Route } from "../lib/router";
 import { activeConcepts, activeSegmentIndex } from "../lib/selectors";
 import { formatTimestamp } from "../lib/time";
 import type {
+  Analysis,
+  AnalyzeStatus,
   Bubble,
   ConceptCard,
   HealthResponse,
   LibraryItem,
+  OverlayMeta,
   Project,
+  ShareBundle,
   StudyLoopConfig,
   StudyLoopConfigPatch,
   TranscriptSegment,
@@ -57,6 +61,32 @@ function clearPendingNotesSave(): void {
     clearTimeout(notesSaveTimer);
     notesSaveTimer = null;
   }
+}
+
+// V2-C: Analyze-status poll timer + heatmap-refetch debounce, kept as
+// module-level state for the same reason as notesSaveTimer above — a single
+// active timer regardless of which component happens to be mounted, cleared
+// deterministically on project switch/unmount rather than component teardown.
+const ANALYZE_POLL_INTERVAL_MS = 1000;
+const HEATMAP_DEBOUNCE_MS = 400;
+let analyzePollTimer: ReturnType<typeof setInterval> | null = null;
+let heatmapDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+function clearAnalyzePoll(): void {
+  if (analyzePollTimer) {
+    clearInterval(analyzePollTimer);
+    analyzePollTimer = null;
+  }
+}
+function clearHeatmapDebounce(): void {
+  if (heatmapDebounceTimer) {
+    clearTimeout(heatmapDebounceTimer);
+    heatmapDebounceTimer = null;
+  }
+}
+
+/** GET/POST analyze can return either an in-flight AnalyzeStatus or (idempotent-serve, or POST-while-done) the full Analysis. */
+function isAnalysis(value: AnalyzeStatus | Analysis): value is Analysis {
+  return "pearls" in value;
 }
 
 /** F4 Notation modal state — a shot capture is in flight the moment the modal opens. */
@@ -245,6 +275,38 @@ export interface StudyLoopStore {
   /** `path` defaults to the project's exports/ directory when omitted. */
   revealExport: (path?: string) => Promise<void>;
 
+  // --- V2-C analysis engine (pearls & concept breakdown) --------------------------------
+  analysis: Analysis | null;
+  analyzeStatus: AnalyzeStatus;
+  /** Kicks off (or, in fake/demo mode, always allowed without a key) an analyze run.
+   *  No API key configured → toast + navigate to Settings, per SPEC. */
+  startAnalyze: (force?: boolean) => Promise<void>;
+  /** Player-chrome/channel-row "Re-analyze" affordance: confirm, then startAnalyze(true). */
+  confirmReanalyze: () => void;
+  /** Internal: begins (or restarts) the 1s poll loop against /analyze/status for `projectId`. */
+  pollAnalyzeStatus: (projectId: string) => void;
+
+  // --- V2-C heatmap -----------------------------------------------------------------------
+  heatmapBuckets: number[];
+  /** Debounced GET /api/projects/:id/heatmap — call after analyze completes or bubbles change. */
+  loadHeatmap: () => void;
+
+  // --- V2-C share bundles / overlays --------------------------------------------------------
+  overlays: OverlayMeta[];
+  overlaysLoading: boolean;
+  overlaysVisible: boolean;
+  toggleOverlaysVisible: () => void;
+  loadOverlays: () => Promise<void>;
+  /** {path} import (SPEC: "multipart or {path}" — the web app only drives the path form). */
+  importOverlayByPath: (path: string) => Promise<void>;
+  deleteOverlayFile: (fileName: string) => Promise<void>;
+
+  exportingAnalysis: boolean;
+  /** Set once POST /api/projects/:id/export-analysis succeeds; drives the Share preview/modal. */
+  shareResult: { path: string; bundle: ShareBundle } | null;
+  runExportAnalysis: () => Promise<void>;
+  clearShareResult: () => void;
+
   // --- toasts -----------------------------------------------------------------------
   toasts: Toast[];
   pushToast: (message: string, kind?: Toast["kind"]) => void;
@@ -255,6 +317,11 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   // --- routing -------------------------------------------------------------
   route: typeof window !== "undefined" ? parseHash(window.location.hash) : { view: "library" },
   navigate: (route) => {
+    if (typeof window === "undefined") {
+      // Non-browser environment (unit tests) — no hash to sync, just update the route directly.
+      set({ route });
+      return;
+    }
     const hash = routeToHash(route);
     if (window.location.hash === hash) {
       // Same route (e.g. re-opening the same project) — hashchange won't fire.
@@ -448,6 +515,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     // flushes synchronously before calling here, but this is cheap and
     // guards any other caller of loadProjectSession too.
     clearPendingNotesSave();
+    clearAnalyzePoll();
+    clearHeatmapDebounce();
 
     set({
       sessionRequestId: requestId,
@@ -474,6 +543,14 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       notationGeneration: get().notationGeneration + 1,
       compiling: false,
       compileResult: null,
+      analysis: null,
+      analyzeStatus: { state: "idle" },
+      heatmapBuckets: [],
+      overlays: [],
+      overlaysLoading: false,
+      overlaysVisible: false,
+      exportingAnalysis: false,
+      shareResult: null,
     });
     let project: Project;
     try {
@@ -526,6 +603,44 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       }
     })();
 
+    // V2-C: an already-analyzed project loads its analysis.json (and, if a
+    // run happens to still be in flight from a prior session — e.g. the tab
+    // was reloaded mid-run — the status endpoint picks that up too) without
+    // requiring the user to click Analyze again. 404 (no analysis yet) is
+    // the expected common case, not an error.
+    const analysisPromise = (async () => {
+      try {
+        const status = await api.getAnalyzeStatus(id);
+        if (!isCurrent()) return;
+        set({ analyzeStatus: status });
+        if (status.state === "done") {
+          const analysis = await api.getAnalysis(id);
+          if (!isCurrent()) return;
+          set({ analysis });
+        } else if (status.state === "running") {
+          get().pollAnalyzeStatus(id);
+        }
+      } catch (err) {
+        if (!isCurrent()) return;
+        if (!(err instanceof ApiError) || err.status !== 404) {
+          get().pushToast(`Could not load analysis status: ${errorMessage(err)}`, "error");
+        }
+      }
+    })();
+
+    const overlaysPromise = (async () => {
+      set({ overlaysLoading: true });
+      try {
+        const res = await api.listOverlays(id);
+        if (!isCurrent()) return;
+        set({ overlays: res.overlays, overlaysLoading: false });
+      } catch (err) {
+        if (!isCurrent()) return;
+        set({ overlaysLoading: false });
+        get().pushToast(`Could not load overlays: ${errorMessage(err)}`, "error");
+      }
+    })();
+
     if (project.transcript.type === "file") {
       set({ transcriptLoading: true });
       try {
@@ -539,10 +654,12 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       }
     }
 
-    await Promise.all([bubblesPromise, notesPromise, conceptsPromise]);
+    await Promise.all([bubblesPromise, notesPromise, conceptsPromise, analysisPromise, overlaysPromise]);
   },
   clearProjectSession: () => {
     clearPendingNotesSave();
+    clearAnalyzePoll();
+    clearHeatmapDebounce();
     set((state) => ({
       sessionRequestId: state.sessionRequestId + 1,
       currentProject: null,
@@ -565,6 +682,14 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       notationGeneration: state.notationGeneration + 1,
       compiling: false,
       compileResult: null,
+      analysis: null,
+      analyzeStatus: { state: "idle" },
+      heatmapBuckets: [],
+      overlays: [],
+      overlaysLoading: false,
+      overlaysVisible: false,
+      exportingAnalysis: false,
+      shareResult: null,
     }));
   },
   patchCurrentProject: async (patch) => {
@@ -925,6 +1050,180 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       get().pushToast(`Could not reveal in Finder: ${errorMessage(err)}`, "error");
     }
   },
+
+  // --- V2-C analysis engine ---------------------------------------------------------------
+  analysis: null,
+  analyzeStatus: { state: "idle" },
+  startAnalyze: async (force) => {
+    const project = get().currentProject;
+    if (!project) return;
+    // No key configured → toast + open Settings (SPEC), unless the config
+    // hasn't loaded yet — in that case load it first rather than guessing.
+    const config = get().config ?? (await get().loadConfig());
+    if (!config) return; // loadConfig already toasted its own failure
+    if (!config.anthropicApiKeySet) {
+      get().pushToast("Add an Anthropic API key in Settings to use Analyze", "info");
+      get().navigate({ view: "settings" });
+      return;
+    }
+    const projectId = project.id;
+    set({ analyzeStatus: { state: "running", pct: 0 } });
+    try {
+      const result = await api.analyze(projectId, force);
+      if (get().currentProject?.id !== projectId) return; // navigated away mid-request
+      if (isAnalysis(result)) {
+        // Idempotent path: analysis.json already existed and force wasn't set.
+        set({ analysis: result, analyzeStatus: { state: "done" } });
+        get().loadHeatmap();
+        return;
+      }
+      set({ analyzeStatus: result });
+      if (result.state === "running") get().pollAnalyzeStatus(projectId);
+    } catch (err) {
+      if (get().currentProject?.id !== projectId) return;
+      if (err instanceof ApiError && err.status === 409) {
+        // Another POST already started a run (e.g. a second tab) — just
+        // start polling instead of surfacing this as a failure.
+        set({ analyzeStatus: { state: "running", pct: 0 } });
+        get().pollAnalyzeStatus(projectId);
+        return;
+      }
+      set({ analyzeStatus: { state: "error", message: errorMessage(err) } });
+      get().pushToast(`Could not start analysis: ${errorMessage(err)}`, "error");
+    }
+  },
+  confirmReanalyze: () => {
+    if (typeof window !== "undefined" && !window.confirm("Re-analyze this video? This replaces the existing analysis.")) {
+      return;
+    }
+    void get().startAnalyze(true);
+  },
+  pollAnalyzeStatus: (projectId) => {
+    clearAnalyzePoll();
+    analyzePollTimer = setInterval(() => {
+      if (get().currentProject?.id !== projectId) {
+        clearAnalyzePoll();
+        return;
+      }
+      void (async () => {
+        try {
+          const status = await api.getAnalyzeStatus(projectId);
+          if (get().currentProject?.id !== projectId) {
+            clearAnalyzePoll();
+            return;
+          }
+          set({ analyzeStatus: status });
+          if (status.state === "done") {
+            clearAnalyzePoll();
+            try {
+              const analysis = await api.getAnalysis(projectId);
+              if (get().currentProject?.id !== projectId) return;
+              set({ analysis });
+              get().pushToast("Analysis complete", "success");
+              get().loadHeatmap();
+            } catch (err) {
+              get().pushToast(`Analysis finished but could not be loaded: ${errorMessage(err)}`, "error");
+            }
+          } else if (status.state === "error") {
+            clearAnalyzePoll();
+            get().pushToast(`Analysis failed: ${status.message}`, "error");
+          }
+        } catch {
+          // Transient poll failure (e.g. a dropped request) — retry on the next tick.
+        }
+      })();
+    }, ANALYZE_POLL_INTERVAL_MS);
+  },
+
+  // --- V2-C heatmap -----------------------------------------------------------------------
+  heatmapBuckets: [],
+  loadHeatmap: () => {
+    const project = get().currentProject;
+    if (!project) return;
+    const projectId = project.id;
+    clearHeatmapDebounce();
+    heatmapDebounceTimer = setTimeout(() => {
+      heatmapDebounceTimer = null;
+      void api
+        .getHeatmap(projectId)
+        .then((res) => {
+          if (get().currentProject?.id !== projectId) return;
+          set({ heatmapBuckets: res.buckets });
+        })
+        .catch(() => {
+          // Heatmap is presentational only — fail quiet rather than toast on every change.
+        });
+    }, HEATMAP_DEBOUNCE_MS);
+  },
+
+  // --- V2-C share bundles / overlays --------------------------------------------------------
+  overlays: [],
+  overlaysLoading: false,
+  overlaysVisible: false,
+  toggleOverlaysVisible: () => set((state) => ({ overlaysVisible: !state.overlaysVisible })),
+  loadOverlays: async () => {
+    const project = get().currentProject;
+    if (!project) return;
+    const projectId = project.id;
+    set({ overlaysLoading: true });
+    try {
+      const res = await api.listOverlays(projectId);
+      if (get().currentProject?.id !== projectId) return;
+      set({ overlays: res.overlays, overlaysLoading: false });
+    } catch (err) {
+      if (get().currentProject?.id !== projectId) return;
+      set({ overlaysLoading: false });
+      get().pushToast(`Could not load overlays: ${errorMessage(err)}`, "error");
+    }
+  },
+  importOverlayByPath: async (path) => {
+    const project = get().currentProject;
+    if (!project) return;
+    try {
+      const res = await api.importAnalysisByPath(project.id, path);
+      await get().loadOverlays();
+      get().loadHeatmap();
+      set({ overlaysVisible: true });
+      if (res.sourceMismatch) {
+        get().pushToast(`Imported — but ${res.sourceMismatch}`, "info");
+      } else {
+        get().pushToast(`Imported ${res.bundle.shareHandle}'s analysis`, "success");
+      }
+    } catch (err) {
+      get().pushToast(`Could not import analysis: ${errorMessage(err)}`, "error");
+      throw err;
+    }
+  },
+  deleteOverlayFile: async (fileName) => {
+    const project = get().currentProject;
+    if (!project) return;
+    const prev = get().overlays;
+    set({ overlays: prev.filter((o) => o.fileName !== fileName) });
+    try {
+      await api.deleteOverlay(project.id, fileName);
+      get().loadHeatmap();
+    } catch (err) {
+      set({ overlays: prev });
+      get().pushToast(`Could not remove overlay: ${errorMessage(err)}`, "error");
+    }
+  },
+
+  exportingAnalysis: false,
+  shareResult: null,
+  runExportAnalysis: async () => {
+    const project = get().currentProject;
+    if (!project) return;
+    set({ exportingAnalysis: true });
+    try {
+      const result = await api.exportAnalysis(project.id);
+      set({ exportingAnalysis: false, shareResult: result });
+      get().pushToast("Exported analysis bundle", "success");
+    } catch (err) {
+      set({ exportingAnalysis: false });
+      get().pushToast(`Could not export analysis: ${errorMessage(err)}`, "error");
+    }
+  },
+  clearShareResult: () => set({ shareResult: null }),
 
   // --- toasts -----------------------------------------------------------------------
   toasts: [],

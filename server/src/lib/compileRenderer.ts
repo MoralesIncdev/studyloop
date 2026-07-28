@@ -1,5 +1,6 @@
 import path from "node:path";
 import { formatTimestamp } from "./time.js";
+import type { AnalysisConcept, Pearl } from "./analysis.js";
 import type { Bubble, Source } from "./models.js";
 import type { ConceptCard } from "./concepts.js";
 
@@ -13,6 +14,14 @@ export interface CompileInput {
   watchedUpTo: number;
   /** ISO date string, injected for determinism (defaults to now if omitted). */
   compiledAt?: string;
+  /**
+   * V2-C: when analysis.json exists for this project, compile gains "Pearls"
+   * and "Concept breakdown" sections after the user-notes sections (SPEC
+   * "Analysis engine" — "Compile v2"). Omitted/undefined when no analysis has
+   * been run — the sections are simply absent, never blocking compile.
+   */
+  analysisPearls?: readonly Pearl[];
+  analysisConcepts?: readonly AnalysisConcept[];
 }
 
 function describeSource(source: Source): string {
@@ -42,6 +51,24 @@ function renderBubbles(bubbles: readonly Bubble[]): string {
 
 function isCovered(card: ConceptCard, watchedUpTo: number): boolean {
   return card.anchors.some((a) => a.t !== null && a.t <= watchedUpTo);
+}
+
+/** SPEC: "Pearls ... importance-starred" — ★×importance, importance-sorted then chronological. */
+function renderAnalysisPearls(pearls: readonly Pearl[]): string {
+  const sorted = [...pearls].sort((a, b) => b.importance - a.importance || a.t - b.t);
+  return sorted
+    .map((p) => `- ${"★".repeat(p.importance)} **[${formatTimestamp(p.t)}] ${p.label}** — ${p.insight}`)
+    .join("\n");
+}
+
+function renderAnalysisConcepts(concepts: readonly AnalysisConcept[]): string {
+  return concepts
+    .map((c) => {
+      const anchorList = c.anchors.map((a) => `[${formatTimestamp(a.t)}]`).join(", ");
+      const lines = [`### ${c.title}${anchorList ? ` (${anchorList})` : ""}`, "", c.summary, "", c.body];
+      return lines.join("\n");
+    })
+    .join("\n\n");
 }
 
 function renderConcepts(concepts: readonly ConceptCard[], watchedUpTo: number): string {
@@ -84,5 +111,13 @@ export function renderCompiledDocument(input: CompileInput): string {
     renderConcepts(input.concepts, input.watchedUpTo),
     "",
   ];
+  // V2-C: only present when analysis.json exists for this project — never
+  // blocks compile without analysis (SPEC "Compile v2").
+  if (input.analysisPearls && input.analysisPearls.length > 0) {
+    parts.push("## Pearls", "", renderAnalysisPearls(input.analysisPearls), "");
+  }
+  if (input.analysisConcepts && input.analysisConcepts.length > 0) {
+    parts.push("## Concept breakdown", "", renderAnalysisConcepts(input.analysisConcepts), "");
+  }
   return parts.join("\n");
 }

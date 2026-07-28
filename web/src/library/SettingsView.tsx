@@ -27,6 +27,8 @@ export function SettingsView(): JSX.Element {
   // `anthropicApiKeySet`), so this field always starts empty — typing in it
   // sets/replaces the key, leaving it blank keeps whatever's already saved.
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
+  const [analysisModel, setAnalysisModel] = useState("");
+  const [shareHandle, setShareHandle] = useState("");
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -40,6 +42,8 @@ export function SettingsView(): JSX.Element {
     setLibraryRoots(config.libraryRoots.join("\n"));
     setTranscriptRoots(config.transcriptRoots.join("\n"));
     setConceptDocs(config.conceptDocs.join("\n"));
+    setAnalysisModel(config.analysisModel ?? "");
+    setShareHandle(config.shareHandle);
     setLoaded(true);
   }, [config, loaded]);
 
@@ -57,6 +61,8 @@ export function SettingsView(): JSX.Element {
         // already-saved key just because the field wasn't touched. Use the
         // "Clear key" button for that instead.
         ...(trimmedKey ? { anthropicApiKey: trimmedKey } : {}),
+        analysisModel: analysisModel.trim() || null,
+        shareHandle: shareHandle.trim() || "anonymous",
       });
       setAnthropicApiKey("");
       pushToast("Settings saved", "success");
@@ -155,6 +161,30 @@ export function SettingsView(): JSX.Element {
               Clear key
             </button>
           )}
+        </label>
+
+        <label className={styles.field}>
+          <span className={styles.label}>Analysis model</span>
+          <span className={styles.hint}>Model used for the ✨ Analyze pipeline. Leave blank for the default (claude-opus-5).</span>
+          <input
+            type="text"
+            className={styles.input}
+            value={analysisModel}
+            onChange={(e) => setAnalysisModel(e.target.value)}
+            placeholder="claude-opus-5"
+          />
+        </label>
+
+        <label className={styles.field}>
+          <span className={styles.label}>Share handle</span>
+          <span className={styles.hint}>Your author name, embedded in exported .studyloop.json analysis bundles.</span>
+          <input
+            type="text"
+            className={styles.input}
+            value={shareHandle}
+            onChange={(e) => setShareHandle(e.target.value)}
+            placeholder="anonymous"
+          />
         </label>
 
         <div className={styles.actions}>

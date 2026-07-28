@@ -407,8 +407,10 @@ identically for local files.*
 - Trigger: ✨ Analyze button (player cluster + channel-row pill). Requires transcript
   + `anthropicApiKey` in config (else pill opens Settings with a hint).
 - `POST /api/projects/:id/analyze` → server chunks the transcript (~8-min windows,
-  1-min overlap), calls Claude (model `claude-sonnet-5`, via @anthropic-ai/sdk,
-  temperature 0.2, JSON tool-output per chunk), then a final merge pass produces:
+  1-min overlap), calls Claude (model from config
+  `analysisModel`, default `claude-opus-5`, via @anthropic-ai/sdk; structured outputs
+  via `client.messages.parse` + `zodOutputFormat`; omit `thinking` (adaptive by
+  default); handle `stop_reason: "refusal"` per chunk gracefully), then a final merge pass produces:
   ```
   analysis.json {
     generatedAt, model, version: 2,

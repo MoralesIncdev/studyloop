@@ -1,16 +1,21 @@
 // Thin typed client for the StudyLoop server API. Every function throws ApiError on
 // failure; call sites are expected to catch and surface via the toast store.
 import type {
+  Analysis,
+  AnalyzeStatus,
   Bubble,
   ConceptCard,
   ConceptProfile,
   CreateProjectBody,
   HealthResponse,
+  HeatmapResponse,
   LibraryResponse,
+  OverlayMeta,
   PatchProjectBody,
   Project,
   RevealResponse,
   SearchResponse,
+  ShareBundle,
   StudyLoopConfig,
   StudyLoopConfigPatch,
   TranscriptResponse,
@@ -121,6 +126,34 @@ export const api = {
     request<Project>("/api/youtube/related", { method: "POST", body: JSON.stringify({ projectId, videoId }) }),
 
   search: (q: string) => request<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}`),
+
+  // --- V2-C: analysis engine ---------------------------------------------------
+  analyze: (id: string, force?: boolean) =>
+    request<AnalyzeStatus | Analysis>(`/api/projects/${encodeURIComponent(id)}/analyze`, {
+      method: "POST",
+      body: JSON.stringify(force ? { force: true } : {}),
+    }),
+  getAnalyzeStatus: (id: string) => request<AnalyzeStatus>(`/api/projects/${encodeURIComponent(id)}/analyze/status`),
+  getAnalysis: (id: string) => request<Analysis>(`/api/projects/${encodeURIComponent(id)}/analysis`),
+
+  // --- V2-C: heatmap -------------------------------------------------------------
+  getHeatmap: (id: string) => request<HeatmapResponse>(`/api/projects/${encodeURIComponent(id)}/heatmap`),
+
+  // --- V2-C: share bundles / overlays ---------------------------------------------
+  exportAnalysis: (id: string) =>
+    request<{ path: string; bundle: ShareBundle }>(`/api/projects/${encodeURIComponent(id)}/export-analysis`, {
+      method: "POST",
+    }),
+  importAnalysisByPath: (id: string, path: string) =>
+    request<{ fileName: string; bundle: ShareBundle; sourceMismatch: string | null }>(
+      `/api/projects/${encodeURIComponent(id)}/import-analysis`,
+      { method: "POST", body: JSON.stringify({ path }) }
+    ),
+  listOverlays: (id: string) => request<{ overlays: OverlayMeta[] }>(`/api/projects/${encodeURIComponent(id)}/overlays`),
+  deleteOverlay: (id: string, fileName: string) =>
+    request<{ ok: true }>(`/api/projects/${encodeURIComponent(id)}/overlays/${encodeURIComponent(fileName)}`, {
+      method: "DELETE",
+    }),
 
   videoStreamUrl: (path: string) => `/api/video/stream?path=${encodeURIComponent(path)}`,
   shotUrl: (projectId: string, shot: string) =>

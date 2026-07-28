@@ -1,0 +1,45 @@
+.pillActive {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-chip);
+  border: 1px solid;
+  border-radius: var(--radius-pill);
+  padding: 4px 10px 4px 8px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.removeChip {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+  margin-left: 2px;
+}
+
+.removeChip:hover {
+  color: var(--text);
+}
