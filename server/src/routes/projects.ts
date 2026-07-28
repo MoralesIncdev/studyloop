@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { getConfig, resolveDataDir, resolveRoots } from "../config.js";
+import { expandHome, getConfig, resolveDataDir, resolveRoots } from "../config.js";
 import { isInsideAnyRootCanonical, isPathAllowedCanonical } from "../lib/paths.js";
 import { assertValidYoutubeUrl, InvalidYoutubeUrlError } from "../lib/ytdlp.js";
 import {
@@ -9,6 +9,7 @@ import {
   CreateProjectBodySchema,
   PatchBubbleBodySchema,
   PatchProjectBodySchema,
+  ProjectIdParamSchema,
   type Bubble,
   type Project,
 } from "../lib/models.js";
@@ -26,7 +27,7 @@ import {
   writeProject,
 } from "../lib/store.js";
 
-const IdParamSchema = z.object({ id: z.string().min(1) });
+const IdParamSchema = ProjectIdParamSchema;
 
 function titleFromLocalPath(p: string): string {
   const base = p.split("/").pop() ?? p;
@@ -43,6 +44,15 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
     const config = await getConfig();
     const dataDir = resolveDataDir(config);
     const roots = resolveRoots(config);
+
+    // `~` is expanded server-side before every root comparison — roots
+    // themselves are always resolved+expanded (see config.ts resolveRoots),
+    // so an incoming `~/...` path would otherwise never match even a
+    // legitimately-configured root (the literal string "~" isn't a real
+    // filesystem path).
+    if (body.source.type === "local") body.source.path = expandHome(body.source.path);
+    if (body.transcriptPath) body.transcriptPath = expandHome(body.transcriptPath);
+    if (body.conceptDocPath) body.conceptDocPath = expandHome(body.conceptDocPath);
 
     if (body.source.type === "local" && !(await isInsideAnyRootCanonical(body.source.path, roots.libraryRoots))) {
       return reply.status(403).send({ error: "source.path is outside configured library roots" });
@@ -125,8 +135,13 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
 
     // Revalidate any path-bearing fields exactly like project creation does —
     // otherwise PATCH is a second, unguarded way to point a project at an
-    // arbitrary file on disk.
+    // arbitrary file on disk. Expand `~` first, same reasoning as creation —
+    // this is what makes a `~/...` entry from configured conceptDocs (e.g.
+    // ConceptsDock's "attach" buttons, which echo GET /api/config's raw,
+    // unexpanded conceptDocs list) actually resolve when clicked.
     const patch = parsed.data;
+    if (patch.conceptDoc?.path) patch.conceptDoc.path = expandHome(patch.conceptDoc.path);
+    if (patch.transcript?.type === "file") patch.transcript.path = expandHome(patch.transcript.path);
     if (patch.conceptDoc?.path && !(await isPathAllowedCanonical(patch.conceptDoc.path, roots))) {
       return reply.status(403).send({ error: "conceptDoc.path is outside configured roots" });
     }
@@ -230,7 +245,7 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.patch("/api/projects/:id/bubbles/:bubbleId", async (request, reply) => {
-    const params = z.object({ id: z.string(), bubbleId: z.string() }).safeParse(request.params);
+    const params = z.object({ id: z.string().uuid(), bubbleId: z.string().uuid() }).safeParse(request.params);
     if (!params.success) return reply.status(400).send({ error: "Invalid id" });
     const parsed = PatchBubbleBodySchema.safeParse(request.body);
     if (!parsed.success) {
@@ -257,7 +272,7 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.delete("/api/projects/:id/bubbles/:bubbleId", async (request, reply) => {
-    const params = z.object({ id: z.string(), bubbleId: z.string() }).safeParse(request.params);
+    const params = z.object({ id: z.string().uuid(), bubbleId: z.string().uuid() }).safeParse(request.params);
     if (!params.success) return reply.status(400).send({ error: "Invalid id" });
     const config = await getConfig();
     const dataDir = resolveDataDir(config);

@@ -10,6 +10,52 @@ describe("clampRate", () => {
   });
 });
 
+function jsonResponseFor(body: unknown): Response {
+  return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+}
+
+describe("loadLibrary / rescanLibrary no-op while already loading", () => {
+  beforeEach(() => {
+    useStudyLoopStore.setState({ libraryLoading: false, libraryLoaded: false, libraryItems: [], toasts: [] });
+  });
+
+  it("does not fire a second GET /api/library while the first is still in flight", async () => {
+    let resolveFirst!: (v: Response) => void;
+    const pending = new Promise<Response>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const fetchMock = vi.fn(() => pending);
+    vi.stubGlobal("fetch", fetchMock);
+
+    // Two stacked calls before the first resolves — mirrors React
+    // StrictMode's double-mount firing loadLibrary() twice in a row.
+    const first = useStudyLoopStore.getState().loadLibrary();
+    const second = useStudyLoopStore.getState().loadLibrary();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    resolveFirst(jsonResponseFor({ items: [], warnings: [] }));
+    await Promise.all([first, second]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(useStudyLoopStore.getState().libraryLoaded).toBe(true);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("a second call after the first has fully resolved is not blocked (the guard is concurrency-only, not a cache)", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponseFor({ items: [], warnings: [] })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().loadLibrary();
+    await useStudyLoopStore.getState().loadLibrary();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("A/B loop store logic", () => {
   beforeEach(() => {
     useStudyLoopStore.setState({ loopA: null, loopB: null, toasts: [] });

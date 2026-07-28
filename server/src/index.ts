@@ -15,11 +15,17 @@ import { youtubeRoutes } from "./routes/youtube.js";
 import { configRoutes } from "./routes/config.js";
 import { mediaRoutes } from "./routes/media.js";
 import { revealRoutes } from "./routes/reveal.js";
-import { isFfmpegAvailable } from "./lib/frames.js";
-import { isYtdlpAvailable } from "./lib/ytdlp.js";
+import { getHealth } from "./lib/health.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.PORT ?? process.env.STUDYLOOP_PORT ?? 4600);
+// STUDYLOOP_PORT only — the generic `PORT` env var is deliberately ignored.
+// Dev harnesses/process managers commonly export a generic PORT for
+// whatever they're launching (observed: a harness's PORT meant for the web
+// dev server leaked in and the API server bound the web port instead), and
+// since this repo runs two servers (server + web) under one `npm run dev`,
+// a single ambient PORT can't unambiguously address either one. Use
+// STUDYLOOP_PORT (read identically by web/vite.config.ts's dev proxy).
+const PORT = Number(process.env.STUDYLOOP_PORT ?? 4600);
 // Loopback by default — this app has no auth, so anything beyond localhost is
 // an explicit, advanced opt-in (e.g. accessing from another device on the LAN).
 const HOST = process.env.HOST ?? "127.0.0.1";
@@ -56,11 +62,12 @@ async function main(): Promise<void> {
 
   // Out-of-box polish: lets the web app disable screenshot controls with a
   // clear tooltip instead of a failed request when ffmpeg/yt-dlp aren't on
-  // PATH. Checked live (not cached) — installing either mid-session and
-  // reloading the app should pick it up without a server restart.
+  // PATH. Availability is cached for up to 5 minutes (see lib/health.ts) —
+  // installing either mid-session and reloading picks it up within that
+  // window without a server restart, and a warm request never spawns a
+  // subprocess (a cold yt-dlp --version check measured ~7s on some setups).
   app.get("/api/health", async () => {
-    const [ffmpeg, ytdlp] = await Promise.all([isFfmpegAvailable(), isYtdlpAvailable()]);
-    return { ok: true, ffmpeg, ytdlp };
+    return getHealth();
   });
 
   // In production, serve the built web app for anything that isn't an /api route.

@@ -1,12 +1,12 @@
 import fs from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
-import { getConfig, resolveDataDir, resolveRoots } from "../config.js";
+import { expandHome, getConfig, resolveDataDir, resolveRoots } from "../config.js";
 import { isPathAllowedCanonical } from "../lib/paths.js";
 import { detectProfileAndParse, parseConceptDoc } from "../lib/concepts.js";
+import { ProjectIdParamSchema } from "../lib/models.js";
 import { readProject } from "../lib/store.js";
 
-const IdParamSchema = z.object({ id: z.string().min(1) });
+const IdParamSchema = ProjectIdParamSchema;
 
 export async function conceptsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/projects/:id/concepts", async (request, reply) => {
@@ -22,16 +22,18 @@ export async function conceptsRoutes(app: FastifyInstance): Promise<void> {
       return { concepts: [] };
     }
 
-    // Concept-doc path is stored on the project (validated at creation/PATCH
-    // time), but roots can change via Settings after that — revalidate here
-    // too rather than trusting whatever's on disk.
-    if (!(await isPathAllowedCanonical(project.conceptDoc.path, resolveRoots(config)))) {
+    // Concept-doc path is stored on the project (validated, and expanded, at
+    // creation/PATCH time), but roots can change via Settings after that —
+    // revalidate here too rather than trusting whatever's on disk. Also
+    // re-expand `~` defensively, in case this project.json predates that fix.
+    const conceptDocPath = expandHome(project.conceptDoc.path);
+    if (!(await isPathAllowedCanonical(conceptDocPath, resolveRoots(config)))) {
       return reply.status(403).send({ error: "conceptDoc.path is outside configured roots" });
     }
 
     let markdown: string;
     try {
-      markdown = await fs.readFile(project.conceptDoc.path, "utf8");
+      markdown = await fs.readFile(conceptDocPath, "utf8");
     } catch {
       return reply.status(404).send({ error: "Concept doc file not found" });
     }

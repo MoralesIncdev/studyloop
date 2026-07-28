@@ -20,7 +20,21 @@ export interface PlayerHandle {
   seek(t: number): void;
   getCurrentTime(): number;
   getDuration(): number;
+  /**
+   * Applies a new playback rate and syncs the store with whatever rate was
+   * *actually* applied (implementations call `setPlaybackRate` on the store
+   * themselves) — for YouTube, the player can snap the requested rate to its
+   * own nearest supported value, so the caller's requested `r` isn't
+   * necessarily what ends up in effect.
+   */
   setRate(r: number): void;
+  /**
+   * The discrete playback rates this player actually supports, if it's
+   * constrained to a fixed set (YouTube's IFrame API is; a plain <video>
+   * element isn't). Omitted entirely when the player accepts any rate — the
+   * UI falls back to its own full default option list in that case.
+   */
+  getAvailableRates?(): number[];
   /** Subscribe to a player event; returns an unsubscribe function. */
   on<E extends PlayerEvent>(event: E, cb: (payload: PlayerEventPayloads[E]) => void): () => void;
 }

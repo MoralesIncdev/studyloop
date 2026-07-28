@@ -2,7 +2,7 @@
 // it's unit-testable the same way every other guard in this codebase is
 // (paths.ts, reveal.ts) — routes stay thin, lib/ holds the logic + tests.
 import path from "node:path";
-import type { ResolvedRoots } from "../config.js";
+import { expandHome, type ResolvedRoots } from "../config.js";
 import { canonicalizeForGuard, isInsideRoot, isPathAllowedCanonical, realpathOrSelf } from "./paths.js";
 import { projectDir, readProject } from "./store.js";
 
@@ -18,6 +18,16 @@ export type TranscriptPathResolution =
  * directory (realpath-canonical, can't escape it) — a location the
  * configured libraryRoots/transcriptRoots don't (and shouldn't need to)
  * cover, since it's server-managed data, not user filesystem content.
+ *
+ * Critically, the project-relative branch only ever serves the project's own
+ * *declared* transcript (`project.transcript.type === "file" &&
+ * project.transcript.path === rawPath`) — not just anything relative that
+ * happens to resolve inside the project directory. Without this, a caller
+ * who knows a project id could request any other file living next to
+ * project.json (bubbles.json, project.json itself, another project's
+ * transcript.path string reused as a relative lookup, etc.) since those all
+ * "resolve inside the project directory" too.
+ *
  * Absolute paths always go through the standard root-allowlist guard
  * regardless of whether `projectId` was also passed, so a local project's
  * transcript path (always absolute) is unaffected by the project-relative
@@ -32,6 +42,9 @@ export async function resolveTranscriptPath(
   if (projectId && !path.isAbsolute(rawPath)) {
     const project = await readProject(dataDir, projectId);
     if (!project) return { ok: false, status: 404, error: "Project not found" };
+    if (project.transcript.type !== "file" || project.transcript.path !== rawPath) {
+      return { ok: false, status: 403, error: "Path does not match the project's declared transcript" };
+    }
     const dir = projectDir(dataDir, projectId);
     const candidate = path.resolve(dir, rawPath);
     const [candidateCanonical, dirReal] = await Promise.all([canonicalizeForGuard(candidate), realpathOrSelf(dir)]);
@@ -41,8 +54,9 @@ export async function resolveTranscriptPath(
     return { ok: true, filePath: candidate };
   }
 
-  if (!(await isPathAllowedCanonical(rawPath, roots))) {
+  const expanded = expandHome(rawPath);
+  if (!(await isPathAllowedCanonical(expanded, roots))) {
     return { ok: false, status: 403, error: "Path is outside configured roots" };
   }
-  return { ok: true, filePath: rawPath };
+  return { ok: true, filePath: expanded };
 }

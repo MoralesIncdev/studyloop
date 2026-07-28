@@ -5,7 +5,7 @@
 // has no timeupdate-style event, so getCurrentTime() must be polled — same
 // rAF-throttled loop as LocalVideoPlayer, including A/B loop enforcement in
 // the same tick.
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStudyLoopStore } from "../state/store";
 import type { PlayerEvent, PlayerEventPayloads, PlayerHandle } from "./types";
 import { loadYouTubeIframeApi, type YTPlayer, type YTPlayerEvent } from "./youtubeApi";
@@ -36,16 +36,25 @@ export function YouTubePlayer({ videoId, startAt = 0 }: Props): JSX.Element {
   const lastReportedTimeRef = useRef(-1);
   const appliedStartRef = useRef(false);
   const playerRef = useRef<YTPlayer | null>(null);
+  // Failure is surfaced as a toast (existing behavior) *and* kept here so the
+  // player area shows a visible retry control instead of staying silently
+  // blank — bumping retryToken re-runs the load effect for a fresh attempt
+  // (loadYouTubeIframeApi() resets its own shared promise on failure, so a
+  // retry isn't just re-awaiting the same doomed promise).
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return undefined;
     let disposed = false;
+    setLoadError(null);
 
     const setController = useStudyLoopStore.getState().setController;
     const setCurrentTime = useStudyLoopStore.getState().setCurrentTime;
     const setDuration = useStudyLoopStore.getState().setDuration;
     const setIsPlaying = useStudyLoopStore.getState().setIsPlaying;
+    const setPlaybackRate = useStudyLoopStore.getState().setPlaybackRate;
     const pushToast = useStudyLoopStore.getState().pushToast;
 
     function emit<E extends PlayerEvent>(event: E, payload: PlayerEventPayloads[E]): void {
@@ -113,7 +122,15 @@ export function YouTubePlayer({ videoId, startAt = 0 }: Props): JSX.Element {
                   const d = ytPlayer.getDuration();
                   return Number.isFinite(d) ? d : 0;
                 },
-                setRate: (r) => ytPlayer.setPlaybackRate(r),
+                setRate: (r) => {
+                  ytPlayer.setPlaybackRate(r);
+                  // YouTube snaps the requested rate to its own nearest
+                  // supported value — read back what actually took effect so
+                  // the store (and the visible speed control) never shows a
+                  // rate the player itself isn't really playing at.
+                  setPlaybackRate(ytPlayer.getPlaybackRate());
+                },
+                getAvailableRates: () => ytPlayer.getAvailablePlaybackRates(),
                 on: (event, cb) => {
                   const bucket = (listenersRef.current[event] ??= new Set() as NonNullable<Listeners[typeof event]>);
                   bucket.add(cb as never);
@@ -160,7 +177,9 @@ export function YouTubePlayer({ videoId, startAt = 0 }: Props): JSX.Element {
       },
       (err: unknown) => {
         if (disposed) return;
-        pushToast(`Could not load the YouTube player: ${err instanceof Error ? err.message : String(err)}`, "error");
+        const message = err instanceof Error ? err.message : String(err);
+        pushToast(`Could not load the YouTube player: ${message}`, "error");
+        setLoadError(message);
       }
     );
 
@@ -176,16 +195,25 @@ export function YouTubePlayer({ videoId, startAt = 0 }: Props): JSX.Element {
       }
       playerRef.current = null;
     };
-    // Intentionally run once per mount — StudyView remounts this component
-    // (via React `key`) when the project changes, so `videoId`/`startAt` are
+    // Otherwise runs once per mount — StudyView remounts this component (via
+    // React `key`) when the project changes, so `videoId`/`startAt` are
     // effectively constant for the lifetime of a given mount (mirrors
-    // LocalVideoPlayer's same convention).
+    // LocalVideoPlayer's same convention); `retryToken` is the one
+    // intentional exception, letting the Retry button re-run this effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [retryToken]);
 
   return (
     <div className={styles.wrap}>
       <div ref={containerRef} className={styles.iframeHost} />
+      {loadError && (
+        <div className={styles.loadError}>
+          <p>{loadError}</p>
+          <button type="button" className={styles.retryButton} onClick={() => setRetryToken((n) => n + 1)}>
+            Retry
+          </button>
+        </div>
+      )}
     </div>
   );
 }

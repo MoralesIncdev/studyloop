@@ -66,10 +66,24 @@ studyloop/
   `anthropicApiKey` (string to set it, `null` to clear it) but its response is
   redacted the same way, so the plaintext key never round-trips back to the client.
 - `~` in `dataDir` **and** every entry of `libraryRoots` / `transcriptRoots` /
-  `conceptDocs` is expanded to the user's home directory before use.
-- Server port is controlled by `PORT` (or `STUDYLOOP_PORT`) env var, default `4600`;
-  the Vite dev proxy reads the same variable. `HOST` controls the bind interface,
-  default `127.0.0.1` (loopback-only — no auth exists, so anything broader is an
+  `conceptDocs` is expanded to the user's home directory before use. Every
+  incoming path-bearing request param that gets compared against those roots
+  (`source.path`/`transcriptPath`/`conceptDocPath` at project creation,
+  `conceptDoc.path`/`transcript.path` on PATCH, the `?path=` query params on
+  `/api/transcript` and `/api/video/stream`) is also `~`-expanded server-side
+  before validation and storage — otherwise a `~/...` entry from the
+  configured `conceptDocs` list (which `GET /api/config` still returns
+  unexpanded, verbatim) would never match once compared against the already-
+  expanded root, and clicking it in the UI (ConceptsDock's attach buttons)
+  would 403.
+- Server port is controlled by the `STUDYLOOP_PORT` env var, default `4600`; the
+  Vite dev proxy reads the same variable. The generic `PORT` env var is
+  **deliberately ignored** by both — a dev harness or process manager commonly
+  exports a generic `PORT` for whatever it's launching, and since this repo runs
+  two servers (API + web) under one `npm run dev`, a single ambient `PORT` can't
+  unambiguously address either one; using a namespaced variable avoids one
+  leaking into the other. `HOST` controls the bind interface, default
+  `127.0.0.1` (loopback-only — no auth exists, so anything broader is an
   explicit opt-in). CORS only allows `localhost`/`127.0.0.1`/`[::1]` origins (any port).
 
 ## Data model — project folder `<dataDir>/projects/<id>/`
@@ -102,9 +116,28 @@ the server also enforces the max server-side against the stored value as a backs
 The periodic PATCH is serialized client-side (skipped if one is already in flight).
 
 ## Server API (all JSON unless noted)
+- Every route that takes a project id (`:id` path param, or `projectId` on
+  `/api/transcript` and `/api/media/:projectId/...`) constrains it to the UUID
+  shape project ids are generated in (see `newId()`) — a malformed or
+  path-traversal-shaped id (including a URL-encoded `..%2F` sequence, once the
+  router decodes it) is rejected with 400 before it ever reaches a filesystem
+  path. `store.ts`'s `projectDir()` and `readProject()` independently re-guard
+  against traversal and id/content mismatch too (defense in depth), so this
+  isn't the only thing standing between a crafted id and the filesystem.
 - `GET /api/library` → `{ items: [{videoPath, title, durationSeconds?, transcriptPath?,
   instructor?, series?, hasLesson?}], warnings: [] }` — scans libraryRoots for video
   files AND transcriptRoots for transcript JSONs whose `source_video` exists; merges.
+  **Cached:** the scan result is served instantly on every `GET` as long as the
+  resolved root config (`libraryRoots`/`transcriptRoots`) hasn't changed since
+  the last successful scan — a `GET` never re-walks the filesystem or
+  re-parses every transcript file after the first success. Concurrent callers
+  (e.g. two GETs fired close together on first load) share a single in-flight
+  scan instead of each starting their own walk. `POST /api/library/rescan`
+  always forces a fresh scan (still deduped against any other in-flight
+  scan). Within a scan, each transcript JSON is only re-read when its
+  `(path, mtime, size)` has actually changed since the last time it was read
+  — the dominant cost on a real library is re-parsing multi-MB transcript
+  files, not the directory walk itself.
 - `GET /api/video/stream?path=<abs>` — HTTP 206 range streaming. **Security:** path must
   resolve (via `fs.realpath` of the path or its nearest existing ancestor, not just a
   string prefix check) inside a configured root; otherwise 403. Supports standard
@@ -114,9 +147,13 @@ The periodic PATCH is serialized client-side (skipped if one is already in fligh
   text}] }`. Loaders: (a) BJJ-corpus JSON `{timestamps:[{start,end,text}]}`, (b) generic
   whisper-style JSON `{segments:[{start,end,text}]}`, (c) .srt, (d) .vtt. `projectId` is
   optional; when present *and* `path` is not absolute, `path` is resolved inside that
-  project's own folder (realpath-canonical, can't escape it) instead of against the
-  configured roots — this is how a YouTube project's `captions.json` (project-relative,
-  server-managed data) gets read without needing to live under a `transcriptRoot`. An
+  project's own folder — but **only when it exactly matches that project's own declared
+  `transcript.path`** (realpath-canonical, can't escape it either way). This is how a
+  YouTube project's `captions.json` (project-relative, server-managed data) gets read
+  without needing to live under a `transcriptRoot` — it is *not* a general "serve any
+  file under this project's folder" escape hatch: a relative `path` for anything else
+  next to `project.json` (`bubbles.json`, `project.json` itself, etc.) is rejected with
+  403, even though it would otherwise resolve inside the project directory just fine. An
   absolute `path` always goes through the standard root-allowlist guard regardless of
   whether `projectId` was also passed, so local-project transcripts (always absolute) are
   unaffected.
@@ -137,8 +174,12 @@ The periodic PATCH is serialized client-side (skipped if one is already in fligh
 - `POST /api/projects/:id/shots` `{t}` → grabs frame via ffmpeg from local file
   (`ffmpeg -ss t -i file -frames:v 1 -q:v 3`), saves to shots/, returns `{shot}`.
   For YouTube sources: resolve stream URL via `yt-dlp -g -f "best[height<=720]"` then
-  same ffmpeg call against the URL; on failure return `{shot: null, error}` — UI still
-  creates the bubble without an image.
+  same ffmpeg call against the URL; on failure (including a 60s spawn timeout, which
+  kills the process — a stream-URL capture can otherwise hang indefinitely on a stalled
+  network read) return `{shot: null, error}` — UI still creates the bubble without an
+  image. ffmpeg's stderr is capped (bounded memory even if the process misbehaves), and
+  ffmpeg-availability checks (`GET /api/health`, and the pre-capture gate on the N/S
+  hotkeys and the Shot button) require the version check to exit 0, not merely spawn.
 - `GET /api/projects/:id/concepts` → `[{id, title, body, anchors:[{t}], raw}]`
   parsed from the attached concept doc (see Concept profiles), re-parsed fresh on every
   request. A GET never persists (no auto-detected profile write-back — parsing is cheap
@@ -154,19 +195,28 @@ The periodic PATCH is serialized client-side (skipped if one is already in fligh
   segments). URL must be `https://` and match an allowlisted YouTube host
   (youtube.com, www.youtube.com, m.youtube.com, youtu.be, music.youtube.com) — anything
   else is a 400. Every yt-dlp invocation has a 30s spawn timeout and a 10MB stdout cap.
-  yt-dlp absent → **does not block project creation**: `videoId` is still extracted
-  locally from the URL, `title`/`captions` are `null`, `ytdlpMissing: true`; the web
-  app creates the project anyway with `title = url`.
+  `videoId` is extracted locally from the URL's `?v=`, `youtu.be/`, `/shorts/`, `/live/`,
+  or `/embed/` form. yt-dlp absent → **does not block project creation**: `videoId` is
+  still extracted locally, `title`/`captions` are `null`, `ytdlpMissing: true`; the web
+  app creates the project anyway with `title = url`. If the URL's form isn't one of the
+  recognized ones (e.g. a playlist or channel link) *and* local extraction can't find an
+  id, the request rejects with a clear error instead of ever using the raw URL string as
+  a videoId — if yt-dlp is present, its own resolved id is used as a fallback before
+  giving up.
 - `GET /api/media/:projectId/shots/<file>` — serves shot images.
 - `POST /api/projects/:id/reveal` `{path?}` → `{ok, message?}`. macOS-only: runs `open -R
   <path>` to reveal a file (or the whole `exports/` folder, if `path` omitted) in Finder.
   `path`, if given, must resolve (realpath-canonical) inside that project's `exports/`
   directory — otherwise 403. On non-macOS platforms, returns `{ok: false, message}`
   rather than attempting anything (no-op, not an error).
-- `GET /api/health` → `{ok: true, ffmpeg: boolean, ytdlp: boolean}`. Checked live on
-  every call (not cached), so installing either binary mid-session and reloading picks
-  it up without a server restart. The web app calls this once on load and disables
-  ffmpeg-dependent controls (screenshots) with a tooltip when `ffmpeg` is false.
+- `GET /api/health` → `{ok: true, ffmpeg: boolean, ytdlp: boolean}`. Each tool's
+  availability is cached for up to 5 minutes (a cold check — especially yt-dlp's
+  Python interpreter startup — can take several seconds; this endpoint is polled by the
+  web app on every load, so a warm request must be fast). Installing either binary
+  mid-session and reloading picks it up within that window, without a server restart.
+  The web app calls this once on load and disables ffmpeg-dependent controls
+  (screenshots, and the notation modal's frame capture) with a tooltip/toast when
+  `ffmpeg` is false.
 
 ## Concept-doc profiles (`server/src/lib/concepts.ts`)
 1. `bjj-curriculum`: split on `##`/`###` headings; extract time anchors from citation
@@ -189,43 +239,79 @@ BJJ-style formatting); of those, fall back to headings if <2 anchored cards.
   Derived selectors (binary search over sorted arrays): activeSegment (requires `t <=
   segment.end` + 0.5s grace — no active segment in a gap between segments or past the
   end of the last one), activeConcepts (t within [anchor, anchor+90s] window),
-  passedConcepts. All panes subscribe.
+  passedConcepts. All panes subscribe. ConceptsDock's "covered" checkmarks and count
+  compute passedConcepts against `max(watchedUpTo, currentTime)`, not raw `currentTime`
+  alone — matching compile's semantics, so scrubbing backward to rewatch a section
+  doesn't visually un-cover a concept you've already passed.
 - **TranscriptPane:** virtualized list (react-window or simple windowing) — search
   results are windowed the same way as the full list, not rendered in full; active
   segment highlighted + kept in view (unless user scrolled recently — 5s hold-off);
   click seeks; search box filters + Enter jumps.
 - **Player interface:** `{play, pause, seek(t), getCurrentTime(), getDuration(),
-  setRate(r), on(event)}` implemented by LocalVideoPlayer (<video>) and
-  YouTubePlayer (IFrame API). Seek bar shows bubble pins + concept ticks.
-  LocalVideoPlayer applies the store's current `playbackRate` on mount and again on
-  `loadedmetadata`, so a rate change made on one video carries over to the next.
+  setRate(r), getAvailableRates?(), on(event)}` implemented by LocalVideoPlayer
+  (<video>) and YouTubePlayer (IFrame API). Seek bar shows bubble pins + concept ticks.
+  `setRate` is responsible for syncing the store's `playbackRate` itself (not the
+  caller) with whatever rate actually ends up in effect — YouTube's IFrame API can snap
+  a requested rate to its own nearest supported value, so the store must reflect the
+  real applied rate, not merely the requested one. The speed control (PlayerControls)
+  intersects its default option list with `getAvailableRates()` when the active player
+  exposes it (YouTube only — a plain `<video>` has no such constraint and omits the
+  method, so the full default list is used). LocalVideoPlayer applies the store's
+  current `playbackRate` on mount and again on `loadedmetadata`, so a rate change made
+  on one video carries over to the next.
+  The YouTube IFrame API script load is bounded (15s timeout, plus `onerror`) — on
+  failure the shared load promise rejects and resets itself (so a retry is a real fresh
+  attempt, not the same doomed promise), and YouTubePlayer shows a toast *and* a visible
+  "Retry" button over the player area instead of staying silently blank.
 - **Loading a project session:** each `loadProjectSession(id)` call is tagged with a
   request id; if a newer call (or a return to the library) supersedes it before its
   fetches resolve, the stale response is discarded rather than applied — otherwise a
   slow response for a project you've since navigated away from could leave the view
-  stuck on "Loading project…" or show the wrong project's data.
+  stuck on "Loading project…" or show the wrong project's data. Leaving the Study view
+  (unmount, or switching to a different project) synchronously flushes, in order, before
+  clearing the session: (1) any pending debounced notes save, (2) a final
+  `{lastPosition, watchedUpTo}` PATCH if `currentTime > 0`. Both reads happen before any
+  state is cleared, so the flush always sees the project/notes/time it's about to leave
+  behind, not whatever they get reset to.
 - **Hotkeys** (disabled while typing in inputs/textareas):
   space play/pause · J/L −/+10s · ←/→ −/+5s · K pause · ,/. speed −/+0.25 (0.5–2.5)
-  · A/B set loop points, Shift+A clear · N notation · S screenshot-only.
+  · A/B set loop points, Shift+A clear · N notation · S screenshot-only. Both N and S
+  respect the ffmpeg-missing health gate exactly like the disabled Shot button — a
+  capture is never attempted when `ffmpeg` is known false; a toast explains why instead
+  (N still opens the modal, straight into its "no frame" state, since note-taking itself
+  doesn't require ffmpeg).
 - **Notation flow (N):** pause → POST shot (async, don't block modal) → modal with
   frame thumbnail (spinner till ready), timestamp, prefilled quote of active transcript
   segment (removable) → Save creates bubble → resume playback. Esc cancels + resumes.
+  While the shot capture is still in flight, Save waits on it (button shows
+  "Capturing…", disabled) instead of immediately creating a bubble that races ahead of
+  the capture — after 15s of waiting it instead offers a "Save without frame" button
+  that proceeds immediately with no image, rather than blocking indefinitely.
 - **Screenshot-only (S):** POST shot → toast "captured 12:34" → bubble with empty text.
   No pause, no modal.
-- **NotesPane:** textarea (monospace) autosaving (debounce 800ms) to notes.md;
-  `@` hotkey button inserts `^t:<current>` token; rendered preview toggle where tokens
-  become clickable seek links; drag bubble → appends `^t` + text + shot ref.
+- **NotesPane:** textarea (monospace) autosaving (debounce 800ms) to notes.md. The debounce
+  timer and the notes buffer both live in the zustand store (not component-local state),
+  so a `flushNotes()` call — from the Compile button (always flushed before compiling,
+  see below) or from leaving the Study view — always sees and persists the very latest
+  edit rather than dropping whatever hasn't autosaved yet. `@` hotkey button inserts
+  `^t:<current>` token; rendered preview toggle where tokens become clickable seek
+  links; drag bubble → appends `^t` + text + shot ref.
 - **BubbleRail:** right-side chronological list; click seeks to t−5s; edit/delete;
   uncaptioned shots show a subtle "no caption" badge.
-- **Compile button:** if any bubble has a shot but empty text, first shows a skippable
-  "caption these?" pass (uncaptioned shots + inline text inputs) before compiling.
-  Then calls compile and shows the rendered markdown in a preview modal (a small
-  markdown-lite renderer, not the raw text) with "Reveal in Finder" (opens the compiled
-  file's location, or the whole exports/ folder — no-op toast with a message on
-  non-macOS) and "Copy markdown" buttons.
+- **Compile button:** before compiling, flushes any pending debounced notes save and
+  PATCHes current progress (`{lastPosition, watchedUpTo}`, if `currentTime > 0`) — so the
+  compiled doc reflects the very latest edit and position even if Compile is hit before
+  the 800ms notes debounce or the 10s progress PATCH would otherwise have fired. If any
+  bubble has a shot but empty text, first shows a skippable "caption these?" pass
+  (uncaptioned shots + inline text inputs) before compiling. Then calls compile and shows
+  the rendered markdown in a preview modal (a small markdown-lite renderer, not the raw
+  text) with "Reveal in Finder" (opens the compiled file's location, or the whole
+  exports/ folder — no-op toast with a message on non-macOS) and "Copy markdown" buttons.
 - **Resume:** `{lastPosition, watchedUpTo}` PATCHed every 10s (serialized — skipped if
   a previous PATCH is still in flight); reopening a project offers resume from
-  `lastPosition`.
+  `lastPosition`. The final PATCH on leaving the project is handled once, deterministically,
+  by the session-loading effect's own cleanup (see "Loading a project session" above) —
+  not by this periodic timer, which only owns the steady-state tick.
 
 ## Out-of-box requirements (non-negotiable)
 - `npm install && npm run dev` from repo root starts both server and web (concurrently),
@@ -239,9 +325,13 @@ BJJ-style formatting); of those, fall back to headings if <2 anchored cards.
 - TypeScript strict; no `any` in exported signatures.
 - Server: input validation on every route (zod); path-traversal guard on file params
   using realpath-canonical root checks (not lexical prefix checks alone — a symlink
-  inside an allowed root can't be used to escape it).
+  inside an allowed root can't be used to escape it). Project ids are additionally
+  constrained to the UUID shape they're generated in at every route boundary, with
+  store.ts independently re-guarding `projectDir()`/`readProject()` against traversal
+  and id/content mismatch as defense in depth.
 - Vitest: unit tests for transcript loaders, concept parsers, time utils, compile
-  renderer (golden file). No E2E suite in v1.
+  renderer (golden file), the library scan cache (cache hit/miss + in-flight dedupe),
+  and the transcript-ref mtime/size cache. No E2E suite in v1.
 - UI: dark theme default, clean/minimal, keyboard-first. No component library; plain
   CSS modules. Layout: header (title/source) · main = video (left 60%) + transcript
   (right 40%) · bottom dock = tabs [Notes | Bubbles | Concepts] resizable.

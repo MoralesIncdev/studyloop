@@ -64,16 +64,52 @@ interface TranscriptRef {
   durationSeconds?: number;
 }
 
+interface CachedTranscriptRef {
+  mtimeMs: number;
+  size: number;
+  ref: TranscriptRef | null;
+}
+
+/**
+ * Transcript JSONs can be multi-MB — re-reading and JSON.parsing every one of
+ * them on every scan is the dominant cost of a rescan once a library is real
+ * sized. Keyed by (path, mtime, size): a rescan only re-reads a file whose
+ * mtime or size actually changed since the last time we looked at it; an
+ * unchanged file's already-parsed `source_video`/`duration_seconds` are
+ * reused as-is. Module-level and unbounded by design (mirrors the rest of
+ * this codebase's in-process caches) — a local video library's transcript
+ * count is small enough that this never becomes a real memory concern.
+ */
+const transcriptRefCache = new Map<string, CachedTranscriptRef>();
+
 async function readTranscriptRef(filePath: string): Promise<TranscriptRef | null> {
+  let stat: import("node:fs").Stats;
+  try {
+    stat = await fs.stat(filePath);
+  } catch {
+    return null;
+  }
+  const cached = transcriptRefCache.get(filePath);
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    return cached.ref;
+  }
+  let ref: TranscriptRef | null;
   try {
     const raw = await fs.readFile(filePath, "utf8");
     const data = JSON.parse(raw) as Record<string, unknown>;
     const sourceVideo = typeof data.source_video === "string" ? data.source_video : null;
     const durationSeconds = typeof data.duration_seconds === "number" ? data.duration_seconds : undefined;
-    return { transcriptPath: filePath, sourceVideo, durationSeconds };
+    ref = { transcriptPath: filePath, sourceVideo, durationSeconds };
   } catch {
-    return null;
+    ref = null;
   }
+  transcriptRefCache.set(filePath, { mtimeMs: stat.mtimeMs, size: stat.size, ref });
+  return ref;
+}
+
+/** Test-only: resets the transcript-ref mtime/size cache between test cases. */
+export function resetTranscriptRefCacheForTests(): void {
+  transcriptRefCache.clear();
 }
 
 export interface ScanConfig {

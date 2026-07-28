@@ -5,7 +5,7 @@ import { z } from "zod";
 import { getConfig, resolveDataDir } from "../config.js";
 import { readProject, shotsDir } from "../lib/store.js";
 
-const ParamsSchema = z.object({ projectId: z.string().min(1), file: z.string().min(1) });
+const ParamsSchema = z.object({ projectId: z.string().uuid(), file: z.string().min(1) });
 
 export async function mediaRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/media/:projectId/shots/*", async (request, reply) => {

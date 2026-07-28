@@ -5,7 +5,7 @@ import { getConfig, resolveDataDir, resolveRoots } from "../config.js";
 import { resolveTranscriptPath } from "../lib/transcriptResolve.js";
 import { loadTranscriptFromText, TranscriptParseError } from "../lib/transcripts.js";
 
-const QuerySchema = z.object({ path: z.string().min(1), projectId: z.string().min(1).optional() });
+const QuerySchema = z.object({ path: z.string().min(1), projectId: z.string().uuid().optional() });
 
 export async function transcriptRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/transcript", async (request, reply) => {

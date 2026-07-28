@@ -42,9 +42,14 @@ export function ConceptsDock(): JSX.Element {
     () => new Set(activeConcepts(concepts, currentTime).map((a) => a.card.id)),
     [concepts, currentTime]
   );
+  // Covered state is derived from the same monotonic high-water mark compile
+  // uses (max(watchedUpTo, currentTime)), not raw currentTime alone — so
+  // scrubbing backward to rewatch a section doesn't visually un-cover
+  // concepts you've already passed, matching what the compiled doc will show.
+  const coveredT = Math.max(currentProject?.watchedUpTo ?? 0, currentTime);
   const coveredIds = useMemo(
-    () => new Set(passedConcepts(concepts, currentTime).map((c) => c.id)),
-    [concepts, currentTime]
+    () => new Set(passedConcepts(concepts, coveredT).map((c) => c.id)),
+    [concepts, coveredT]
   );
 
   const anchoredRows = useMemo<AnchoredRow[]>(() => {

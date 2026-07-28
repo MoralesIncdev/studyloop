@@ -98,7 +98,7 @@ happens to collide with a clone of this repo, move your data (`mv ~/StudyLoop
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `PORT` (or `STUDYLOOP_PORT`) | `4600` | Server port. The Vite dev proxy reads the same variable, so `PORT=5000 npm run dev` moves both sides together. |
+| `STUDYLOOP_PORT` | `4600` | Server port. The Vite dev proxy reads the same variable, so `STUDYLOOP_PORT=5000 npm run dev` moves both sides together. The generic `PORT` env var is **deliberately ignored** — a dev harness or process manager commonly exports a generic `PORT` for whatever it's launching, and since this repo runs two servers under one `npm run dev`, an ambient `PORT` meant for something else could otherwise silently steal the API server's port. |
 | `WEB_PORT` | `4601` | Vite dev server port. |
 | `HOST` | `127.0.0.1` | Interface the server binds to. Loopback-only by default — there's no authentication, so only widen this if you understand the exposure (e.g. reaching it from another device on your LAN). |
 | `STUDYLOOP_FFMPEG_BIN` | `ffmpeg` | Override the ffmpeg binary path/name. |
@@ -165,12 +165,17 @@ cards would end up anchored).
 ## Troubleshooting
 
 **Port already in use.** The server logs a clear message and exits rather than
-silently binding somewhere unexpected — set `PORT=<other-port>` (and restart) to move
-it, or stop whatever else is using `4600`.
+silently binding somewhere unexpected — set `STUDYLOOP_PORT=<other-port>` (and restart)
+to move it, or stop whatever else is using `4600`. Note the generic `PORT` env var has
+no effect here (see Environment variables above) — a dev harness's ambient `PORT` won't
+be the cause of a conflict.
 
 **Screenshots are disabled / greyed out.** `ffmpeg` isn't on `PATH` — the app checks
-via `GET /api/health` on load and disables screenshot controls with a tooltip
-explaining why, instead of letting captures fail one at a time. Install ffmpeg (`brew
+via `GET /api/health` on load and disables screenshot controls (and the notation
+modal's frame capture) with a tooltip/toast explaining why, instead of letting captures
+fail one at a time. `GET /api/health` caches each tool's availability for up to 5
+minutes, so installing ffmpeg mid-session and reloading may take a moment to be
+picked up — restarting the server picks it up immediately. Install ffmpeg (`brew
 install ffmpeg` on macOS) and reload.
 
 **YouTube project has no title or captions.** `yt-dlp` isn't on `PATH`. The project is
@@ -197,7 +202,12 @@ file's path is still shown in the preview modal so you can navigate to it manual
 - Every file-path request (video streaming, transcripts, concept docs, project
   creation, Reveal in Finder) is checked against your configured roots (or, for
   server-managed files like a YouTube project's `captions.json`, that project's own
-  folder) using resolved, symlink-aware paths — not just string prefixes.
+  folder) using resolved, symlink-aware paths — not just string prefixes. A
+  project-relative transcript read only ever serves that project's own declared
+  `transcript.path`, never an arbitrary file that merely happens to live next to it.
+- Every project id (`:id`/`projectId` route params) is constrained to the UUID shape
+  ids are generated in — a crafted or path-traversal-shaped id (including a
+  URL-encoded `..%2F` sequence) is rejected before it reaches a filesystem path.
 
 ## License
 

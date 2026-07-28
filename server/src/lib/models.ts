@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+/**
+ * `:id` / `projectId` route params, everywhere a project id is accepted.
+ * Project ids are always server-generated UUIDs (see lib/store.ts newId()) —
+ * constraining the param to that shape closes off path-traversal via a
+ * crafted id (e.g. URL-encoded `..%2F..%2Fetc` segments) before it ever
+ * reaches projectDir()/path.join(). Belt-and-braces: store.ts's projectDir()
+ * and readProject() also independently guard against traversal and id
+ * spoofing, but this is the first and cheapest gate.
+ */
+export const ProjectIdParamSchema = z.object({ id: z.string().uuid() });
+
 export const SourceSchema = z.union([
   z.object({ type: z.literal("local"), path: z.string() }),
   z.object({ type: z.literal("youtube"), videoId: z.string(), url: z.string() }),

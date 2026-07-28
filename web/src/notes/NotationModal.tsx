@@ -10,8 +10,11 @@ import { api } from "../lib/api";
 import { formatTimestamp } from "../lib/time";
 import styles from "./NotationModal.module.css";
 
+const SHOT_WAIT_TIMEOUT_MS = 15_000;
+
 export function NotationModal(): JSX.Element | null {
   const modal = useStudyLoopStore((s) => s.notationModal);
+  const notationGeneration = useStudyLoopStore((s) => s.notationGeneration);
   const currentProject = useStudyLoopStore((s) => s.currentProject);
   const cancelNotation = useStudyLoopStore((s) => s.cancelNotation);
   const removeNotationQuote = useStudyLoopStore((s) => s.removeNotationQuote);
@@ -21,6 +24,25 @@ export function NotationModal(): JSX.Element | null {
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const wasOpenRef = useRef(false);
+
+  // Save must not race the in-flight shot capture: while shotLoading, Save
+  // waits on modal.shotPromise (bounded — after 15s it offers "Save without
+  // frame" instead of hanging forever) rather than immediately creating a
+  // bubble with shot: null out from under a capture that's about to land.
+  const [waitingForShot, setWaitingForShot] = useState(false);
+  const [offerSaveWithoutFrame, setOfferSaveWithoutFrame] = useState(false);
+  const waitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const waitTokenRef = useRef(0);
+
+  const clearWait = (): void => {
+    if (waitTimerRef.current) {
+      clearTimeout(waitTimerRef.current);
+      waitTimerRef.current = null;
+    }
+    waitTokenRef.current += 1; // invalidates any in-flight .finally() from a previous wait
+    setWaitingForShot(false);
+    setOfferSaveWithoutFrame(false);
+  };
 
   // Reset the draft + autofocus each time the modal transitions closed -> open.
   useEffect(() => {
@@ -33,6 +55,13 @@ export function NotationModal(): JSX.Element | null {
     if (!modal) wasOpenRef.current = false;
     return undefined;
   }, [modal]);
+
+  // A new generation (fresh N press, cancel, or a save that just completed)
+  // invalidates any pending wait so it can never bleed into the next attempt.
+  useEffect(() => {
+    clearWait();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notationGeneration]);
 
   useEffect(() => {
     if (!modal) return undefined;
@@ -49,6 +78,28 @@ export function NotationModal(): JSX.Element | null {
   if (!modal || !currentProject) return null;
 
   const handleSave = (): void => {
+    if (modal.shotLoading && modal.shotPromise) {
+      const token = waitTokenRef.current;
+      setWaitingForShot(true);
+      setOfferSaveWithoutFrame(false);
+      waitTimerRef.current = setTimeout(() => {
+        if (waitTokenRef.current !== token) return;
+        setOfferSaveWithoutFrame(true);
+      }, SHOT_WAIT_TIMEOUT_MS);
+      modal.shotPromise.finally(() => {
+        // Superseded (cancelled, timed out into "save without frame", or a
+        // new N press) while we were waiting — don't act on stale intent.
+        if (waitTokenRef.current !== token) return;
+        clearWait();
+        void saveNotation(text);
+      });
+      return;
+    }
+    void saveNotation(text);
+  };
+
+  const handleSaveWithoutFrame = (): void => {
+    clearWait();
     void saveNotation(text);
   };
 
@@ -101,14 +152,25 @@ export function NotationModal(): JSX.Element | null {
             placeholder="Add a note…"
             value={text}
             onChange={(e) => setText(e.target.value)}
+            disabled={waitingForShot}
           />
 
           <div className={styles.actions}>
             <button type="button" className={styles.secondaryButton} onClick={cancelNotation}>
               Cancel (Esc)
             </button>
-            <button type="button" className={styles.primaryButton} onClick={handleSave} disabled={modal.saving}>
-              {modal.saving ? "Saving…" : "Save"}
+            {offerSaveWithoutFrame && (
+              <button type="button" className={styles.secondaryButton} onClick={handleSaveWithoutFrame}>
+                Save without frame
+              </button>
+            )}
+            <button
+              type="button"
+              className={styles.primaryButton}
+              onClick={handleSave}
+              disabled={modal.saving || waitingForShot}
+            >
+              {modal.saving ? "Saving…" : waitingForShot ? "Capturing…" : "Save"}
             </button>
           </div>
         </div>

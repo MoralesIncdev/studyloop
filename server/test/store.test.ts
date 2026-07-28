@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   nextWatchedUpTo,
+  projectDir,
   readBubbles,
   readProject,
   withProjectLock,
@@ -11,6 +12,29 @@ import {
   writeProject,
 } from "../src/lib/store.js";
 import type { Bubble, Project } from "../src/lib/models.js";
+
+describe("projectDir traversal guard", () => {
+  const dataDir = "/tmp/studyloop-data-dir-fixture";
+
+  it("resolves a plain id (or UUID) inside <dataDir>/projects", () => {
+    expect(projectDir(dataDir, "81025a1c-b04d-422c-8947-a1c302197d33")).toBe(
+      path.join(dataDir, "projects", "81025a1c-b04d-422c-8947-a1c302197d33")
+    );
+  });
+
+  it("throws for an id containing a traversal sequence that would escape <dataDir>/projects", () => {
+    expect(() => projectDir(dataDir, "../../etc/passwd")).toThrow();
+  });
+
+  it("throws for a decoded `..%2F..%2Fetc%2Fpasswd`-style id (what a router hands the app once it decodes %2F)", () => {
+    expect(() => projectDir(dataDir, "../../etc/passwd".split("/").join("/"))).toThrow();
+    expect(() => projectDir(dataDir, "..//..//etc//passwd")).toThrow();
+  });
+
+  it("throws for an id that is itself an absolute path (would otherwise bypass the projects root entirely)", () => {
+    expect(() => projectDir(dataDir, "/etc/passwd")).toThrow();
+  });
+});
 
 describe("nextWatchedUpTo", () => {
   it("advances when the patch value is higher than the existing value", () => {
@@ -177,5 +201,27 @@ describe("readProject watchedUpTo migration", () => {
     await fs.writeFile(path.join(dir, "project.json"), JSON.stringify(raw));
     const project = await readProject(dataDir, id);
     expect(project?.watchedUpTo).toBe(300);
+  });
+
+  it("returns null (not the file's contents) when the requested id doesn't match project.json's own id field", async () => {
+    // Defense in depth: even if a project.json somehow ended up readable
+    // under a directory name that doesn't match its own `id` field, readProject
+    // must not trust the directory name over the file's declared identity.
+    const dirId = "requested-id";
+    const dir = path.join(dataDir, "projects", dirId);
+    await fs.mkdir(dir, { recursive: true });
+    const raw = {
+      id: "a-completely-different-id",
+      title: "Mismatched project",
+      source: { type: "local", path: "/tmp/video.mp4" },
+      transcript: { type: "none" },
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+      lastPosition: 0,
+      watchedUpTo: 0,
+    };
+    await fs.writeFile(path.join(dir, "project.json"), JSON.stringify(raw));
+    const project = await readProject(dataDir, dirId);
+    expect(project).toBeNull();
   });
 });

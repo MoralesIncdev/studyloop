@@ -3,10 +3,11 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getConfig, resolveDataDir } from "../config.js";
 import { extractFrame } from "../lib/frames.js";
+import { ProjectIdParamSchema } from "../lib/models.js";
 import { readProject, shotsDir } from "../lib/store.js";
 import { resolveStreamUrl } from "../lib/ytdlp.js";
 
-const IdParamSchema = z.object({ id: z.string().min(1) });
+const IdParamSchema = ProjectIdParamSchema;
 const BodySchema = z.object({ t: z.number().nonnegative() });
 
 export async function captureRoutes(app: FastifyInstance): Promise<void> {

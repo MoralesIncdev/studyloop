@@ -12,7 +12,6 @@ export function PlayerControls(): JSX.Element {
   const currentTime = useStudyLoopStore((s) => s.currentTime);
   const duration = useStudyLoopStore((s) => s.duration);
   const playbackRate = useStudyLoopStore((s) => s.playbackRate);
-  const setPlaybackRate = useStudyLoopStore((s) => s.setPlaybackRate);
   const loopA = useStudyLoopStore((s) => s.loopA);
   const loopB = useStudyLoopStore((s) => s.loopB);
   const clearLoop = useStudyLoopStore((s) => s.clearLoop);
@@ -32,9 +31,26 @@ export function PlayerControls(): JSX.Element {
 
   const changeRate = (r: number) => {
     const next = clampRate(r);
+    // The player itself syncs the store with whatever rate actually ends up
+    // in effect (see PlayerHandle.setRate) — YouTube in particular can snap
+    // `next` to its own nearest supported value, so we don't also call
+    // setPlaybackRate here with the merely-requested value.
     controller?.setRate(next);
-    setPlaybackRate(next);
   };
+
+  // When the active player is constrained to a discrete set of rates
+  // (YouTube's IFrame API), only offer the ones it actually supports —
+  // otherwise picking an option YouTube would just silently snap away from
+  // is misleading. A player with no such constraint (plain <video>) omits
+  // getAvailableRates entirely, so the full default list is used.
+  const availableRates = controller?.getAvailableRates?.();
+  const filteredRates = availableRates ? RATE_STEPS.filter((r) => availableRates.includes(r)) : RATE_STEPS;
+  // Always keep the current rate selectable even if it falls outside the
+  // filtered set (e.g. carried over from a differently-constrained player on
+  // the previous video) so the <select>'s value is never orphaned.
+  const rateOptions = filteredRates.includes(playbackRate)
+    ? filteredRates
+    : [...filteredRates, playbackRate].sort((a, b) => a - b);
 
   return (
     <div className={styles.controls}>
@@ -70,7 +86,7 @@ export function PlayerControls(): JSX.Element {
           value={playbackRate}
           onChange={(e) => changeRate(Number(e.target.value))}
         >
-          {RATE_STEPS.map((r) => (
+          {rateOptions.map((r) => (
             <option key={r} value={r}>
               {r}×
             </option>

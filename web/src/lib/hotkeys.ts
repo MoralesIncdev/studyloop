@@ -50,15 +50,14 @@ export function useHotkeys(enabled: boolean): void {
           controller.pause();
           break;
         case ",": {
-          const next = clampRate(store.playbackRate - 0.25);
-          controller.setRate(next);
-          store.setPlaybackRate(next);
+          // setRate syncs the store itself with whatever rate actually ends
+          // up in effect (see PlayerHandle.setRate) — no separate
+          // store.setPlaybackRate call needed here.
+          controller.setRate(clampRate(store.playbackRate - 0.25));
           break;
         }
         case ".": {
-          const next = clampRate(store.playbackRate + 0.25);
-          controller.setRate(next);
-          store.setPlaybackRate(next);
+          controller.setRate(clampRate(store.playbackRate + 0.25));
           break;
         }
         case "a":

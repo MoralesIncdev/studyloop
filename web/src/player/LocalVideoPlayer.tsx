@@ -58,6 +58,12 @@ export function LocalVideoPlayer({ src, startAt = 0 }: Props): JSX.Element {
       getDuration: () => (Number.isFinite(video.duration) ? video.duration : 0),
       setRate: (r) => {
         video.playbackRate = r;
+        // A plain <video> element applies whatever rate it's given (no
+        // snapping to a discrete set, unlike YouTube's IFrame API) — but the
+        // store is still updated from here, not by the caller, so both
+        // player implementations follow the same "the player is the source
+        // of truth for what rate actually ended up in effect" contract.
+        useStudyLoopStore.getState().setPlaybackRate(video.playbackRate);
       },
       on: (event, cb) => {
         const bucket = (listenersRef.current[event] ??= new Set() as NonNullable<Listeners[typeof event]>);

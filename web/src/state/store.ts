@@ -41,6 +41,21 @@ function sortBubbles(bubbles: readonly Bubble[]): Bubble[] {
   return [...bubbles].sort((a, b) => a.t - b.t);
 }
 
+// Notes autosave debounce timer + in-flight shot-capture promise. Kept as
+// module-level state (not component-local, e.g. a NotesPane ref) so a
+// `flushNotes()`/wait-for-shot action can be called from anywhere that has
+// the store — CompileFlow (via runCompile) and StudyView's unmount cleanup
+// in particular — without needing a live reference to whatever component
+// happens to be mounted.
+const NOTES_AUTOSAVE_DEBOUNCE_MS = 800;
+let notesSaveTimer: ReturnType<typeof setTimeout> | null = null;
+function clearPendingNotesSave(): void {
+  if (notesSaveTimer) {
+    clearTimeout(notesSaveTimer);
+    notesSaveTimer = null;
+  }
+}
+
 /** F4 Notation modal state — a shot capture is in flight the moment the modal opens. */
 export interface NotationModalState {
   t: number;
@@ -52,6 +67,14 @@ export interface NotationModalState {
   shotLoading: boolean;
   shotFailed: boolean;
   saving: boolean;
+  /**
+   * The in-flight POST /shots promise, while shotLoading is true (null once
+   * settled or if no capture was attempted at all — e.g. ffmpeg is known
+   * missing). NotationModal awaits this (bounded by a 15s timeout, after
+   * which it offers "Save without frame") so a fast Save can't race ahead of
+   * the capture and create an orphaned-shot/empty-shot bubble.
+   */
+  shotPromise: Promise<{ shot: string | null; error?: string }> | null;
 }
 
 const MIN_RATE = 0.5;
@@ -143,7 +166,13 @@ export interface StudyLoopStore {
   // --- notes (F6) -------------------------------------------------------------------
   notes: string;
   notesLoaded: boolean;
+  notesSaveStatus: "idle" | "saving" | "saved" | "error";
+  /** Updates the notes buffer immediately (optimistic) and (re)schedules a debounced save. */
+  setNotesDraft: (content: string) => void;
   saveNotes: (content: string) => Promise<void>;
+  /** Flushes any pending debounced note save immediately. Called before compiling
+   *  and on leaving the Study view, so the latest edit is never dropped. */
+  flushNotes: () => Promise<void>;
 
   // --- bubbles (F4/F5/F6) -------------------------------------------------------------
   bubbles: Bubble[];
@@ -198,6 +227,11 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   libraryLoading: false,
   libraryLoaded: false,
   loadLibrary: async () => {
+    // React StrictMode's double-mount (plus LibraryView's own mount effect
+    // re-running on re-renders) fired several stacked GETs on first load —
+    // each one re-walking the whole library. A scan is idempotent from the
+    // caller's point of view, so just no-op while one is already in flight.
+    if (get().libraryLoading) return;
     set({ libraryLoading: true });
     try {
       const res = await api.getLibrary();
@@ -209,6 +243,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     }
   },
   rescanLibrary: async () => {
+    if (get().libraryLoading) return;
     set({ libraryLoading: true });
     try {
       const res = await api.rescanLibrary();
@@ -340,6 +375,13 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     const requestId = get().sessionRequestId + 1;
     const isCurrent = () => get().sessionRequestId === requestId;
 
+    // Defensive: a pending debounced save from the *previous* project must
+    // never fire against whatever project ends up current by the time its
+    // timer goes off. StudyView's unmount/project-switch cleanup already
+    // flushes synchronously before calling here, but this is cheap and
+    // guards any other caller of loadProjectSession too.
+    clearPendingNotesSave();
+
     set({
       sessionRequestId: requestId,
       currentProjectLoading: true,
@@ -356,6 +398,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       bubblesLoading: false,
       notes: "",
       notesLoaded: false,
+      notesSaveStatus: "idle",
       concepts: [],
       conceptsLoading: false,
       notationModal: null,
@@ -430,6 +473,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     await Promise.all([bubblesPromise, notesPromise, conceptsPromise]);
   },
   clearProjectSession: () => {
+    clearPendingNotesSave();
     set((state) => ({
       sessionRequestId: state.sessionRequestId + 1,
       currentProject: null,
@@ -444,6 +488,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       bubblesLoading: false,
       notes: "",
       notesLoaded: false,
+      notesSaveStatus: "idle",
       concepts: [],
       conceptsLoading: false,
       notationModal: null,
@@ -554,16 +599,34 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   // --- notes (F6) -------------------------------------------------------------------
   notes: "",
   notesLoaded: false,
+  notesSaveStatus: "idle",
+  setNotesDraft: (content) => {
+    // `notes` is updated immediately (optimistic) rather than only after the
+    // debounced save lands — this is what makes it safe for flushNotes() (and
+    // appendBubbleToNotes, and anything else reading get().notes) to always
+    // see the very latest edit, not a stale last-saved snapshot.
+    set({ notes: content, notesSaveStatus: "saving" });
+    clearPendingNotesSave();
+    notesSaveTimer = setTimeout(() => {
+      notesSaveTimer = null;
+      void get().saveNotes(content);
+    }, NOTES_AUTOSAVE_DEBOUNCE_MS);
+  },
   saveNotes: async (content) => {
     const project = get().currentProject;
     if (!project) return;
     try {
       await api.putNotes(project.id, content);
-      set({ notes: content });
+      set({ notes: content, notesSaveStatus: "saved" });
     } catch (err) {
+      set({ notesSaveStatus: "error" });
       get().pushToast(`Could not save notes: ${errorMessage(err)}`, "error");
       throw err;
     }
+  },
+  flushNotes: async () => {
+    clearPendingNotesSave();
+    await get().saveNotes(get().notes);
   },
 
   // --- bubbles (F4/F5/F6) -------------------------------------------------------------
@@ -602,9 +665,12 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     const shotLine = bubble.shot ? `\n![shot](${bubble.shot})` : "";
     const separator = get().notes.length > 0 && !get().notes.endsWith("\n") ? "\n" : "";
     const nextNotes = `${get().notes}${separator}\n${line}${shotLine}\n`;
+    // Supersede any pending debounced save — it would otherwise fire later
+    // with the pre-append text and clobber this direct write.
+    clearPendingNotesSave();
     try {
       await api.putNotes(project.id, nextNotes);
-      set({ notes: nextNotes });
+      set({ notes: nextNotes, notesSaveStatus: "saved" });
       get().pushToast("Added to notes", "success");
     } catch (err) {
       get().pushToast(`Could not update notes: ${errorMessage(err)}`, "error");
@@ -625,11 +691,45 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     const activeAtT = activeConcepts(get().concepts, t);
     const conceptTitle = activeAtT.length > 0 ? activeAtT[0].card.title : null;
     const gen = get().notationGeneration + 1;
+
+    // Respect the ffmpeg-missing health gate exactly like the disabled Shot
+    // button: don't even attempt the capture (which would just fail on the
+    // server after a wasted round trip) — open the modal straight into its
+    // "no frame" state with an explanatory toast instead.
+    const ffmpegMissing = get().health?.ffmpeg === false;
+    if (ffmpegMissing) {
+      set({
+        notationGeneration: gen,
+        notationModal: {
+          t,
+          quote,
+          conceptTitle,
+          shot: null,
+          shotLoading: false,
+          shotFailed: true,
+          saving: false,
+          shotPromise: null,
+        },
+      });
+      get().pushToast("ffmpeg not found on PATH — capturing a frame is disabled", "info");
+      return;
+    }
+
+    const capturePromise = api.captureShot(project.id, t);
     set({
       notationGeneration: gen,
-      notationModal: { t, quote, conceptTitle, shot: null, shotLoading: true, shotFailed: false, saving: false },
+      notationModal: {
+        t,
+        quote,
+        conceptTitle,
+        shot: null,
+        shotLoading: true,
+        shotFailed: false,
+        saving: false,
+        shotPromise: capturePromise,
+      },
     });
-    api.captureShot(project.id, t).then(
+    capturePromise.then(
       (res) => {
         set((state) => {
           if (state.notationGeneration !== gen || !state.notationModal) return {};
@@ -686,6 +786,13 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     const controller = get().controller;
     const project = get().currentProject;
     if (!controller || !project) return;
+    // Respect the ffmpeg-missing health gate exactly like the disabled Shot
+    // button (and the S hotkey, which calls this same action) — explain why
+    // instead of attempting a capture already known to fail.
+    if (get().health?.ffmpeg === false) {
+      get().pushToast("ffmpeg not found on PATH — screenshots are disabled", "info");
+      return;
+    }
     const t = controller.getCurrentTime();
     try {
       const res = await api.captureShot(project.id, t);
@@ -709,6 +816,15 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     if (!project) return;
     set({ compiling: true });
     try {
+      // The compiled doc must reflect the very latest notes edit and
+      // progress, even if the user hits Compile before the 800ms notes
+      // debounce or the periodic progress PATCH would otherwise have fired.
+      await get().flushNotes();
+      const t = get().currentTime;
+      if (t > 0) {
+        const watchedUpTo = Math.max(get().currentProject?.watchedUpTo ?? 0, t);
+        await get().patchCurrentProject({ lastPosition: t, watchedUpTo });
+      }
       const result = await api.compile(project.id);
       set({ compiling: false, compileResult: result });
       get().pushToast("Compiled study document", "success");

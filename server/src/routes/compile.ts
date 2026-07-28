@@ -1,13 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
-import { getConfig, resolveDataDir } from "../config.js";
+import { expandHome, getConfig, resolveDataDir } from "../config.js";
 import { detectProfileAndParse, parseConceptDoc, type ConceptCard } from "../lib/concepts.js";
 import { renderCompiledDocument } from "../lib/compileRenderer.js";
+import { ProjectIdParamSchema } from "../lib/models.js";
 import { exportsDir, readBubbles, readNotes, readProject, writeFileAtomic } from "../lib/store.js";
 
-const IdParamSchema = z.object({ id: z.string().min(1) });
+const IdParamSchema = ProjectIdParamSchema;
 
 async function loadConcepts(
   conceptDoc: { path?: string; profile?: "bjj-curriculum" | "headings" } | undefined,
@@ -16,7 +16,7 @@ async function loadConcepts(
   if (!conceptDoc?.path) return [];
   let markdown: string;
   try {
-    markdown = await fs.readFile(conceptDoc.path, "utf8");
+    markdown = await fs.readFile(expandHome(conceptDoc.path), "utf8");
   } catch {
     return [];
   }

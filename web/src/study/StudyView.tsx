@@ -59,7 +59,25 @@ export function StudyView({ projectId }: Props): JSX.Element {
   useEffect(() => {
     void loadProjectSession(projectId);
     setStartAt(undefined);
-    return () => clearProjectSession();
+    return () => {
+      // Flush pending work for the project we're *leaving* before tearing
+      // down its session state. Both reads below happen synchronously, in
+      // this order, before clearProjectSession() runs — so they see the
+      // still-current project/notes/time regardless of how the resulting
+      // promises settle. (Previously this depended on React running two
+      // separate effects' cleanups in a particular order: clearProjectSession
+      // zeroed currentTime/currentProject before the *other* effect's cleanup
+      // got a chance to read them, silently dropping the final progress PATCH
+      // — consolidating into one cleanup removes that ordering hazard
+      // entirely.)
+      const store = useStudyLoopStore.getState();
+      void store.flushNotes();
+      if (store.currentProject && store.currentTime > 0) {
+        const watchedUpTo = Math.max(store.currentProject.watchedUpTo ?? 0, store.currentTime);
+        void store.patchCurrentProject({ lastPosition: store.currentTime, watchedUpTo });
+      }
+      store.clearProjectSession();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
@@ -72,9 +90,12 @@ export function StudyView({ projectId }: Props): JSX.Element {
 
   // Persist lastPosition (and the monotonic watchedUpTo high-water mark)
   // every 10s while a playable project is open. Serialized: if a patch is
-  // still in flight when the next tick (or unmount) fires, that tick is
-  // skipped rather than firing a second overlapping PATCH — an out-of-order
-  // response to an earlier request could otherwise stomp a later position.
+  // still in flight when the next tick fires, that tick is skipped rather
+  // than firing a second overlapping PATCH — an out-of-order response to an
+  // earlier request could otherwise stomp a later position. The *final*
+  // flush on leaving the project is handled once, deterministically, by the
+  // session-load effect's cleanup above — this effect only owns the
+  // steady-state periodic tick.
   const patchRef = useRef(patchCurrentProject);
   patchRef.current = patchCurrentProject;
   const patchInFlightRef = useRef(false);
@@ -91,11 +112,7 @@ export function StudyView({ projectId }: Props): JSX.Element {
       });
     };
     const interval = setInterval(doPatch, PATCH_INTERVAL_MS);
-    return () => {
-      clearInterval(interval);
-      const t = useStudyLoopStore.getState().currentTime;
-      if (t > 0) doPatch();
-    };
+    return () => clearInterval(interval);
   }, [canPlay, isSameProjectLoaded, projectId]);
 
   useHotkeys(isSameProjectLoaded && startAt !== undefined);

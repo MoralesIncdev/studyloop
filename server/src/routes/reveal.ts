@@ -2,9 +2,10 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getConfig, resolveDataDir } from "../config.js";
 import { resolveRevealTarget, revealInFinder } from "../lib/reveal.js";
+import { ProjectIdParamSchema } from "../lib/models.js";
 import { exportsDir, readProject } from "../lib/store.js";
 
-const IdParamSchema = z.object({ id: z.string().min(1) });
+const IdParamSchema = ProjectIdParamSchema;
 const BodySchema = z.object({ path: z.string().optional() });
 
 export async function revealRoutes(app: FastifyInstance): Promise<void> {

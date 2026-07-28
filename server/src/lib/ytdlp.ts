@@ -104,10 +104,12 @@ export async function isYtdlpAvailable(): Promise<boolean> {
 export function extractVideoId(url: string): string | null {
   try {
     const u = new URL(url);
-    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1) || null;
+    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1).split("/")[0] || null;
     if (u.searchParams.has("v")) return u.searchParams.get("v");
-    const shorts = /\/shorts\/([^/?]+)/.exec(u.pathname);
-    if (shorts) return shorts[1];
+    // /shorts/<id>, /live/<id>, /embed/<id> — all path-segment forms YouTube
+    // uses instead of the ?v= query param.
+    const pathForm = /\/(?:shorts|live|embed)\/([^/?]+)/.exec(u.pathname);
+    if (pathForm) return pathForm[1];
     return null;
   } catch {
     return null;
@@ -140,7 +142,13 @@ export interface YoutubeMetadata {
  */
 export async function resolveYoutube(url: string): Promise<YoutubeMetadata> {
   assertValidYoutubeUrl(url);
-  const videoId = extractVideoId(url) ?? url;
+  // Local extraction covers every URL shape we know about (watch?v=, youtu.be,
+  // /shorts/, /live/, /embed/) — but a URL with none of those (e.g. a
+  // playlist or channel link that still passes the host/scheme allowlist)
+  // yields `null`. It must never fall back to using the raw URL string as a
+  // videoId (that string ends up embedded as YouTube.Player's videoId and in
+  // project.source.videoId) — see the two guards below.
+  let videoId = extractVideoId(url);
   const os = await import("node:os");
   const path = await import("node:path");
   const fs = await import("node:fs/promises");
@@ -166,6 +174,15 @@ export async function resolveYoutube(url: string): Promise<YoutubeMetadata> {
   } catch (err) {
     await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
     if (err instanceof YtDlpNotFoundError) {
+      // yt-dlp isn't installed and we have no other way to resolve an id
+      // from this URL's shape — reject with a clear error rather than
+      // silently treating the whole URL as a videoId.
+      if (!videoId) {
+        throw new Error(
+          "Could not determine a video ID from this URL, and yt-dlp isn't installed to resolve it. " +
+            "Use a standard youtube.com/watch, youtu.be, /shorts/, /live/, or /embed/ link, or install yt-dlp."
+        );
+      }
       return { videoId, title: null, captions: null, ytdlpMissing: true };
     }
     throw err;
@@ -180,6 +197,22 @@ export async function resolveYoutube(url: string): Promise<YoutubeMetadata> {
   } catch (err) {
     if (!(err instanceof YtDlpNotFoundError)) throw err;
     // yt-dlp vanished between the two calls (unlikely) — keep the placeholder title.
+  }
+
+  if (!videoId) {
+    // yt-dlp is present and reachable — ask it for the canonical id rather
+    // than ever falling back to the raw URL string.
+    try {
+      const idMeta = await run(["--print", "%(id)s", "--skip-download", url]);
+      if (idMeta.code === 0 && idMeta.stdout.trim()) {
+        videoId = idMeta.stdout.trim().split("\n")[0];
+      }
+    } catch (err) {
+      if (!(err instanceof YtDlpNotFoundError)) throw err;
+    }
+  }
+  if (!videoId) {
+    throw new Error("Could not determine a video ID for this URL, even with yt-dlp.");
   }
 
   let captions: NormalizedTranscript["segments"] | undefined;

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { getConfig, resolveRoots } from "../config.js";
+import { expandHome, getConfig, resolveRoots } from "../config.js";
 import { isInsideAnyRootCanonical } from "../lib/paths.js";
 
 const QuerySchema = z.object({ path: z.string().min(1) });
@@ -70,7 +70,7 @@ export async function videoRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.status(400).send({ error: "Missing or invalid ?path=" });
     }
-    const filePath = parsed.data.path;
+    const filePath = expandHome(parsed.data.path);
 
     const config = await getConfig();
     const { libraryRoots } = resolveRoots(config);

@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import { BubbleSchema, ProjectSchema, type Bubble, type Project } from "./models.js";
+import { isInsideRoot } from "./paths.js";
 
 /**
  * Atomic write: write to a temp file in the same directory, then rename over
@@ -98,8 +99,24 @@ export function withProjectLock<T>(projectId: string, fn: () => Promise<T>): Pro
 // Project folder persistence: <dataDir>/projects/<id>/
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolves a project's on-disk folder. Defense in depth against
+ * path-traversal via `id`: routes already constrain `:id` params to the
+ * UUID shape project ids are generated in (see models.ts
+ * ProjectIdParamSchema), but this is called from several places, and a
+ * lexical `..`/`/` in `id` must never be able to walk the resolved path
+ * outside `<dataDir>/projects` regardless of what validated it upstream.
+ * This is a lexical (not realpath) check — good enough here because we're
+ * guarding against traversal *sequences* in `id`, not symlinks (nothing
+ * about a project id is attacker-controlled filesystem content).
+ */
 export function projectDir(dataDir: string, id: string): string {
-  return path.join(dataDir, "projects", id);
+  const projectsRoot = path.resolve(dataDir, "projects");
+  const dir = path.resolve(projectsRoot, id);
+  if (!isInsideRoot(dir, projectsRoot)) {
+    throw new Error(`Invalid project id: ${id}`);
+  }
+  return dir;
 }
 
 function projectJsonPath(dataDir: string, id: string): string {
@@ -156,6 +173,13 @@ export async function readProject(dataDir: string, id: string): Promise<Project 
   const raw = await readJsonIfExists<Record<string, unknown>>(projectJsonPath(dataDir, id));
   if (raw === null) return null;
   const parsed = ProjectSchema.parse(raw);
+  // Defense in depth: the file we just read must actually be the project we
+  // asked for. Guards against any way `id` and the on-disk `project.json`'s
+  // own `id` field could disagree (case/normalization tricks, a future bug
+  // upstream of this call) — without this, reading `projects/<id>/project.json`
+  // would trust `id` purely by construction of the file path, never
+  // cross-checking it against the content.
+  if (parsed.id !== id) return null;
   // Migration: older project.json files predate `watchedUpTo`. Rather than
   // silently defaulting to 0 (which would make previously-covered concepts
   // vanish from the compiled doc), seed it from lastPosition on first read.

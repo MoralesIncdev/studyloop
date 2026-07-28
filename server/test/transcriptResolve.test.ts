@@ -84,4 +84,47 @@ describe("resolveTranscriptPath", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.status).toBe(403);
   });
+
+  describe("declared-transcript-path-only restriction", () => {
+    it("rejects a relative path that resolves inside the project directory but isn't the project's declared transcript", async () => {
+      // bubbles.json genuinely lives next to project.json — the old
+      // "resolves inside the project dir" check alone would have let this
+      // through. Only the project's own declared transcript.path may be
+      // served this way.
+      await fs.writeFile(path.join(dataDir, "projects", projectId, "bubbles.json"), "[]");
+      const result = await resolveTranscriptPath(dataDir, noRoots, "bubbles.json", projectId);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.status).toBe(403);
+    });
+
+    it("rejects project.json itself, even though it trivially resolves inside the project directory", async () => {
+      const result = await resolveTranscriptPath(dataDir, noRoots, "project.json", projectId);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.status).toBe(403);
+    });
+
+    it("rejects any relative path when the project has no file transcript attached", async () => {
+      const now = new Date().toISOString();
+      const noTranscriptProject: Project = {
+        id: "proj-no-transcript",
+        title: "No transcript",
+        source: { type: "local", path: "/tmp/video.mp4" },
+        transcript: { type: "none" },
+        createdAt: now,
+        updatedAt: now,
+        lastPosition: 0,
+        watchedUpTo: 0,
+      };
+      await writeProject(dataDir, noTranscriptProject);
+      const result = await resolveTranscriptPath(dataDir, noRoots, "whatever.json", "proj-no-transcript");
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.status).toBe(403);
+    });
+
+    it("still allows the project's own declared transcript path (captions.json)", async () => {
+      await writeCaptions(dataDir, projectId, [{ start: 0, end: 1, text: "hi" }]);
+      const result = await resolveTranscriptPath(dataDir, noRoots, "captions.json", projectId);
+      expect(result.ok).toBe(true);
+    });
+  });
 });
