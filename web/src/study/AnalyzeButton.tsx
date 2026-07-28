@@ -1,11 +1,12 @@
 // V2-C "Analysis engine" (SPEC): the channel-row Analyze pill. No API key →
 // toast + open Settings; otherwise POST /analyze, poll status 1s (via the
 // store), and show a thin YT-style progress bar under the pill while running.
-// The chrome cluster's ✨ button (PlayerControls) drives the exact same store
-// actions — see its onClick there — so behavior stays identical between the
-// two entry points the SPEC calls out ("Analyze pill (channel row) + ✨ chrome
-// button go live").
+// The chrome cluster's autoAwesome button (PlayerControls) drives the exact
+// same store actions — see its onClick there — so behavior stays identical
+// between the two entry points the SPEC calls out ("Analyze pill (channel
+// row) + chrome button go live").
 import { useStudyLoopStore } from "../state/store";
+import { Icon } from "../components/icons";
 import styles from "./AnalyzeButton.module.css";
 
 export function AnalyzeButton(): JSX.Element {
@@ -24,22 +25,25 @@ export function AnalyzeButton(): JSX.Element {
   };
 
   const label = running
-    ? `✨ Analyzing… ${analyzeStatus.pct}%`
+    ? `Analyzing… ${analyzeStatus.pct}%`
     : hasAnalysis
-      ? "✨ Re-analyze"
+      ? "Re-analyze"
       : analyzeStatus.state === "error"
-        ? "✨ Retry analysis"
-        : "✨ Analyze";
+        ? "Retry analysis"
+        : "Analyze";
 
   return (
     <div className={styles.wrap}>
       <button
         type="button"
         className={styles.analyzePill}
+        data-ripple
         onClick={handleClick}
         disabled={running}
+        aria-busy={running}
         title={analyzeStatus.state === "error" ? analyzeStatus.message : undefined}
       >
+        <Icon name="autoAwesome" size={16} />
         {label}
       </button>
       {running && (

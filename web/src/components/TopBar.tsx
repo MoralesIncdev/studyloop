@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { api, ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/time";
+import { Icon } from "../components/icons";
 import type { LibraryItem, RelatedVideo } from "../lib/types";
 import styles from "./TopBar.module.css";
 
@@ -200,7 +201,7 @@ export function TopBar(): JSX.Element {
             aria-controls="topbar-search-dropdown"
           />
           <button type="submit" className={styles.searchButton} aria-label="Search">
-            🔍
+            <Icon name="search" size={18} />
           </button>
         </form>
         {dropdownOpen && query.trim().length > 0 && (
@@ -252,7 +253,7 @@ export function TopBar(): JSX.Element {
                     {video.thumbnailUrl ? (
                       <img src={video.thumbnailUrl} alt="" className={styles.dropdownItemThumbImg} />
                     ) : (
-                      "▶"
+                      <Icon name="play" size={16} />
                     )}
                   </span>
                   <span className={styles.dropdownItemBody}>
@@ -278,7 +279,7 @@ export function TopBar(): JSX.Element {
           aria-expanded={menuOpen}
           aria-label="Account menu"
         >
-          ⚙
+          <Icon name="settings" size={20} />
         </button>
         {menuOpen && (
           <div className={styles.menu} role="menu">
@@ -291,7 +292,8 @@ export function TopBar(): JSX.Element {
                 navigate({ view: "library" });
               }}
             >
-              🏠 Home
+              <Icon name="home" size={18} />
+              Home
             </button>
             <button
               type="button"
@@ -302,7 +304,8 @@ export function TopBar(): JSX.Element {
                 navigate({ view: "settings" });
               }}
             >
-              ⚙ Settings
+              <Icon name="settings" size={18} />
+              Settings
             </button>
           </div>
         )}

@@ -165,7 +165,7 @@ export function SettingsView(): JSX.Element {
 
         <label className={styles.field}>
           <span className={styles.label}>Analysis model</span>
-          <span className={styles.hint}>Model used for the ✨ Analyze pipeline. Leave blank for the default (claude-opus-5).</span>
+          <span className={styles.hint}>Model used for the Analyze pipeline. Leave blank for the default (claude-opus-5).</span>
           <input
             type="text"
             className={styles.input}

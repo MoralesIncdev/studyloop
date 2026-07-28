@@ -6,8 +6,8 @@
 }
 
 .status {
-  color: var(--text-dim);
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--type-13);
   margin: 0;
 }
 
@@ -21,39 +21,56 @@
 
 .search {
   flex: 1;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 6px;
+  background: var(--surface-bg);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
   padding: 6px 10px;
-  font-size: 13px;
+  font-size: var(--type-13);
+  transition: border-color var(--duration-fast) var(--ease-standard);
 }
 
-.search:focus {
-  outline: 1px solid var(--accent);
+.search:hover {
+  border-color: var(--border-strong);
+}
+
+.search:focus-visible {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: var(--focus-ring);
+}
+
+.search::placeholder {
+  color: var(--text-tertiary);
 }
 
 .detachButton {
   background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-dim);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
   border-radius: var(--radius-pill);
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: var(--type-12);
   cursor: pointer;
   white-space: nowrap;
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
 }
 
 .detachButton:hover {
   color: var(--danger);
   border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
 
 .progress {
-  font-size: 12px;
-  color: var(--text-dim);
+  font-size: var(--type-12);
+  color: var(--text-secondary);
   margin-bottom: 8px;
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .list {
@@ -63,10 +80,11 @@
 }
 
 .sectionLabel {
-  font-size: 11px;
+  font-size: var(--type-11);
+  font-weight: var(--weight-medium);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-dim);
+  letter-spacing: .06em;
+  color: var(--text-tertiary);
   margin: 12px 0 6px;
 }
 
@@ -84,42 +102,52 @@
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.item:hover {
+  background: var(--hover-overlay);
 }
 
 .itemActive {
-  background: color-mix(in srgb, var(--success) 14%, transparent);
+  background: color-mix(in srgb, var(--accent-green) 14%, transparent);
+}
+
+.itemActive:hover {
+  background: color-mix(in srgb, var(--accent-green) 20%, transparent);
 }
 
 .timeChip {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  background: color-mix(in srgb, var(--accent-blue) 15%, transparent);
   border: none;
-  color: var(--accent);
-  border-radius: 999px;
+  color: var(--accent-blue);
+  border-radius: var(--radius-pill);
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: var(--type-11);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   flex-shrink: 0;
+  transition: background-color var(--duration-fast) var(--ease-standard);
 }
 
 .timeChip:hover {
-  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  background: color-mix(in srgb, var(--accent-blue) 28%, transparent);
 }
 
 .itemTitle {
   flex: 1;
   min-width: 0;
-  font-size: 13px;
-  color: var(--text);
+  font-size: var(--type-13);
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .covered {
-  color: var(--success);
-  font-size: 12px;
+  display: inline-flex;
+  color: var(--accent-green);
   flex-shrink: 0;
 }
 
@@ -140,20 +168,21 @@
 
 .docButton {
   text-align: left;
-  background: var(--bg-chip);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 8px;
+  background: var(--surface-popover);
+  border: 1px solid var(--border-hairline);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
   padding: 8px 10px;
-  font-size: 12px;
+  font-size: var(--type-12);
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: background-color var(--duration-fast) var(--ease-standard);
 }
 
 .docButton:hover:not(:disabled) {
-  background: var(--bg-hover);
+  background: var(--surface-hover);
 }
 
 .docButton:disabled {
@@ -168,28 +197,46 @@
 
 .input {
   flex: 1;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 6px;
+  background: var(--surface-bg);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
   padding: 6px 10px;
-  font-size: 13px;
+  font-size: var(--type-13);
+  transition: border-color var(--duration-fast) var(--ease-standard);
 }
 
-.input:focus {
-  outline: 1px solid var(--accent);
+.input:hover {
+  border-color: var(--border-strong);
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: var(--focus-ring);
 }
 
 .primaryButton {
-  background: var(--accent);
-  color: var(--accent-contrast);
+  background: var(--accent-blue);
+  color: var(--surface-bg);
   border: none;
   border-radius: var(--radius-pill);
   padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--type-13);
+  font-weight: var(--weight-bold);
   cursor: pointer;
   white-space: nowrap;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-blue) 85%, white);
+}
+
+.primaryButton:active:not(:disabled) {
+  transform: scale(.98);
 }
 
 .primaryButton:disabled {

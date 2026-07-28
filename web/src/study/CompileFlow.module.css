@@ -2,20 +2,27 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--bg-chip);
+  background: var(--surface-popover);
   border: none;
-  color: var(--text);
+  color: var(--text-primary);
   border-radius: var(--radius-pill);
   padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--type-13);
+  font-weight: var(--weight-medium);
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
 }
 
 .compileButton:hover:not(:disabled) {
-  background: var(--bg-hover);
+  background: var(--surface-hover);
+}
+
+.compileButton:active:not(:disabled) {
+  transform: scale(.98);
 }
 
 .compileButton:disabled {
@@ -26,18 +33,30 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--surface-scrim);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 300;
   padding: 24px;
+  animation: backdrop-in var(--duration-standard) var(--ease-enter) both;
+}
+
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(12px) scale(.98); }
+  to { opacity: 1; transform: none; }
 }
 
 .card {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
   width: min(560px, 100%);
   max-height: min(80vh, 640px);
   display: flex;
@@ -45,12 +64,14 @@
   padding: 20px;
   gap: 12px;
   overflow: hidden;
+  animation: modal-in var(--duration-modal) var(--ease-enter) both;
 }
 
 .previewCard {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
   width: min(680px, 100%);
   max-height: min(85vh, 720px);
   display: flex;
@@ -58,8 +79,10 @@
   padding: 20px;
   gap: 10px;
   overflow: hidden;
+  animation: modal-in var(--duration-modal) var(--ease-enter) both;
 }
 
+.header,
 .previewHeader {
   display: flex;
   align-items: center;
@@ -68,44 +91,98 @@
 }
 
 .closeButton {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: none;
-  color: var(--text-dim);
+  border-radius: 50%;
+  color: var(--text-secondary);
   cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
 }
 
-.closeButton:hover {
-  color: var(--text);
+.closeButton:hover:not(:disabled) {
+  background: var(--hover-overlay);
+  color: var(--text-primary);
+}
+
+.closeButton:active:not(:disabled) {
+  transform: scale(.94);
+}
+
+.closeButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.previewPathRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .previewPath {
-  font-size: 11px;
-  color: var(--text-dim);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  word-break: break-all;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--type-11);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: all;
+}
+
+.copyIconButton {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+
+.copyIconButton:hover {
+  background: var(--hover-overlay);
+  color: var(--text-primary);
 }
 
 .previewBody {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  background: var(--surface-bg);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sm);
   padding: 16px;
 }
 
 .cardTitle {
-  font-size: 15px;
+  font-size: var(--type-16);
+  font-weight: var(--weight-bold);
   margin: 0;
+  text-wrap: pretty;
 }
 
 .cardSub {
-  font-size: 13px;
-  color: var(--text-dim);
+  font-size: var(--type-13);
+  color: var(--text-secondary);
   margin: -6px 0 0;
+  text-wrap: pretty;
 }
 
 .captionList {
@@ -122,22 +199,28 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: 48px;
 }
 
 .captionThumb {
   width: 56px;
   height: 40px;
   flex-shrink: 0;
-  background: #000;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  background: var(--surface-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xs);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-dim);
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0;
   overflow: hidden;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.captionThumb:hover {
+  border-color: var(--border-strong);
 }
 
 .captionThumbImg {
@@ -156,23 +239,34 @@
 }
 
 .captionTime {
-  font-size: 11px;
-  color: var(--text-dim);
+  font-size: var(--type-11);
+  color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
 .captionInput {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 6px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
   padding: 6px 10px;
-  font-size: 13px;
+  font-size: var(--type-13);
   font-family: inherit;
+  transition: border-color var(--duration-fast) var(--ease-standard);
 }
 
-.captionInput:focus {
-  outline: 1px solid var(--accent);
+.captionInput:hover {
+  border-color: var(--border-strong);
+}
+
+.captionInput:focus-visible {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: var(--focus-ring);
+}
+
+.captionInput::placeholder {
+  color: var(--text-tertiary);
 }
 
 .cardActions {
@@ -183,14 +277,30 @@
 }
 
 .primaryButton {
-  background: var(--accent);
-  color: var(--accent-contrast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--accent-blue);
+  color: var(--surface-bg);
   border: none;
   border-radius: var(--radius-pill);
   padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--type-13);
+  font-weight: var(--weight-bold);
   cursor: pointer;
+  min-width: 76px;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-blue) 85%, white);
+}
+
+.primaryButton:active:not(:disabled) {
+  transform: scale(.98);
 }
 
 .primaryButton:disabled {
@@ -198,16 +308,37 @@
   cursor: default;
 }
 
-.secondaryButton {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: var(--radius-pill);
-  padding: 8px 16px;
-  font-size: 13px;
-  cursor: pointer;
+.buttonSpinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--surface-bg) 40%, transparent);
+  border-top-color: var(--surface-bg);
+  animation: spin 700ms linear infinite;
 }
 
-.secondaryButton:hover {
-  background: var(--bg-hover);
+.secondaryButton {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-pill);
+  padding: 8px 16px;
+  font-size: var(--type-13);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
+}
+
+.secondaryButton:hover:not(:disabled) {
+  background: var(--hover-overlay);
+}
+
+.secondaryButton:active:not(:disabled) {
+  transform: scale(.98);
+}
+
+.secondaryButton:disabled {
+  opacity: 0.5;
+  cursor: default;
 }

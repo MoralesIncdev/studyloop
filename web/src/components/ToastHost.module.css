@@ -11,54 +11,88 @@
 
 .toast {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
+  min-height: 48px;
   padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
-  color: var(--text);
-  font-size: 13px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  animation: slide-in 150ms ease-out;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-hairline);
+  border-left: 3px solid var(--border-strong);
+  background: var(--surface-popover);
+  color: var(--text-primary);
+  font-size: var(--type-13);
+  box-shadow: var(--shadow-3);
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity var(--duration-standard) var(--ease-enter),
+    transform var(--duration-standard) var(--ease-enter);
+}
+
+.toast[data-state="idle"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast[data-state="exiting"] {
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity var(--duration-fast) var(--ease-exit),
+    transform var(--duration-fast) var(--ease-exit);
+}
+
+.icon {
+  flex-shrink: 0;
 }
 
 .error {
-  border-color: var(--danger);
+  border-left-color: var(--danger);
+}
+
+.error .icon {
+  color: var(--danger);
 }
 
 .success {
-  border-color: var(--success);
+  border-left-color: var(--accent-green);
+}
+
+.success .icon {
+  color: var(--accent-green);
 }
 
 .info {
-  border-color: var(--border);
+  border-left-color: var(--accent-blue);
 }
 
-.toast span {
+.info .icon {
+  color: var(--accent-blue);
+}
+
+.message {
   flex: 1;
+  line-height: 1.4;
 }
 
 .dismiss {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: none;
-  color: var(--text-dim);
+  border-radius: 50%;
+  color: var(--text-secondary);
   cursor: pointer;
-  font-size: 12px;
-  line-height: 1;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
 }
 
 .dismiss:hover {
-  color: var(--text);
-}
-
-@keyframes slide-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  background: var(--hover-overlay);
+  color: var(--text-primary);
 }

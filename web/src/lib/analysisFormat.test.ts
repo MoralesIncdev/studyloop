@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analysisConceptToConceptCard, hashHueForHandle, importanceStars, sortPearls } from "./analysisFormat";
+import { analysisConceptToConceptCard, hashHueForHandle, starStates, sortPearls } from "./analysisFormat";
 import type { AnalysisConcept, Pearl } from "./types";
 
 describe("sortPearls", () => {
@@ -24,11 +24,11 @@ describe("sortPearls", () => {
   });
 });
 
-describe("importanceStars", () => {
-  it("renders filled + empty stars totalling 3", () => {
-    expect(importanceStars(3)).toBe("★★★");
-    expect(importanceStars(2)).toBe("★★☆");
-    expect(importanceStars(1)).toBe("★☆☆");
+describe("starStates", () => {
+  it("returns filled/outline flags totalling 3 slots", () => {
+    expect(starStates(3)).toEqual([true, true, true]);
+    expect(starStates(2)).toEqual([true, true, false]);
+    expect(starStates(1)).toEqual([true, false, false]);
   });
 });
 

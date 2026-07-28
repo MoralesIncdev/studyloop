@@ -2,7 +2,7 @@
   position: relative;
   width: 100%;
   height: 100%;
-  background: #000;
+  background: var(--surface-player);
 }
 
 .loadError {
@@ -15,21 +15,26 @@
   gap: 12px;
   padding: 24px;
   text-align: center;
-  color: var(--text);
-  background: rgba(0, 0, 0, 0.6);
+  color: var(--text-primary);
+  background: rgb(0 0 0 / 60%);
 }
 
 .retryButton {
   padding: 8px 20px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-elevated);
-  color: var(--text);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  color: var(--text-primary);
   cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
 }
 
 .retryButton:hover {
-  background: var(--bg-hover);
+  background: var(--surface-hover);
+}
+
+.retryButton:active {
+  transform: scale(.98);
 }
 
 .iframeHost {

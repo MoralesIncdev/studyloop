@@ -5,6 +5,7 @@
 // local-first, no-upload-server architecture. Reuses CompileFlow's modal styling.
 import { useState } from "react";
 import { useStudyLoopStore } from "../state/store";
+import { Icon } from "../components/icons";
 import styles from "./CompileFlow.module.css";
 
 export function ImportOverlayFlow(): JSX.Element | null {
@@ -34,14 +35,45 @@ export function ImportOverlayFlow(): JSX.Element | null {
 
   return (
     <>
-      <button type="button" className={styles.compileButton} onClick={() => setOpen(true)} title="Import another viewer's analysis bundle">
-        ⤓ Import
+      <button type="button" className={styles.compileButton} data-ripple onClick={() => setOpen(true)} title="Import another viewer's analysis bundle">
+        <Icon name="download" size={16} />
+        Import
       </button>
 
       {open && (
-        <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Import analysis">
-          <div className={styles.card}>
-            <h2 className={styles.cardTitle}>Import analysis</h2>
+        <div
+          className={styles.overlay}
+          data-state="open"
+          role="presentation"
+          onMouseDown={() => {
+            if (!importing) {
+              setOpen(false);
+              setPath("");
+            }
+          }}
+        >
+          <div
+            className={styles.card}
+            onMouseDown={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Import analysis"
+          >
+            <header className={styles.header}>
+              <h2 className={styles.cardTitle}>Import analysis</h2>
+              <button
+                type="button"
+                className={styles.closeButton}
+                onClick={() => {
+                  setOpen(false);
+                  setPath("");
+                }}
+                disabled={importing}
+                aria-label="Close"
+              >
+                <Icon name="close" size={18} />
+              </button>
+            </header>
             <p className={styles.cardSub}>Path to a <code>.studyloop.json</code> bundle exported from another viewer.</p>
             <input
               type="text"
@@ -66,7 +98,14 @@ export function ImportOverlayFlow(): JSX.Element | null {
               >
                 Cancel
               </button>
-              <button type="button" className={styles.primaryButton} onClick={() => void handleImport()} disabled={importing || !path.trim()}>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={() => void handleImport()}
+                disabled={importing || !path.trim()}
+                aria-busy={importing}
+              >
+                {importing && <span className={styles.buttonSpinner} aria-hidden="true" />}
                 {importing ? "Importing…" : "Import"}
               </button>
             </div>

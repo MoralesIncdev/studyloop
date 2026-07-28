@@ -4,6 +4,7 @@
 // lib/conceptFormat.ts — no external markdown lib per SPEC quality bar.
 import { useEffect } from "react";
 import { parseConceptBody, type ConceptInline } from "../lib/conceptFormat";
+import { Icon } from "../components/icons";
 import type { ConceptCard as ConceptCardType } from "../lib/types";
 import styles from "./ConceptOverlay.module.css";
 
@@ -43,7 +44,7 @@ export function ConceptOverlay({ card, onClose }: Props): JSX.Element {
         <div className={styles.header}>
           <h2 className={styles.title}>{card.title}</h2>
           <button type="button" className={styles.close} onClick={onClose} aria-label="Close">
-            ✕
+            <Icon name="close" size={16} />
           </button>
         </div>
         <div className={styles.body}>

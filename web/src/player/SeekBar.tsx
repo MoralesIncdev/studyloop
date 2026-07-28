@@ -1,8 +1,9 @@
 // YouTube-style progress bar: red played-portion, hover time tooltip, click-to-seek,
 // and marker layers rendered purely from props — bubble pins and concept ticks —
 // plus an optional heatmap density strip (SPEC "Player chrome" — see HeatmapStrip).
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { formatTimestamp } from "../lib/time";
+import { Icon } from "../components/icons";
 import { HeatmapStrip } from "./HeatmapStrip";
 import styles from "./SeekBar.module.css";
 
@@ -71,6 +72,7 @@ export function SeekBar({
   const [hover, setHover] = useState<{ x: number; t: number } | null>(null);
   const [hoverBubble, setHoverBubble] = useState<SeekBarBubbleMarker | null>(null);
   const [hoverPearl, setHoverPearl] = useState<SeekBarPearlMarker | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   const timeAtClientX = useCallback(
     (clientX: number): number => {
@@ -90,8 +92,9 @@ export function SeekBar({
       const rect = track.getBoundingClientRect();
       const x = Math.min(rect.width, Math.max(0, e.clientX - rect.left));
       setHover({ x, t: timeAtClientX(e.clientX) });
+      if (dragging) onSeek(timeAtClientX(e.clientX));
     },
-    [timeAtClientX]
+    [timeAtClientX, dragging, onSeek]
   );
 
   const handleClick = useCallback(
@@ -101,6 +104,34 @@ export function SeekBar({
     [onSeek, timeAtClientX]
   );
 
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      setDragging(true);
+      onSeek(timeAtClientX(e.clientX));
+    },
+    [onSeek, timeAtClientX]
+  );
+
+  useEffect(() => {
+    if (!dragging) return undefined;
+    const stop = (): void => setDragging(false);
+    window.addEventListener("mouseup", stop);
+    return () => window.removeEventListener("mouseup", stop);
+  }, [dragging]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        onSeek(Math.min(duration, currentTime + 5));
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        onSeek(Math.max(0, currentTime - 5));
+      }
+    },
+    [onSeek, currentTime, duration]
+  );
+
   const pct = (t: number): string => `${duration > 0 ? Math.min(100, Math.max(0, (t / duration) * 100)) : 0}%`;
 
   return (
@@ -108,14 +139,19 @@ export function SeekBar({
       <div
         ref={trackRef}
         className={styles.track}
+        data-dragging={dragging}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setHover(null)}
+        onMouseDown={handleMouseDown}
         onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        tabIndex={0}
         role="slider"
         aria-label="Seek"
         aria-valuemin={0}
         aria-valuemax={Math.max(0, Math.round(duration))}
         aria-valuenow={Math.round(currentTime)}
+        aria-valuetext={formatTimestamp(currentTime)}
       >
         {heatmap && <HeatmapStrip buckets={heatmap} />}
         {loopA != null && loopB != null && (
@@ -126,10 +162,13 @@ export function SeekBar({
         )}
         <div className={styles.fill} style={{ width: pct(currentTime) }} />
         {conceptTicks.map((tick) => (
-          <div
+          <button
             key={tick.id}
+            type="button"
             className={styles.conceptTick}
+            data-kind="concept"
             style={{ left: pct(tick.t) }}
+            aria-label={`Concept: ${tick.title ?? "untitled"} at ${formatTimestamp(tick.t)}`}
             title={tick.title ? `${tick.title} — ${formatTimestamp(tick.t)}` : formatTimestamp(tick.t)}
             onClick={(e) => {
               e.stopPropagation();
@@ -138,12 +177,17 @@ export function SeekBar({
           />
         ))}
         {bubbles.map((bubble) => (
-          <div
+          <button
             key={bubble.id}
+            type="button"
             className={styles.bubblePin}
+            data-kind="bubble"
             style={{ left: pct(bubble.t) }}
+            aria-label={`Note: ${bubble.text || "untitled"} at ${formatTimestamp(bubble.t)}`}
             onMouseEnter={() => setHoverBubble(bubble)}
             onMouseLeave={() => setHoverBubble((cur) => (cur?.id === bubble.id ? null : cur))}
+            onFocus={() => setHoverBubble(bubble)}
+            onBlur={() => setHoverBubble((cur) => (cur?.id === bubble.id ? null : cur))}
             onClick={(e) => {
               e.stopPropagation();
               (onSeekBubble ?? onSeek)(bubble.t);
@@ -153,13 +197,18 @@ export function SeekBar({
         {/* V2-C: pearl diamonds — visually distinct from bubble pins (dots above)
             and concept ticks (bars below); size scales with importance. */}
         {pearls.map((pearl) => (
-          <div
+          <button
             key={pearl.id}
+            type="button"
             className={styles.pearlMarker}
+            data-kind="pearl"
             style={{ left: pct(pearl.t) }}
             data-importance={pearl.importance}
+            aria-label={`Pearl: ${pearl.label} at ${formatTimestamp(pearl.t)}`}
             onMouseEnter={() => setHoverPearl(pearl)}
             onMouseLeave={() => setHoverPearl((cur) => (cur?.id === pearl.id ? null : cur))}
+            onFocus={() => setHoverPearl(pearl)}
+            onBlur={() => setHoverPearl((cur) => (cur?.id === pearl.id ? null : cur))}
             onClick={(e) => {
               e.stopPropagation();
               (onSeekPearl ?? onSeek)(pearl.t);
@@ -168,10 +217,13 @@ export function SeekBar({
         ))}
         {/* V2-C: imported overlay markers — one colored dot per author handle. */}
         {overlayMarkers.map((marker) => (
-          <div
+          <button
             key={marker.id}
+            type="button"
             className={marker.kind === "pearl" ? styles.overlayPearlMarker : styles.overlayBubbleMarker}
+            data-kind={`overlay-${marker.kind}`}
             style={{ left: pct(marker.t), background: `hsl(${marker.hue}, 70%, 55%)` }}
+            aria-label={`${marker.handle} — ${formatTimestamp(marker.t)}`}
             title={`${marker.handle} — ${formatTimestamp(marker.t)}`}
             onClick={(e) => {
               e.stopPropagation();
@@ -179,24 +231,31 @@ export function SeekBar({
             }}
           />
         ))}
-        {loopA != null && <div className={styles.loopMarker} style={{ left: pct(loopA) }} title={`A: ${formatTimestamp(loopA)}`} />}
-        {loopB != null && <div className={styles.loopMarker} style={{ left: pct(loopB) }} title={`B: ${formatTimestamp(loopB)}`} />}
+        {loopA != null && (
+          <div className={styles.loopMarker} style={{ left: pct(loopA) }} title={`A: ${formatTimestamp(loopA)}`} />
+        )}
+        {loopB != null && (
+          <div className={styles.loopMarker} style={{ left: pct(loopB) }} title={`B: ${formatTimestamp(loopB)}`} />
+        )}
         <div className={styles.playhead} style={{ left: pct(currentTime) }} />
         {hoverPearl && (
-          <div className={styles.bubbleTooltip} style={{ left: pct(hoverPearl.t) }}>
-            <span className={styles.bubbleTooltipText}>
-              {"★".repeat(hoverPearl.importance)} {hoverPearl.label}
+          <div className={styles.bubbleTooltip} style={{ left: `clamp(28px, ${pct(hoverPearl.t)}, calc(100% - 28px))` }}>
+            <span className={styles.pearlStars}>
+              {Array.from({ length: 3 }, (_, i) => (
+                <Icon key={i} name={i < hoverPearl.importance ? "star" : "starOutline"} size={12} />
+              ))}
             </span>
+            <span className={styles.bubbleTooltipText}>{hoverPearl.label}</span>
           </div>
         )}
         {!hoverPearl && hoverBubble && (
-          <div className={styles.bubbleTooltip} style={{ left: pct(hoverBubble.t) }}>
+          <div className={styles.bubbleTooltip} style={{ left: `clamp(28px, ${pct(hoverBubble.t)}, calc(100% - 28px))` }}>
             {hoverBubble.thumbnailUrl && <img className={styles.bubbleTooltipImg} src={hoverBubble.thumbnailUrl} alt="" />}
             <span className={styles.bubbleTooltipText}>{hoverBubble.text || formatTimestamp(hoverBubble.t)}</span>
           </div>
         )}
         {!hoverPearl && !hoverBubble && hover && (
-          <div className={styles.tooltip} style={{ left: hover.x }}>
+          <div className={styles.tooltip} style={{ left: `clamp(16px, ${hover.x}px, calc(100% - 16px))` }}>
             {formatTimestamp(hover.t)}
           </div>
         )}

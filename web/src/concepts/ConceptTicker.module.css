@@ -8,23 +8,36 @@
   gap: 8px;
   align-items: flex-start;
   pointer-events: none;
+  transition: bottom var(--duration-standard) var(--ease-standard);
+}
+
+.stack[data-chrome-visible="true"] {
+  bottom: 72px;
 }
 
 .stack > * {
   pointer-events: auto;
+  transition: transform var(--duration-fast) var(--ease-standard);
 }
 
 .moreChip {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  color: var(--text-dim);
-  border-radius: 999px;
+  background: var(--surface-popover);
+  border: 1px solid var(--border-hairline);
+  color: var(--text-secondary);
+  border-radius: var(--radius-pill);
   padding: 4px 10px;
-  font-size: 11px;
+  font-size: var(--type-11);
   cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
 }
 
 .moreChip:hover {
-  color: var(--text);
-  background: var(--bg-hover);
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.moreChip:active {
+  transform: scale(.97);
 }

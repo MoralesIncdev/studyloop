@@ -1,18 +1,25 @@
 .card {
   position: relative;
-  width: 260px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--success);
-  border-radius: var(--radius-card);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  animation: slideIn 200ms ease-out;
+  width: 280px;
+  background: var(--surface-popover);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
   overflow: hidden;
+  animation: ticker-in var(--duration-standard) var(--ease-spring);
+  transition:
+    transform var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
 }
 
-@keyframes slideIn {
+.card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-3);
+}
+
+@keyframes ticker-in {
   from {
-    transform: translateX(-16px);
+    transform: translateX(-12px);
     opacity: 0;
   }
   to {
@@ -23,20 +30,31 @@
 
 .dismiss {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 6px;
+  right: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: none;
-  color: var(--text-dim);
+  border-radius: 50%;
+  color: var(--text-secondary);
   cursor: pointer;
-  font-size: 11px;
-  line-height: 1;
-  padding: 4px;
   z-index: 1;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
 }
 
 .dismiss:hover {
-  color: var(--text);
+  background: var(--hover-overlay);
+  color: var(--text-primary);
+}
+
+.dismiss:active {
+  transform: scale(.94);
 }
 
 .body {
@@ -47,25 +65,48 @@
   width: 100%;
   background: transparent;
   border: none;
-  color: var(--text);
+  color: var(--text-primary);
   text-align: left;
   cursor: pointer;
-  padding: 10px 24px 10px 12px;
+  padding: 12px 36px 12px 14px;
+  transition: background-color var(--duration-fast) var(--ease-standard);
 }
 
 .body:hover {
-  background: var(--bg-hover);
+  background: var(--hover-overlay);
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  flex-shrink: 0;
+}
+
+.metaLabel {
+  font-size: var(--type-11);
+  font-weight: var(--weight-medium);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
 }
 
 .title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
+  font-size: var(--type-14);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
 }
 
 .preview {
-  font-size: 12px;
-  color: var(--text-dim);
+  font-size: var(--type-12);
+  color: var(--text-secondary);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;

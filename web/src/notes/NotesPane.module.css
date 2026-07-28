@@ -14,17 +14,22 @@
 }
 
 .toolButton {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 6px;
+  background: var(--surface-bg);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: var(--type-12);
   cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
 }
 
 .toolButton:hover:not(:disabled) {
-  background: var(--bg-hover);
+  background: var(--hover-overlay);
+}
+
+.toolButton:active:not(:disabled) {
+  transform: scale(.97);
 }
 
 .toolButton:disabled {
@@ -37,8 +42,8 @@
 }
 
 .status {
-  font-size: 11px;
-  color: var(--text-dim);
+  font-size: var(--type-11);
+  color: var(--text-secondary);
   min-width: 70px;
   text-align: right;
 }
@@ -48,59 +53,71 @@
 }
 
 .loading {
-  color: var(--text-dim);
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--type-13);
 }
 
 .textarea {
   flex: 1;
   min-height: 0;
   resize: none;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 6px;
+  background: var(--surface-bg);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
-  font-size: 13px;
-  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: var(--type-13);
+  font-family: var(--font-mono);
   line-height: 1.5;
+  transition: border-color var(--duration-fast) var(--ease-standard);
 }
 
-.textarea:focus {
-  outline: 1px solid var(--accent);
+.textarea:hover {
+  border-color: var(--border-strong);
+}
+
+.textarea:focus-visible {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: var(--focus-ring);
+}
+
+.textarea::placeholder {
+  color: var(--text-tertiary);
 }
 
 .preview {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  background: var(--surface-bg);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: var(--type-13);
   line-height: 1.6;
   white-space: pre-wrap;
 }
 
 .previewEmpty {
   flex: 1;
-  color: var(--text-dim);
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--type-13);
   padding: 10px 12px;
 }
 
 .timestampLink {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  background: color-mix(in srgb, var(--accent-blue) 15%, transparent);
   border: none;
-  color: var(--accent);
-  border-radius: 4px;
+  color: var(--accent-blue);
+  border-radius: var(--radius-xs);
   padding: 0 4px;
-  font-size: 12px;
+  font-size: var(--type-12);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
 }
 
 .timestampLink:hover {
-  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  background: color-mix(in srgb, var(--accent-blue) 28%, transparent);
 }

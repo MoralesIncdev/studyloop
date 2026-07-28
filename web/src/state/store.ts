@@ -33,6 +33,11 @@ export interface Toast {
   kind: "error" | "info" | "success";
 }
 
+// Toast auto-dismiss timers, kept outside the store (not serializable state,
+// and re-running them shouldn't trigger a re-render) — see pauseToastTimer.
+const toastTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const TOAST_LIFETIME_MS = 6000;
+
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError) return err.message;
   if (err instanceof Error) return err.message;
@@ -311,6 +316,11 @@ export interface StudyLoopStore {
   toasts: Toast[];
   pushToast: (message: string, kind?: Toast["kind"]) => void;
   dismissToast: (id: string) => void;
+  /** Suspends a toast's auto-dismiss timer (ToastHost calls this on
+   *  hover/focus) — codex §5 "Pause auto-dismiss while hovered or
+   *  keyboard-focused". */
+  pauseToastTimer: (id: string) => void;
+  resumeToastTimer: (id: string) => void;
 }
 
 export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
@@ -1230,9 +1240,28 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   pushToast: (message, kind = "error") => {
     const id = makeId();
     set((state) => ({ toasts: [...state.toasts, { id, message, kind }] }));
-    setTimeout(() => get().dismissToast(id), 6000);
+    toastTimers.set(id, setTimeout(() => get().dismissToast(id), TOAST_LIFETIME_MS));
   },
-  dismissToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
+  dismissToast: (id) => {
+    const timer = toastTimers.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      toastTimers.delete(id);
+    }
+    set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }));
+  },
+  pauseToastTimer: (id) => {
+    const timer = toastTimers.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      toastTimers.delete(id);
+    }
+  },
+  resumeToastTimer: (id) => {
+    if (toastTimers.has(id)) return; // already running
+    if (!get().toasts.some((t) => t.id === id)) return; // already dismissed
+    toastTimers.set(id, setTimeout(() => get().dismissToast(id), TOAST_LIFETIME_MS));
+  },
 }));
 
 if (typeof window !== "undefined") {

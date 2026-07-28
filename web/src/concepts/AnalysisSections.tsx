@@ -6,10 +6,21 @@
 // card for imported overlays.
 import { useState } from "react";
 import { useStudyLoopStore } from "../state/store";
-import { sortPearls, importanceStars, hashHueForHandle } from "../lib/analysisFormat";
+import { sortPearls, starStates, hashHueForHandle } from "../lib/analysisFormat";
 import { formatTimestamp } from "../lib/time";
+import { Icon } from "../components/icons";
 import type { Pearl } from "../lib/types";
 import styles from "./AnalysisSections.module.css";
+
+function StarRating({ importance }: { importance: 1 | 2 | 3 }): JSX.Element {
+  return (
+    <span className={styles.stars} aria-label={`Importance ${importance} of 3`}>
+      {starStates(importance).map((filled, i) => (
+        <Icon key={i} name={filled ? "star" : "starOutline"} size={12} />
+      ))}
+    </span>
+  );
+}
 
 export function PearlsSection(): JSX.Element | null {
   const analysis = useStudyLoopStore((s) => s.analysis);
@@ -35,9 +46,7 @@ export function PearlsSection(): JSX.Element | null {
         {pearls.map((pearl: Pearl, i) => (
           <li key={`${pearl.t}-${pearl.label}`} className={styles.pearlRow} onClick={() => toggle(i)}>
             <div className={styles.pearlHead}>
-              <span className={styles.stars} aria-label={`Importance ${pearl.importance} of 3`}>
-                {importanceStars(pearl.importance)}
-              </span>
+              <StarRating importance={pearl.importance} />
               <button
                 type="button"
                 className={styles.timeChip}
@@ -132,7 +141,7 @@ export function OthersAnalysisSection(): JSX.Element | null {
                 {sortPearls(overlay.bundle.pearls).map((pearl) => (
                   <li key={`${pearl.t}-${pearl.label}`} className={styles.pearlRow}>
                     <div className={styles.pearlHead}>
-                      <span className={styles.stars}>{importanceStars(pearl.importance)}</span>
+                      <StarRating importance={pearl.importance} />
                       <button type="button" className={styles.timeChip} onClick={() => controller?.seek(Math.max(0, pearl.t - 5))}>
                         {formatTimestamp(pearl.t)}
                       </button>

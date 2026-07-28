@@ -1,12 +1,13 @@
 // YouTube-style control cluster, rendered inside PlayerChrome's hover scrim (SPEC
-// V2 "Player chrome": "left group ▶/⏸, volume, time … right cluster: ✎ Note ·
-// 📷 Shot · ✨ Analyze · CC · ⚙(speed/loop) · ⛶ fullscreen"). Play/pause, volume,
+// V2 "Player chrome": "left group play/pause, volume, time … right cluster: note ·
+// shot · analyze · CC · settings(speed/loop) · fullscreen"). Play/pause, volume,
 // and the settings (speed + A/B loop) menu live here; the progress bar itself is
 // SeekBar, rendered by PlayerChrome above this row.
 import { useEffect, useRef, useState } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { clampRate } from "../state/store";
 import { formatTimestamp } from "../lib/time";
+import { Icon } from "../components/icons";
 import styles from "./PlayerControls.module.css";
 
 const RATE_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5];
@@ -40,6 +41,7 @@ export function PlayerControls({ isFullscreen, onToggleFullscreen, onMenuOpenCha
   const confirmReanalyze = useStudyLoopStore((s) => s.confirmReanalyze);
 
   const [menuOpen, setMenuOpenState] = useState(false);
+  const [volumeActive, setVolumeActive] = useState(false);
   const menuWrapRef = useRef<HTMLDivElement | null>(null);
 
   const setMenuOpen = (open: boolean): void => {
@@ -83,6 +85,7 @@ export function PlayerControls({ isFullscreen, onToggleFullscreen, onMenuOpenCha
 
   const muted = volume === 0;
   const toggleMute = (): void => controller?.setVolume(muted ? 1 : 0);
+  const analyzing = analyzeStatus.state === "running";
 
   return (
     <div className={styles.controls}>
@@ -93,23 +96,40 @@ export function PlayerControls({ isFullscreen, onToggleFullscreen, onMenuOpenCha
         disabled={!controller}
         aria-label={isPlaying ? "Pause" : "Play"}
       >
-        {isPlaying ? "⏸" : "▶"}
+        <Icon name={isPlaying ? "pause" : "play"} />
       </button>
 
-      <button type="button" className={styles.iconButton} onClick={toggleMute} disabled={!controller} aria-label={muted ? "Unmute" : "Mute"}>
-        {muted ? "🔇" : "🔊"}
-      </button>
-      <input
-        type="range"
-        className={styles.volumeSlider}
-        min={0}
-        max={1}
-        step={0.05}
-        value={volume}
-        disabled={!controller}
-        onChange={(e) => controller?.setVolume(Number(e.target.value))}
-        aria-label="Volume"
-      />
+      <div
+        className={styles.volumeCluster}
+        onMouseEnter={() => setVolumeActive(true)}
+        onMouseLeave={() => setVolumeActive(false)}
+        onFocus={() => setVolumeActive(true)}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setVolumeActive(false);
+        }}
+      >
+        <button
+          type="button"
+          className={styles.iconButton}
+          onClick={toggleMute}
+          disabled={!controller}
+          aria-label={muted ? "Unmute" : "Mute"}
+        >
+          <Icon name={muted ? "volumeOff" : "volumeHigh"} />
+        </button>
+        <input
+          type="range"
+          className={styles.volumeSlider}
+          data-active={volumeActive}
+          min={0}
+          max={1}
+          step={0.05}
+          value={volume}
+          disabled={!controller}
+          onChange={(e) => controller?.setVolume(Number(e.target.value))}
+          aria-label="Volume"
+        />
+      </div>
 
       <span className={styles.time}>
         {formatTimestamp(currentTime)} / {formatTimestamp(duration)}
@@ -119,58 +139,67 @@ export function PlayerControls({ isFullscreen, onToggleFullscreen, onMenuOpenCha
 
       {loopA != null && (
         <button type="button" className={styles.loopBadge} onClick={clearLoop} title="Clear A/B loop">
-          Loop {formatTimestamp(loopA)}
-          {loopB != null ? `–${formatTimestamp(loopB)}` : "–…"} ✕
+          <span>
+            Loop {formatTimestamp(loopA)}
+            {loopB != null ? `–${formatTimestamp(loopB)}` : "–…"}
+          </span>
+          <Icon name="close" size={14} />
         </button>
       )}
 
-      <button type="button" className={styles.iconButton} onClick={openNotation} disabled={!controller} title="Add notation (N)">
-        ✎
+      <button
+        type="button"
+        className={styles.iconButton}
+        onClick={openNotation}
+        disabled={!controller}
+        aria-label="Add notation"
+        title="Add notation (N)"
+      >
+        <Icon name="editNote" />
       </button>
       <button
         type="button"
         className={styles.iconButton}
         onClick={() => void captureScreenshotOnly()}
         disabled={!controller || ffmpegMissing}
+        aria-label="Screenshot"
         title={ffmpegMissing ? "ffmpeg not found on PATH — screenshots are disabled" : "Screenshot (S)"}
       >
-        📷
+        <Icon name="camera" />
       </button>
       <button
         type="button"
-        className={styles.iconButton}
+        className={`${styles.iconButton} ${analyzing ? styles.iconButtonBusy : ""}`}
         onClick={() => (analysis ? confirmReanalyze() : void startAnalyze())}
-        disabled={analyzeStatus.state === "running"}
-        title={
-          analyzeStatus.state === "running"
-            ? `Analyzing… ${analyzeStatus.pct}%`
-            : analysis
-              ? "Re-analyze"
-              : "Analyze"
-        }
+        disabled={analyzing}
+        aria-label={analyzing ? `Analyzing, ${analyzeStatus.pct}% complete` : analysis ? "Re-analyze" : "Analyze"}
+        aria-busy={analyzing}
+        title={analyzing ? `Analyzing… ${analyzeStatus.pct}%` : analysis ? "Re-analyze" : "Analyze"}
       >
-        ✨
+        <Icon name="autoAwesome" />
       </button>
       <button
         type="button"
         className={`${styles.iconButton} ${ccEnabled ? styles.iconButtonActive : ""}`}
         onClick={toggleCcEnabled}
+        aria-label="Toggle captions"
         title="Toggle captions (C)"
         aria-pressed={ccEnabled}
       >
-        CC
+        <Icon name="closedCaption" />
       </button>
 
       <div className={styles.menuWrap} ref={menuWrapRef}>
         <button
           type="button"
-          className={styles.iconButton}
+          className={`${styles.iconButton} ${menuOpen ? styles.iconButtonActive : ""}`}
           onClick={() => setMenuOpen(!menuOpen)}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
+          aria-label="Playback settings"
           title="Settings"
         >
-          ⚙
+          <Icon name="settings" />
         </button>
         {menuOpen && (
           <div className={styles.settingsMenu} role="menu">
@@ -180,6 +209,8 @@ export function PlayerControls({ isFullscreen, onToggleFullscreen, onMenuOpenCha
                 <button
                   key={r}
                   type="button"
+                  role="menuitemradio"
+                  aria-checked={r === playbackRate}
                   className={`${styles.rateOption} ${r === playbackRate ? styles.rateOptionActive : ""}`}
                   onClick={() => changeRate(r)}
                 >
@@ -220,10 +251,11 @@ export function PlayerControls({ isFullscreen, onToggleFullscreen, onMenuOpenCha
         type="button"
         className={styles.iconButton}
         onClick={onToggleFullscreen}
+        aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
         title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
         aria-pressed={isFullscreen}
       >
-        {isFullscreen ? "⛶" : "⛶"}
+        <Icon name={isFullscreen ? "fullscreenExit" : "fullscreen"} />
       </button>
     </div>
   );

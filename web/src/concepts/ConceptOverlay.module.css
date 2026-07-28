@@ -1,24 +1,30 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--surface-scrim);
   display: flex;
   justify-content: flex-end;
   z-index: 100;
+  animation: backdrop-in var(--duration-standard) var(--ease-enter) both;
+}
+
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .panel {
   width: min(420px, 90vw);
   height: 100%;
-  background: var(--bg-elevated);
-  border-left: 1px solid var(--border);
+  background: var(--surface-overlay);
+  border-left: 1px solid var(--border-hairline);
   display: flex;
   flex-direction: column;
-  animation: slideIn 180ms ease-out;
-  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
+  animation: panel-in var(--duration-panel) var(--ease-standard);
+  box-shadow: var(--shadow-3);
 }
 
-@keyframes slideIn {
+@keyframes panel-in {
   from {
     transform: translateX(100%);
   }
@@ -33,30 +39,43 @@
   justify-content: space-between;
   gap: 12px;
   padding: 16px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-hairline);
   flex-shrink: 0;
 }
 
 .title {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--type-16);
+  font-weight: var(--weight-bold);
   margin: 0;
-  color: var(--text);
+  color: var(--text-primary);
+  text-wrap: pretty;
 }
 
 .close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-dim);
-  border-radius: 6px;
-  padding: 4px 8px;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-secondary);
   cursor: pointer;
   flex-shrink: 0;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
 }
 
 .close:hover {
-  color: var(--text);
-  background: var(--bg-hover);
+  color: var(--text-primary);
+  background: var(--hover-overlay);
+}
+
+.close:active {
+  transform: scale(.94);
 }
 
 .body {
@@ -69,31 +88,34 @@
 .h2,
 .h3,
 .h4 {
-  color: var(--text);
+  color: var(--text-primary);
   margin: 16px 0 6px;
 }
 
 .h2 {
-  font-size: 15px;
+  font-size: var(--type-16);
+  font-weight: var(--weight-bold);
 }
 
 .h3 {
-  font-size: 14px;
+  font-size: var(--type-14);
+  font-weight: var(--weight-medium);
 }
 
 .h4 {
-  font-size: 13px;
-  color: var(--text-dim);
+  font-size: var(--type-13);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
 }
 
 .paragraph {
-  font-size: 13px;
+  font-size: var(--type-13);
   line-height: 1.6;
-  color: var(--text);
+  color: var(--text-primary);
   margin: 0 0 10px;
 }
 
 .empty {
-  color: var(--text-dim);
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--type-13);
 }

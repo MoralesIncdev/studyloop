@@ -1,29 +1,32 @@
 .doc {
-  font-size: 13px;
+  font-size: var(--type-13);
   line-height: 1.5;
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .h1 {
-  font-size: 18px;
+  font-size: var(--type-18);
+  font-weight: var(--weight-bold);
   margin: 0 0 10px;
 }
 
 .h2 {
-  font-size: 15px;
+  font-size: var(--type-16);
+  font-weight: var(--weight-bold);
   margin: 18px 0 8px;
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .h3 {
-  font-size: 13px;
+  font-size: var(--type-13);
+  font-weight: var(--weight-medium);
   margin: 14px 0 6px;
-  color: var(--text-dim);
+  color: var(--text-secondary);
 }
 
 .hr {
   border: none;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-hairline);
   margin: 14px 0;
 }
 
@@ -44,21 +47,27 @@
 .image {
   display: block;
   max-width: 220px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   margin-top: 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-hairline);
+  box-shadow: var(--shadow-1);
 }
 
 .link {
-  color: var(--accent);
+  color: var(--accent-blue);
 }
 
 .seekLink {
   background: transparent;
   border: none;
-  color: var(--accent);
+  color: var(--accent-blue);
   cursor: pointer;
   font: inherit;
   padding: 0;
   text-decoration: underline;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.seekLink:hover {
+  color: color-mix(in srgb, var(--accent-blue) 80%, white);
 }

@@ -9,11 +9,19 @@
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 40px 8px 0;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.55) 55%, transparent 100%);
+  padding: 72px 12px 0;
+  background: linear-gradient(
+    to top,
+    rgb(0 0 0 / 92%) 0,
+    rgb(0 0 0 / 68%) 38%,
+    rgb(0 0 0 / 24%) 72%,
+    transparent 100%
+  );
   opacity: 0;
   transform: translateY(4px);
-  transition: opacity 160ms ease, transform 160ms ease;
+  transition:
+    opacity var(--duration-standard) var(--ease-standard),
+    transform var(--duration-standard) var(--ease-standard);
   pointer-events: none;
 }
 

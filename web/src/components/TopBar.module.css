@@ -7,8 +7,8 @@
   align-items: center;
   gap: 16px;
   padding: 0 16px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-bg);
+  border-bottom: 1px solid var(--border-hairline);
 }
 
 .wordmark {
@@ -17,17 +17,23 @@
   gap: 8px;
   background: transparent;
   border: none;
-  color: var(--text);
+  color: var(--text-primary);
   cursor: pointer;
   padding: 6px 4px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.wordmark:hover {
+  background: var(--hover-overlay);
 }
 
 .logoMark {
   width: 30px;
   height: 30px;
-  border-radius: 8px;
-  background: var(--red);
+  border-radius: var(--radius-sm);
+  background: var(--accent-red);
   color: #fff;
   display: flex;
   align-items: center;
@@ -36,8 +42,8 @@
 }
 
 .logoText {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: var(--type-18);
+  font-weight: var(--weight-bold);
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
@@ -59,33 +65,49 @@
 .searchInput {
   flex: 1;
   min-width: 0;
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--surface-bg);
+  border: 1px solid var(--border-default);
   border-right: none;
-  color: var(--text);
+  color: var(--text-primary);
   border-radius: var(--radius-pill) 0 0 var(--radius-pill);
   padding: 8px 16px;
-  font-size: 14px;
+  font-size: var(--type-14);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.searchInput:hover {
+  border-color: var(--border-strong);
 }
 
 .searchInput:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--accent-blue);
+}
+
+.searchInput::placeholder {
+  color: var(--text-tertiary);
 }
 
 .searchButton {
   flex-shrink: 0;
   width: 56px;
-  background: var(--bg-chip);
-  border: 1px solid var(--border);
-  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-popover);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
   border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
   cursor: pointer;
-  font-size: 14px;
+  transition: background-color var(--duration-fast) var(--ease-standard);
 }
 
 .searchButton:hover {
-  background: var(--bg-hover);
+  background: var(--surface-hover);
+}
+
+.searchButton:active {
+  transform: scale(.96);
 }
 
 .dropdown {
@@ -94,34 +116,40 @@
   left: 50%;
   transform: translateX(-50%);
   width: min(560px, 90vw);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  background: var(--surface-popover);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-3);
   padding: 8px 0;
   max-height: 60vh;
   overflow-y: auto;
+  animation: dropdown-in var(--duration-fast) var(--ease-enter) both;
+}
+
+@keyframes dropdown-in {
+  from { opacity: 0; transform: translate(-50%, -4px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
 }
 
 .dropdownSection + .dropdownSection {
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--border-hairline);
   margin-top: 6px;
   padding-top: 6px;
 }
 
 .dropdownLabel {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--type-11);
+  font-weight: var(--weight-medium);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-dim);
+  letter-spacing: .06em;
+  color: var(--text-tertiary);
   padding: 6px 16px;
 }
 
 .dropdownEmpty {
   padding: 8px 16px 12px;
-  font-size: 13px;
-  color: var(--text-dim);
+  font-size: var(--type-13);
+  color: var(--text-secondary);
 }
 
 .dropdownItem {
@@ -131,15 +159,16 @@
   width: 100%;
   background: transparent;
   border: none;
-  color: var(--text);
+  color: var(--text-primary);
   text-align: left;
   padding: 8px 16px;
   cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
 }
 
 .dropdownItem:hover:not(:disabled),
 .dropdownItemActive {
-  background: var(--bg-hover);
+  background: var(--hover-overlay);
 }
 
 .dropdownItem:disabled {
@@ -150,13 +179,13 @@
 .dropdownItemThumb {
   width: 44px;
   height: 25px;
-  border-radius: 4px;
-  background: var(--bg-chip);
+  border-radius: var(--radius-xs);
+  background: var(--surface-raised);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 11px;
+  color: var(--text-secondary);
   overflow: hidden;
 }
 
@@ -174,15 +203,15 @@
 }
 
 .dropdownItemTitle {
-  font-size: 13px;
+  font-size: var(--type-13);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .dropdownItemMeta {
-  font-size: 11px;
-  color: var(--text-dim);
+  font-size: var(--type-11);
+  color: var(--text-secondary);
 }
 
 .menuWrap {
@@ -194,18 +223,24 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: var(--bg-chip);
-  border: 1px solid var(--border);
-  color: var(--text);
+  background: var(--surface-popover);
+  border: 1px solid var(--border-hairline);
+  color: var(--text-primary);
   cursor: pointer;
-  font-size: 15px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
 }
 
 .avatarButton:hover {
-  background: var(--bg-hover);
+  background: var(--surface-hover);
+}
+
+.avatarButton:active {
+  transform: scale(.94);
 }
 
 .menu {
@@ -213,14 +248,15 @@
   top: calc(100% + 8px);
   right: 0;
   min-width: 180px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  background: var(--surface-popover);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-3);
   padding: 6px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  animation: dropdown-in var(--duration-fast) var(--ease-enter) both;
 }
 
 .menuItem {
@@ -229,14 +265,15 @@
   gap: 10px;
   background: transparent;
   border: none;
-  color: var(--text);
+  color: var(--text-primary);
   text-align: left;
   padding: 10px 12px;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--radius-sm);
+  font-size: var(--type-13);
   cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
 }
 
 .menuItem:hover {
-  background: var(--bg-hover);
+  background: var(--hover-overlay);
 }

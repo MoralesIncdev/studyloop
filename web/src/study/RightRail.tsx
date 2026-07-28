@@ -8,6 +8,7 @@ import { TranscriptPane } from "../transcript/TranscriptPane";
 import { ConceptsDock } from "../concepts/ConceptsDock";
 import { PearlsSection, AiBreakdownSection, ThemesSection, OthersAnalysisSection } from "../concepts/AnalysisSections";
 import { formatTimestamp } from "../lib/time";
+import { Icon } from "../components/icons";
 import type { RelatedVideo, TranscriptSegment } from "../lib/types";
 import styles from "./RightRail.module.css";
 
@@ -40,11 +41,17 @@ function RailCard({
           aria-expanded={expanded}
         >
           <span className={styles.cardTitle}>{title}</span>
-          <span className={styles.chevron}>{expanded ? "▲" : "▼"}</span>
+          <span className={styles.chevron} data-open={expanded}>
+            <Icon name="chevronDown" size={16} />
+          </span>
         </button>
         {headerAction}
       </div>
-      {expanded && <div className={styles.cardBody}>{children}</div>}
+      <div className={styles.expandRegion} data-open={expanded}>
+        <div className={styles.expandInner}>
+          <div className={styles.cardBody}>{children}</div>
+        </div>
+      </div>
     </section>
   );
 }
@@ -57,7 +64,7 @@ function UpNextCard({ video, onOpen, opening }: { video: RelatedVideo; onOpen: (
           <img src={video.thumbnailUrl} alt="" className={styles.upNextThumbImg} loading="lazy" />
         ) : (
           <span className={styles.upNextThumbGlyph} aria-hidden="true">
-            ▶
+            <Icon name="play" size={22} />
           </span>
         )}
         {video.durationSeconds != null && (
@@ -121,13 +128,13 @@ function UpNextCabinet(): JSX.Element | null {
         </div>
         <button
           type="button"
-          className={styles.tickerMuteButton}
+          className={`${styles.tickerMuteButton} ${refreshing ? styles.spinning : ""}`}
           onClick={() => void handleRefresh()}
           disabled={refreshing}
           title="Refresh related videos"
           aria-label="Refresh related videos"
         >
-          {refreshing ? "…" : "⟳"}
+          <Icon name="refresh" size={16} />
         </button>
       </div>
       {related.length === 0 ? (
@@ -175,9 +182,10 @@ export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
               setConceptTickerMuted(!conceptTickerMuted);
             }}
             title={conceptTickerMuted ? "Unmute concept pop-ups" : "Mute concept pop-ups"}
+            aria-label={conceptTickerMuted ? "Unmute concept pop-ups" : "Mute concept pop-ups"}
             aria-pressed={conceptTickerMuted}
           >
-            {conceptTickerMuted ? "🔕" : "🔔"}
+            <Icon name={conceptTickerMuted ? "notificationsOff" : "notifications"} size={16} />
           </button>
         }
       >

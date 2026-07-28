@@ -20,8 +20,11 @@ export function sortPearls(pearls: readonly Pearl[]): Pearl[] {
   return [...pearls].sort((a, b) => b.importance - a.importance || a.t - b.t);
 }
 
-export function importanceStars(importance: 1 | 2 | 3): string {
-  return "★".repeat(importance) + "☆".repeat(3 - importance);
+/** Three-slot filled/outline star state for a pearl's importance rating —
+ * rendered as `Icon name="star"|"starOutline"` by the caller (no glyph
+ * characters; see components/icons.tsx). */
+export function starStates(importance: 1 | 2 | 3): boolean[] {
+  return [1, 2, 3].map((n) => n <= importance);
 }
 
 /**

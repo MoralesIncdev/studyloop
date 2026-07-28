@@ -9,6 +9,7 @@ import { useStudyLoopStore } from "../state/store";
 import { getUncaptionedBubbles } from "../lib/compileFlow";
 import { api } from "../lib/api";
 import { formatTimestamp } from "../lib/time";
+import { Icon } from "../components/icons";
 import { MarkdownPreview } from "./MarkdownPreview";
 import styles from "./CompileFlow.module.css";
 
@@ -75,14 +76,20 @@ export function CompileFlow(): JSX.Element | null {
 
   return (
     <>
-      <button type="button" className={styles.compileButton} onClick={handleCompileClick} disabled={compiling}>
-        🔖 {compiling ? "Compiling…" : "Compile"}
+      <button type="button" className={styles.compileButton} data-ripple onClick={handleCompileClick} disabled={compiling} aria-busy={compiling}>
+        <Icon name="bookmark" size={16} />
+        {compiling ? "Compiling…" : "Compile"}
       </button>
 
       {captionPassBubbles && (
-        <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Caption these shots?">
-          <div className={styles.card}>
-            <h2 className={styles.cardTitle}>Caption these before compiling?</h2>
+        <div className={styles.overlay} data-state="open" role="presentation" onMouseDown={() => !savingCaptions && handleCaptionSkip()}>
+          <div className={styles.card} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Caption these shots?">
+            <header className={styles.header}>
+              <h2 className={styles.cardTitle}>Caption these before compiling?</h2>
+              <button type="button" className={styles.closeButton} onClick={handleCaptionSkip} aria-label="Skip and close" disabled={savingCaptions}>
+                <Icon name="close" size={18} />
+              </button>
+            </header>
             <p className={styles.cardSub}>
               {captionRows.length} screenshot{captionRows.length === 1 ? "" : "s"} {captionRows.length === 1 ? "has" : "have"} no
               caption yet. Add a quick note or skip — compile works either way.
@@ -119,7 +126,8 @@ export function CompileFlow(): JSX.Element | null {
               <button type="button" className={styles.secondaryButton} onClick={handleCaptionSkip} disabled={savingCaptions}>
                 Skip
               </button>
-              <button type="button" className={styles.primaryButton} onClick={() => void handleCaptionSave()} disabled={savingCaptions}>
+              <button type="button" className={styles.primaryButton} onClick={() => void handleCaptionSave()} disabled={savingCaptions} aria-busy={savingCaptions}>
+                {savingCaptions && <span className={styles.buttonSpinner} aria-hidden="true" />}
                 {savingCaptions ? "Saving…" : "Save & compile"}
               </button>
             </div>
@@ -128,15 +136,20 @@ export function CompileFlow(): JSX.Element | null {
       )}
 
       {compileResult && (
-        <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Compiled study document">
-          <div className={styles.previewCard}>
+        <div className={styles.overlay} data-state="open" role="presentation" onMouseDown={clearCompileResult}>
+          <div className={styles.previewCard} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Compiled study document">
             <div className={styles.previewHeader}>
               <h2 className={styles.cardTitle}>Compiled study document</h2>
               <button type="button" className={styles.closeButton} onClick={clearCompileResult} aria-label="Close">
-                ✕
+                <Icon name="close" size={18} />
               </button>
             </div>
-            <div className={styles.previewPath}>{compileResult.path}</div>
+            <div className={styles.previewPathRow}>
+              <span className={styles.previewPath}>{compileResult.path}</span>
+              <button type="button" className={styles.copyIconButton} onClick={() => void handleCopy()} aria-label="Copy markdown" title="Copy markdown">
+                <Icon name="copy" size={14} />
+              </button>
+            </div>
             <div className={styles.previewBody}>
               <MarkdownPreview
                 markdown={compileResult.markdown}

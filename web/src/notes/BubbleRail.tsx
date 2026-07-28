@@ -1,11 +1,12 @@
 // F4/F5 BubbleRail: chronological list of captured bubbles (notation + screenshot-
 // only) for the open project. Click the time chip or the thumbnail to seek t-5s,
 // click the text to edit inline (PATCH on blur), delete with confirm, or push a
-// bubble into the long-running notes with "-> Notes".
+// bubble into the long-running notes with the "Add to notes" action.
 import { useState } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { api } from "../lib/api";
 import { formatTimestamp } from "../lib/time";
+import { Icon } from "../components/icons";
 import type { Bubble } from "../lib/types";
 import styles from "./BubbleRail.module.css";
 
@@ -22,6 +23,7 @@ export function BubbleRail(): JSX.Element {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   const seekTo = (t: number): void => controller?.seek(Math.max(0, t - SEEK_BACK_SECONDS));
 
@@ -37,7 +39,8 @@ export function BubbleRail(): JSX.Element {
 
   const handleDelete = (bubble: Bubble): void => {
     if (!window.confirm(`Delete the capture at ${formatTimestamp(bubble.t)}?`)) return;
-    void deleteBubble(bubble.id);
+    setRemovingId(bubble.id);
+    window.setTimeout(() => void deleteBubble(bubble.id), 180);
   };
 
   if (bubblesLoading && bubbles.length === 0) {
@@ -53,7 +56,7 @@ export function BubbleRail(): JSX.Element {
         const noCaption = !bubble.text && !!bubble.shot;
         const isEditing = editingId === bubble.id;
         return (
-          <li key={bubble.id} className={styles.item}>
+          <li key={bubble.id} className={styles.item} data-removing={removingId === bubble.id}>
             <button
               type="button"
               className={styles.thumb}
@@ -91,13 +94,20 @@ export function BubbleRail(): JSX.Element {
               <button
                 type="button"
                 className={styles.iconButton}
-                title="Append to notes"
+                title="Add to notes"
+                aria-label="Add to notes"
                 onClick={() => void appendBubbleToNotes(bubble.id)}
               >
-                → Notes
+                <Icon name="noteAdd" size={18} />
               </button>
-              <button type="button" className={styles.deleteButton} title="Delete capture" onClick={() => handleDelete(bubble)}>
-                ✕
+              <button
+                type="button"
+                className={styles.deleteButton}
+                title="Delete capture"
+                aria-label="Delete capture"
+                onClick={() => handleDelete(bubble)}
+              >
+                <Icon name="delete" size={18} />
               </button>
             </div>
           </li>

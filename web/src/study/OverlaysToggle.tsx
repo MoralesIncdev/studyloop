@@ -1,11 +1,12 @@
-// V2-C "Overlays" (SPEC): the 👁 action pill toggles a second marker layer
-// for every imported overlay bundle — this file owns the pill itself plus
-// the legend chip row rendered above the dock when overlays are visible
+// V2-C "Overlays" (SPEC): the visibility action pill toggles a second marker
+// layer for every imported overlay bundle — this file owns the pill itself
+// plus the legend chip row rendered above the dock when overlays are visible
 // (SPEC: "legend chips above the dock"). SeekBar/PlayerChrome consume
 // `overlaysVisible` + `overlays` directly to render the marker layer itself.
 import { useEffect } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { hashHueForHandle } from "../lib/analysisFormat";
+import { Icon } from "../components/icons";
 import styles from "./OverlaysToggle.module.css";
 import compileStyles from "./CompileFlow.module.css";
 
@@ -34,7 +35,8 @@ export function OverlaysPill(): JSX.Element | null {
       title={overlays.length === 0 ? "No imported analyses yet — use Import to add one" : "Toggle others' imported analysis markers"}
       aria-pressed={overlaysVisible}
     >
-      👁 Overlays{overlays.length > 0 ? ` (${overlays.length})` : ""}
+      <Icon name={overlaysVisible ? "visibility" : "visibilityOff"} size={16} />
+      Overlays{overlays.length > 0 ? ` (${overlays.length})` : ""}
     </button>
   );
 }
@@ -59,7 +61,7 @@ export function OverlayLegend(): JSX.Element | null {
             aria-label={`Remove ${o.bundle.shareHandle}'s overlay`}
             title="Remove"
           >
-            ✕
+            <Icon name="close" size={12} />
           </button>
         </span>
       ))}

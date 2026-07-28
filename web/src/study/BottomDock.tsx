@@ -18,11 +18,13 @@ export function BottomDock(): JSX.Element {
 
   return (
     <div className={styles.dock}>
-      <div className={styles.tabBar}>
+      <div className={styles.tabBar} role="tablist">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
+            role="tab"
+            aria-selected={activeDockTab === tab.id}
             className={`${styles.tab} ${activeDockTab === tab.id ? styles.tabActive : ""}`}
             onClick={() => setActiveDockTab(tab.id)}
           >

@@ -166,7 +166,7 @@ export function StudyView({ projectId }: Props): JSX.Element {
             {startAt !== undefined && currentProject.source.type === "youtube" && (
               <YouTubePlayer key={currentProject.id} videoId={currentProject.source.videoId} startAt={startAt} />
             )}
-            {startAt !== undefined && <ConceptTicker />}
+            {startAt !== undefined && <ConceptTicker chromeVisible={chromeHovering} />}
             {startAt !== undefined && <CCOverlay chromeVisible={chromeHovering} />}
             {startAt !== undefined && <PlayerChrome frameRef={frameRef} onVisibleChange={setChromeHovering} />}
           </div>

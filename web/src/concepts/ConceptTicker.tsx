@@ -31,7 +31,14 @@ interface Entry {
   card: ConceptCardType;
 }
 
-export function ConceptTicker(): JSX.Element {
+interface Props {
+  /** True while the player chrome scrim is visible — the ticker shifts its
+   *  bottom offset up so it never sits under the control cluster (codex §5
+   *  "Ticker must sit above player controls only when chrome is hidden"). */
+  chromeVisible?: boolean;
+}
+
+export function ConceptTicker({ chromeVisible = false }: Props): JSX.Element {
   const concepts = useStudyLoopStore((s) => s.concepts);
   const analysis = useStudyLoopStore((s) => s.analysis);
   const currentTime = useStudyLoopStore((s) => s.currentTime);
@@ -92,7 +99,7 @@ export function ConceptTicker(): JSX.Element {
   return (
     <>
       {!muted && entries.length > 0 && (
-        <div className={styles.stack}>
+        <div className={styles.stack} data-chrome-visible={chromeVisible}>
           {visible.map((entry) => (
             <ConceptCard
               key={entry.key}

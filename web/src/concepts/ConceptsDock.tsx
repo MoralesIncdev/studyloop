@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { activeConcepts, passedConcepts } from "../lib/selectors";
 import { formatTimestamp } from "../lib/time";
+import { Icon } from "../components/icons";
 import type { ConceptCard } from "../lib/types";
 import styles from "./ConceptsDock.module.css";
 
@@ -166,8 +167,8 @@ export function ConceptsDock(): JSX.Element {
                   </button>
                   <span className={styles.itemTitle}>{row.card.title}</span>
                   {coveredIds.has(row.card.id) && (
-                    <span className={styles.covered} title="Covered">
-                      ✓
+                    <span className={styles.covered} title="Covered" aria-label="Covered">
+                      <Icon name="check" size={14} />
                     </span>
                   )}
                 </li>
@@ -182,8 +183,8 @@ export function ConceptsDock(): JSX.Element {
                   <li key={card.id} className={`${styles.item} ${activeIds.has(card.id) ? styles.itemActive : ""}`}>
                     <span className={styles.itemTitle}>{card.title}</span>
                     {coveredIds.has(card.id) && (
-                      <span className={styles.covered} title="Covered">
-                        ✓
+                      <span className={styles.covered} title="Covered" aria-label="Covered">
+                        <Icon name="check" size={14} />
                       </span>
                     )}
                   </li>

@@ -214,3 +214,10 @@ file's path is still shown in the preview modal so you can navigate to it manual
 ## License
 
 MIT — see [LICENSE](./LICENSE).
+
+### Icon attribution
+
+The UI's inline SVG icon set (`web/src/components/icons.tsx`) is a small,
+hand-maintained collection of Material Symbols/Material Icons-style path data
+(Google, Apache License 2.0), vendored directly as path strings — no icon
+font, sprite sheet, or CDN dependency at runtime.

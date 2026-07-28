@@ -1,8 +1,9 @@
 // F7 concept ticker: the compact card that slides in over the video's bottom-left
 // when a concept becomes active. Auto-dismisses itself after 12s (per SPEC);
-// clicking the body (not the ✕) expands the full card in a side overlay.
+// clicking the body (not the close button) expands the full card in a side overlay.
 import { useEffect } from "react";
 import { firstBodyLine } from "../lib/conceptFormat";
+import { Icon } from "../components/icons";
 import type { ConceptCard as ConceptCardType } from "../lib/types";
 import styles from "./ConceptCard.module.css";
 
@@ -29,9 +30,13 @@ export function ConceptCard({ card, onDismiss, onExpand }: Props): JSX.Element {
   return (
     <div className={styles.card}>
       <button type="button" className={styles.dismiss} onClick={onDismiss} aria-label={`Dismiss ${card.title}`} title="Dismiss">
-        ✕
+        <Icon name="close" size={20} />
       </button>
       <button type="button" className={styles.body} onClick={onExpand}>
+        <span className={styles.metaRow}>
+          <span className={styles.dot} aria-hidden="true" />
+          <span className={styles.metaLabel}>Concept</span>
+        </span>
         <span className={styles.title}>{card.title}</span>
         {preview && <span className={styles.preview}>{preview}</span>}
       </button>

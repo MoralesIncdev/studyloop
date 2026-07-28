@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { formatTimestamp } from "../lib/time";
+import { Icon } from "../components/icons";
 import type { LibraryItem } from "../lib/types";
 import styles from "./LibraryView.module.css";
 
@@ -66,7 +67,7 @@ function YoutubeBar(): JSX.Element {
   return (
     <form className={styles.youtubeBar} onSubmit={handleSubmit}>
       <span className={styles.youtubeBarIcon} aria-hidden="true">
-        ▶
+        <Icon name="play" size={16} />
       </span>
       <input
         type="url"
@@ -88,7 +89,7 @@ function VideoCard({ item, onOpen, opening }: { item: LibraryItem; onOpen: () =>
     <button type="button" className={styles.card} onClick={onOpen} disabled={opening}>
       <div className={styles.thumb}>
         <span className={styles.thumbGlyph} aria-hidden="true">
-          🎞
+          <Icon name="video" size={32} />
         </span>
         {item.durationSeconds != null && (
           <span className={styles.durationBadge}>{formatTimestamp(item.durationSeconds)}</span>
@@ -170,6 +171,7 @@ export function LibraryView(): JSX.Element {
 
       {showEmptyState && (
         <div className={styles.emptyCard}>
+          <Icon name="video" size={48} className={styles.emptyIcon} />
           <h2>Let&rsquo;s find your videos</h2>
           <p>
             {hasNoRoots
