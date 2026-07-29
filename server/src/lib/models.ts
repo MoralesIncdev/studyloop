@@ -30,6 +30,16 @@ export const ConceptDocRefSchema = z.object({
 export type ConceptDocRef = z.infer<typeof ConceptDocRefSchema>;
 
 /**
+ * V3-B B1 "Analysis v3 (typed extraction)": the subject-matter domain a
+ * ROUTER call classifies once per analyze run (PEDAGOGY §2 "domain lenses are
+ * prompt modules, not separate engines"). Stored on the project (not just
+ * analysis.json) because it's user-editable independent of re-analyzing —
+ * SPEC: "editable chip near the channel row; PATCH `domain`".
+ */
+export const DomainSchema = z.enum(["biology", "history", "music", "physical_skill", "generic"]);
+export type Domain = z.infer<typeof DomainSchema>;
+
+/**
  * V2-B "Fast YouTube layer": related-video shape returned by both Innertube's
  * watch-next feed and its search results (server/src/lib/innertube.ts). Kept
  * as a zod schema (not just a TS interface) because it's persisted as-is into
@@ -67,6 +77,16 @@ export const ProjectSchema = z.object({
    * Prefills on re-compile; renders as the compiled doc's first section.
    */
   lessonSummary: z.string().optional(),
+  /** V3-B B1: router-classified (then user-editable) subject-matter domain — see DomainSchema. Absent for pre-v3 projects until the next analyze run. */
+  domain: DomainSchema.optional(),
+  /**
+   * V3-B B2 "Attestation + reveal-gating": per-project toggle that flips
+   * proposal-card ordering — off (default): generation prompt first, AI
+   * body revealed after; on ("I'm new to this subject"): worked example
+   * (the AI body) shown first, then a "restate it" prompt (PEDAGOGY §1
+   * expertise-reversal rule).
+   */
+  noviceMode: z.boolean().optional(),
 });
 export type Project = z.infer<typeof ProjectSchema>;
 
@@ -104,6 +124,10 @@ export const PatchProjectBodySchema = z.object({
   transcript: TranscriptRefSchema.optional(),
   /** V3-A: the compile checkpoint's synthesis paragraph — saved on "Save & continue", untouched on "Skip". */
   lessonSummary: z.string().optional(),
+  /** V3-B B1: the editable domain chip near the channel row. */
+  domain: DomainSchema.optional(),
+  /** V3-B B2: the per-project novice-mode toggle. */
+  noviceMode: z.boolean().optional(),
 });
 export type PatchProjectBody = z.infer<typeof PatchProjectBodySchema>;
 

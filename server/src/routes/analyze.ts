@@ -9,12 +9,12 @@ import fs from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getConfig, resolveDataDir, resolveRoots } from "../config.js";
-import { AnalysisSchema, isFakeAnalysisMode, resolveAnalysisClient, runAnalysisJob } from "../lib/analysis.js";
+import { AnalysisSchema, isFakeAnalysisMode, resolveAnalysisClientV3, runAnalysisJobV3 } from "../lib/analysis.js";
 import { AnalysisJobManager, evaluateAnalyzeGuard } from "../lib/analysisJobs.js";
 import { resolveTranscriptPath } from "../lib/transcriptResolve.js";
 import { loadTranscriptFromText, type TranscriptSegment } from "../lib/transcripts.js";
 import { ProjectIdParamSchema } from "../lib/models.js";
-import { analysisJsonPath, pathExists, readJsonIfExists, readProject, writeJsonAtomic } from "../lib/store.js";
+import { analysisJsonPath, pathExists, readJsonIfExists, readProject, withProjectLock, writeJsonAtomic, writeProject } from "../lib/store.js";
 
 const IdParamSchema = ProjectIdParamSchema;
 const AnalyzeBodySchema = z.object({ force: z.boolean().optional() });
@@ -97,8 +97,8 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
     // its own in-memory status as it goes, and writes analysis.json on success.
     void (async () => {
       try {
-        const client = resolveAnalysisClient(config.anthropicApiKey);
-        const analysis = await runAnalysisJob({
+        const client = resolveAnalysisClientV3(config.anthropicApiKey);
+        const analysis = await runAnalysisJobV3({
           segments,
           model,
           client,
@@ -106,6 +106,15 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
           onProgress: (pct) => analysisJobs.progress(projectId, pct),
         });
         await writeJsonAtomic(analysisPath, analysis);
+        // V3-B B1: "domain ... stored on the project (editable chip near the
+        // channel row; PATCH `domain`)" — persisted here so the chip has
+        // something to show without a second round trip, then freely
+        // user-editable afterward via the existing generic PATCH /projects/:id.
+        await withProjectLock(projectId, async () => {
+          const current = await readProject(dataDir, projectId);
+          if (!current) return;
+          await writeProject(dataDir, { ...current, domain: analysis.domain, updatedAt: new Date().toISOString() });
+        });
         analysisJobs.done(projectId);
       } catch (err) {
         analysisJobs.error(projectId, err instanceof Error ? err.message : String(err));
