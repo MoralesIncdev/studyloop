@@ -13,3 +13,4 @@ coverage/
 /projects/
 /review.json
 .claude/
+.gstack/
