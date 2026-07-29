@@ -486,6 +486,19 @@ reps, lastGrade, introducedAt}}}` via the existing atomic-write + a global mutex
 - `POST /api/review/grade` {cardId, grade:"again"|"good"} → updates state,
   returns next queue slice. Zod everywhere; review.json corruption → rebuild empty.
 
+**Implementation notes (deviations from the literal wording above):**
+- review.json's top-level shape gained an optional `streak: {count, lastDay}`
+  field beyond `{version, cards}` — needed to back the UI's "streak line"
+  (below) with something durable. It's bumped once per calendar day the first
+  time a grade is recorded that day; never exposed as a stats page (still
+  respects the non-goal below), just the one summary-line read.
+- Both `GET /api/review/queue` and `POST /api/review/grade` responses add a
+  third field, `streak: {count, lastDay} | null`, alongside `due`/`counts`,
+  for the same reason.
+- `counts.new` = the subset of `due` that have never been graded (`reps === 0
+  && lastGrade === null`) — i.e. cards introduced for the first time this
+  call, as opposed to a previously-graded card that's simply come back due.
+
 ## UI (YouTube-native)
 - **Entry points:** TopBar gains a Review icon-button with a due-count badge
   (YouTube notification-bell placement/look); home page shows a slim "Review —
@@ -499,8 +512,18 @@ reps, lastGrade, introducedAt}}}` via the existing atomic-write + a global mutex
 - **Clip loop:** bubble cards with a local-video source get a "Play 10s clip"
   button on the BACK: inline muted-by-default mini player (existing /api/video/stream
   + range) looping [t−5, t+5] with the existing A-B loop logic; YouTube-source
-  cards fall back to a "Open at timestamp" link into the watch view. Clip is
-  lazy — no video element until pressed.
+  cards fall back to a "Open at timestamp" link into the watch view ("Open at
+  timestamp" is implemented as a PATCH of the target project's `lastPosition`
+  to the card's `t`, then navigating into `#/study/:id` — it reuses the
+  existing resume-prompt flow rather than adding a new seek-via-URL
+  mechanism). Clip is lazy — no video element until pressed.
+
+  Deviation: the loop itself is a small standalone `<video>` element
+  (`ReviewClipPlayer`) with its own `timeupdate`-driven [start, end] loop —
+  not literally LocalVideoPlayer's A-B loop (that's wired into the global
+  zustand store's `controller`/sync-engine, which review mode intentionally
+  never touches, since a review session isn't a study session). Same loop
+  *behavior*, independent implementation.
 - Reduced-motion honored; skeleton while queue loads; empty state when no cards
   exist yet ("Take notes while studying — they come back here for review").
 - Keyboard-first: Space reveal, 1/A again, 2/G got-it, Esc exit.

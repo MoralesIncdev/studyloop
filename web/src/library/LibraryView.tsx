@@ -9,6 +9,7 @@ import { useStudyLoopStore } from "../state/store";
 import { formatTimestamp } from "../lib/time";
 import { Icon } from "../components/icons";
 import { api } from "../lib/api";
+import { ReviewBanner } from "../review/ReviewBanner";
 import type { LibraryItem } from "../lib/types";
 import styles from "./LibraryView.module.css";
 
@@ -164,6 +165,7 @@ export function LibraryView(): JSX.Element {
 
   return (
     <div className={styles.page}>
+      <ReviewBanner />
       <YoutubeBar />
 
       <div className={styles.toolbar}>

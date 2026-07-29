@@ -1,0 +1,48 @@
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
+}
+
+.banner:hover {
+  background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), var(--surface-raised);
+}
+
+.banner:active {
+  transform: scale(.995);
+}
+
+.icon {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--accent-red) 16%, transparent);
+  color: var(--accent-red);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.text {
+  flex: 1;
+  font-size: var(--type-14);
+  font-weight: var(--weight-medium);
+}
+
+.chevron {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}

@@ -39,6 +39,7 @@ export function TopBar(): JSX.Element {
   const openOrCreateLocalProject = useStudyLoopStore((s) => s.openOrCreateLocalProject);
   const openOrCreateYoutubeProject = useStudyLoopStore((s) => s.openOrCreateYoutubeProject);
   const pushToast = useStudyLoopStore((s) => s.pushToast);
+  const reviewDueCount = useStudyLoopStore((s) => s.reviewCounts?.due ?? 0);
 
   const [query, setQuery] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -269,6 +270,21 @@ export function TopBar(): JSX.Element {
           </div>
         )}
       </div>
+
+      <button
+        type="button"
+        className={styles.reviewButton}
+        onClick={() => navigate({ view: "review" })}
+        aria-label={reviewDueCount > 0 ? `Review — ${reviewDueCount} card${reviewDueCount === 1 ? "" : "s"} due` : "Review"}
+        title="Review"
+      >
+        <Icon name="notifications" size={20} />
+        {reviewDueCount > 0 && (
+          <span className={styles.reviewBadge} aria-hidden="true">
+            {reviewDueCount > 99 ? "99+" : reviewDueCount}
+          </span>
+        )}
+      </button>
 
       <div className={styles.menuWrap} ref={menuWrapRef}>
         <button

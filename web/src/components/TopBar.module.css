@@ -225,6 +225,50 @@
   color: var(--text-secondary);
 }
 
+.reviewButton {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
+}
+
+.reviewButton:hover {
+  background: var(--hover-overlay);
+}
+
+.reviewButton:active {
+  background: var(--active-overlay);
+  transform: scale(.94);
+}
+
+.reviewBadge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-red);
+  color: #fff;
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--surface-bg);
+}
+
 .menuWrap {
   position: relative;
   flex-shrink: 0;

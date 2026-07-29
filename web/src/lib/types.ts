@@ -242,3 +242,54 @@ export interface RevealResponse {
   ok: boolean;
   message?: string;
 }
+
+// --- F11: Review Mode (SPEC "F11 — Review Mode (spaced resurfacing)") -----------
+// Mirrors server/src/lib/review.ts's public shapes. Scheduling internals
+// (interval/lapses/reps/due) are deliberately never sent to the client —
+// SRS mechanics stay hidden per SPEC ("no decks, ease factors, or scheduling UI").
+
+export type ReviewGrade = "again" | "good";
+
+interface ReviewCardBase {
+  id: string;
+  projectId: string;
+  projectTitle: string;
+  sourceType: "local" | "youtube";
+  /** Local sources only — builds a video-stream/clip-loop URL without a second round trip. */
+  sourcePath?: string;
+  /** YouTube sources only — builds an "Open at timestamp" link. */
+  sourceVideoId?: string;
+  t: number;
+}
+
+export interface ReviewBubbleCard extends ReviewCardBase {
+  kind: "bubble";
+  text: string;
+  shot: string | null;
+}
+
+export interface ReviewPearlCard extends ReviewCardBase {
+  kind: "pearl";
+  label: string;
+  insight: string;
+  importance: 1 | 2 | 3;
+}
+
+export type ReviewCard = ReviewBubbleCard | ReviewPearlCard;
+
+export interface ReviewQueueCounts {
+  due: number;
+  new: number;
+  total: number;
+}
+
+export interface ReviewStreak {
+  count: number;
+  lastDay: string;
+}
+
+export interface ReviewQueueResponse {
+  due: ReviewCard[];
+  counts: ReviewQueueCounts;
+  streak: ReviewStreak | null;
+}

@@ -15,6 +15,10 @@ import type {
   LibraryItem,
   OverlayMeta,
   Project,
+  ReviewCard,
+  ReviewGrade,
+  ReviewQueueCounts,
+  ReviewStreak,
   ShareBundle,
   StudyLoopConfig,
   StudyLoopConfigPatch,
@@ -113,6 +117,17 @@ export interface NotationModalState {
    * the capture and create an orphaned-shot/empty-shot bubble.
    */
   shotPromise: Promise<{ shot: string | null; error?: string }> | null;
+}
+
+/** F11 client-owned session queue — separate from server scheduling state (which stays hidden).
+ *  "Again" re-queues the card at the back (SPEC: "repeat this session"); "Got it" removes it. */
+export interface ReviewSessionState {
+  cards: ReviewCard[];
+  /** Distinct cards graded "Got it" so far this session — the progress bar's numerator. */
+  clearedCount: number;
+  /** Fixed at session start — the progress bar's denominator. */
+  total: number;
+  revealed: boolean;
 }
 
 const MIN_RATE = 0.5;
@@ -311,6 +326,24 @@ export interface StudyLoopStore {
   shareResult: { path: string; bundle: ShareBundle } | null;
   runExportAnalysis: () => Promise<void>;
   clearShareResult: () => void;
+
+  // --- F11 review mode --------------------------------------------------------------------
+  /** Refreshed on app mount (TopBar badge / home banner) and after every grade — never scheduling internals, just the hidden-mechanics-safe summary. */
+  reviewCounts: ReviewQueueCounts | null;
+  reviewStreak: ReviewStreak | null;
+  reviewSession: ReviewSessionState | null;
+  reviewSessionLoading: boolean;
+  reviewGrading: boolean;
+  /** Lightweight refresh of reviewCounts/reviewStreak only (TopBar badge, home banner) — called on app mount. */
+  loadReviewCounts: () => Promise<void>;
+  /** Full GET /api/review/queue + seeds a client-owned session queue (#/review view). */
+  startReviewSession: () => Promise<void>;
+  revealCurrentReviewCard: () => void;
+  gradeCurrentReviewCard: (grade: ReviewGrade) => Promise<void>;
+  /** Clears session state on leaving the Review view — the next visit starts a fresh session. */
+  exitReviewSession: () => void;
+  /** "Open at timestamp" (SPEC): nudges the project to resume at the card's t, then navigates into the watch view. Best-effort — still navigates even if the PATCH fails. */
+  openReviewCardInStudy: (card: ReviewCard) => Promise<void>;
 
   // --- toasts -----------------------------------------------------------------------
   toasts: Toast[];
@@ -1234,6 +1267,80 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     }
   },
   clearShareResult: () => set({ shareResult: null }),
+
+  // --- F11 review mode --------------------------------------------------------------------
+  reviewCounts: null,
+  reviewStreak: null,
+  reviewSession: null,
+  reviewSessionLoading: false,
+  reviewGrading: false,
+  loadReviewCounts: async () => {
+    try {
+      const res = await api.getReviewQueue();
+      set({ reviewCounts: res.counts, reviewStreak: res.streak });
+    } catch {
+      // Non-critical: the badge/banner just won't show a count. No toast —
+      // this can run on every app mount and shouldn't greet the user with
+      // an error (mirrors loadHealth's reasoning).
+    }
+  },
+  startReviewSession: async () => {
+    set({ reviewSessionLoading: true, reviewSession: null });
+    try {
+      const res = await api.getReviewQueue();
+      set({
+        reviewSessionLoading: false,
+        reviewCounts: res.counts,
+        reviewStreak: res.streak,
+        reviewSession: { cards: res.due, clearedCount: 0, total: res.due.length, revealed: false },
+      });
+    } catch (err) {
+      set({ reviewSessionLoading: false });
+      get().pushToast(`Could not load review queue: ${errorMessage(err)}`, "error");
+    }
+  },
+  revealCurrentReviewCard: () =>
+    set((state) => (state.reviewSession ? { reviewSession: { ...state.reviewSession, revealed: true } } : {})),
+  gradeCurrentReviewCard: async (grade) => {
+    const session = get().reviewSession;
+    if (!session || session.cards.length === 0 || get().reviewGrading) return;
+    const current = session.cards[0];
+    set({ reviewGrading: true });
+    try {
+      const res = await api.gradeReviewCard(current.id, grade);
+      set((state) => {
+        if (!state.reviewSession) {
+          return { reviewGrading: false, reviewCounts: res.counts, reviewStreak: res.streak };
+        }
+        const [, ...rest] = state.reviewSession.cards;
+        // "Again" resurfaces the card later this same session (hidden
+        // mechanics: interval resets to 0 server-side, but the *ordering*
+        // within a session is a client-side concern); "Got it" clears it.
+        const nextCards = grade === "again" ? [...rest, current] : rest;
+        const clearedCount =
+          grade === "good" ? state.reviewSession.clearedCount + 1 : state.reviewSession.clearedCount;
+        return {
+          reviewGrading: false,
+          reviewCounts: res.counts,
+          reviewStreak: res.streak,
+          reviewSession: { ...state.reviewSession, cards: nextCards, clearedCount, revealed: false },
+        };
+      });
+    } catch (err) {
+      set({ reviewGrading: false });
+      get().pushToast(`Could not save review grade: ${errorMessage(err)}`, "error");
+    }
+  },
+  exitReviewSession: () => set({ reviewSession: null, reviewSessionLoading: false }),
+  openReviewCardInStudy: async (card) => {
+    try {
+      await api.patchProject(card.projectId, { lastPosition: card.t });
+    } catch {
+      // Best-effort nudge — still navigate to the project even if this fails
+      // (the user can scrub to the timestamp manually).
+    }
+    get().navigate({ view: "study", projectId: card.projectId });
+  },
 
   // --- toasts -----------------------------------------------------------------------
   toasts: [],

@@ -14,6 +14,8 @@ import type {
   PatchProjectBody,
   Project,
   RevealResponse,
+  ReviewGrade,
+  ReviewQueueResponse,
   SearchResponse,
   ShareBundle,
   StudyLoopConfig,
@@ -154,6 +156,11 @@ export const api = {
     request<{ ok: true }>(`/api/projects/${encodeURIComponent(id)}/overlays/${encodeURIComponent(fileName)}`, {
       method: "DELETE",
     }),
+
+  // --- F11: review mode -----------------------------------------------------------
+  getReviewQueue: () => request<ReviewQueueResponse>("/api/review/queue"),
+  gradeReviewCard: (cardId: string, grade: ReviewGrade) =>
+    request<ReviewQueueResponse>("/api/review/grade", { method: "POST", body: JSON.stringify({ cardId, grade }) }),
 
   videoStreamUrl: (path: string) => `/api/video/stream?path=${encodeURIComponent(path)}`,
   shotUrl: (projectId: string, shot: string) =>

@@ -1,0 +1,345 @@
+.page {
+  position: relative;
+  min-height: calc(100vh - var(--topbar-height));
+  display: flex;
+  flex-direction: column;
+}
+
+.progressTrack {
+  width: 100%;
+  height: 3px;
+  background: var(--surface-raised);
+  flex-shrink: 0;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--accent-red);
+  transition: width var(--duration-standard) var(--ease-standard);
+}
+
+.exitButton {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
+}
+
+.exitButton:hover {
+  background: var(--hover-overlay);
+  color: var(--text-primary);
+}
+
+.exitButton:active {
+  transform: scale(.92);
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+}
+
+.card {
+  position: relative;
+  width: min(720px, 100%);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  padding: 40px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+}
+
+.face {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  animation: face-in var(--duration-standard) var(--ease-enter) both;
+}
+
+@keyframes face-in {
+  from {
+    opacity: 0;
+    transform: scale(.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.media {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.shotImage {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+  object-fit: cover;
+}
+
+.timestampChip {
+  background: color-mix(in srgb, var(--accent-blue) 10%, transparent);
+  color: var(--accent-blue);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  font-size: var(--type-13);
+  font-variant-numeric: tabular-nums;
+}
+
+.projectTitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-13);
+  text-wrap: pretty;
+}
+
+.prompt {
+  margin: 4px 0 0;
+  color: var(--text-primary);
+  font-size: var(--type-18);
+  font-weight: var(--weight-medium);
+  text-wrap: pretty;
+}
+
+.pearlLabel {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--type-20);
+  font-weight: var(--weight-bold);
+  text-wrap: pretty;
+}
+
+.backText {
+  width: 100%;
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--type-15);
+  line-height: 1.6;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.mediaActionButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-pill);
+  padding: 8px 16px;
+  font-size: var(--type-13);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
+}
+
+.mediaActionButton:hover {
+  background: var(--hover-overlay);
+  border-color: var(--border-strong);
+}
+
+.mediaActionButton:active {
+  transform: scale(.98);
+}
+
+.reveal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.hint {
+  font-size: var(--type-11);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xs);
+  padding: 1px 7px;
+  font-variant-numeric: tabular-nums;
+}
+
+.gradeRow {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.primaryButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent-blue);
+  color: var(--surface-bg);
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 10px 24px;
+  font-size: var(--type-14);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-blue) 85%, white);
+}
+
+.primaryButton:active:not(:disabled) {
+  transform: scale(.97);
+}
+
+.goodButton {
+  composes: primaryButton;
+}
+
+.againButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-pill);
+  padding: 10px 24px;
+  font-size: var(--type-14);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
+}
+
+.againButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.againButton:active:not(:disabled) {
+  transform: scale(.97);
+}
+
+.againButton:disabled,
+.goodButton:disabled {
+  border-color: var(--border-default);
+  background: var(--surface-overlay);
+  cursor: default;
+}
+
+/* --- Skeleton (queue loading) --------------------------------------------- */
+
+.skeletonCard {
+  width: min(720px, 100%);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  padding: 40px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.skeletonMedia {
+  width: 100%;
+  max-width: 420px;
+  height: 220px;
+  border-radius: var(--radius-md);
+}
+
+.skeletonLine {
+  height: 14px;
+  width: 100%;
+  max-width: 320px;
+}
+
+/* --- Empty / caught-up / summary states ----------------------------------- */
+
+.stateCard {
+  border: 1px solid var(--border-hairline);
+  background: var(--surface-raised);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+  padding: 40px 32px 32px;
+  text-align: center;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.stateIcon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--accent-green) 16%, transparent);
+  color: var(--accent-green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.stateCard h2 {
+  margin: 0 0 8px;
+  font-size: var(--type-18);
+  font-weight: var(--weight-bold);
+  color: var(--text-primary);
+  text-wrap: pretty;
+}
+
+.stateCard p {
+  margin: 0 0 4px;
+  color: var(--text-secondary);
+  font-size: var(--type-14);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.streakLine {
+  color: var(--text-tertiary) !important;
+  font-size: var(--type-12) !important;
+  margin-bottom: 16px !important;
+}
+
+.stateCard .primaryButton {
+  margin-top: 8px;
+}

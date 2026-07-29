@@ -8,6 +8,8 @@ coverage/
 
 # On case-insensitive filesystems (default macOS APFS), ~/StudyLoop resolves to
 # this same repo directory as ~/studyloop. The default dataDir writes project
-# data under <dataDir>/projects — never commit runtime study data.
+# data under <dataDir>/projects — never commit runtime study data. F11's
+# review.json lands directly under dataDir (not per-project) — same reasoning.
 /projects/
+/review.json
 .claude/

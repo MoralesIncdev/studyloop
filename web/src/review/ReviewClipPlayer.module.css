@@ -1,0 +1,8 @@
+.clip {
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 16 / 9;
+  background: var(--surface-player);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+}

@@ -1,0 +1,307 @@
+// F11 "Review Mode" (SPEC "F11 — Review Mode (spaced resurfacing)"): pure
+// scheduling math (hidden SM-2-lite) + card derivation, kept dependency-free
+// and side-effect-free (no fs/network) so it's directly unit-testable —
+// matches this codebase's "routes stay thin, lib/ holds the logic + tests"
+// convention (see lib/heatmap.ts, lib/analysisJobs.ts). routes/review.ts is
+// the only place that reads real project/bubble/analysis data off disk and
+// calls into here.
+//
+// Every function that needs "now" takes it as an explicit `nowMs` parameter
+// (an injectable clock) rather than calling Date.now() itself — the whole
+// point being that the scheduling ladder, the daily new-card cap, and the
+// streak counter are all deterministically testable against a fake clock.
+import { z } from "zod";
+import type { Bubble, Project } from "./models.js";
+import type { Analysis } from "./analysis.js";
+
+// --- Scheduling constants (SPEC "Scheduling (hidden SM-2-lite)") -----------
+
+/** Fixed ladder, in days — no configurable knobs (SPEC non-goal). */
+export const REVIEW_LADDER_DAYS = [1, 3, 7, 14, 30, 60] as const;
+
+/** SPEC: "New cards: due immediately, capped at 20 new/day". */
+export const NEW_CARDS_DAILY_CAP = 20;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// --- review.json shape -------------------------------------------------------
+
+export const ReviewGradeSchema = z.enum(["again", "good"]);
+export type ReviewGrade = z.infer<typeof ReviewGradeSchema>;
+
+export const ReviewCardStateSchema = z.object({
+  /** ISO timestamp — when this card next becomes due. */
+  due: z.string(),
+  /** Current ladder position, in days. 0 = brand new / just lapsed. */
+  interval: z.number().nonnegative().default(0),
+  lapses: z.number().nonnegative().default(0),
+  reps: z.number().nonnegative().default(0),
+  lastGrade: ReviewGradeSchema.nullable().default(null),
+  /** ISO timestamp — when this card was first introduced (daily new-card cap bookkeeping). */
+  introducedAt: z.string(),
+});
+export type ReviewCardState = z.infer<typeof ReviewCardStateSchema>;
+
+const StreakSchema = z.object({
+  count: z.number().nonnegative(),
+  /** UTC day key ("YYYY-MM-DD") of the last day a grade was recorded. */
+  lastDay: z.string(),
+});
+export type Streak = z.infer<typeof StreakSchema>;
+
+export const ReviewStateSchema = z.object({
+  version: z.literal(1),
+  cards: z.record(ReviewCardStateSchema),
+  /** Optional: absent until the first-ever grade is recorded. Not exposed as
+   *  a stats page (SPEC non-goal) — only surfaced as a single summary line
+   *  at the end of a review session. */
+  streak: StreakSchema.optional(),
+});
+export type ReviewState = z.infer<typeof ReviewStateSchema>;
+
+export const GradeBodySchema = z.object({
+  cardId: z.string().min(1),
+  grade: ReviewGradeSchema,
+});
+export type GradeBody = z.infer<typeof GradeBodySchema>;
+
+export function emptyReviewState(): ReviewState {
+  return { version: 1, cards: {} };
+}
+
+// --- Clock-derived helpers ---------------------------------------------------
+
+/** UTC calendar-day key ("YYYY-MM-DD") for a given instant — the unit the daily new-card cap and streak both bucket on. */
+export function dayKeyUTC(nowMs: number): string {
+  return new Date(nowMs).toISOString().slice(0, 10);
+}
+
+function isoAt(nowMs: number): string {
+  return new Date(nowMs).toISOString();
+}
+
+function isoAfterDays(nowMs: number, days: number): string {
+  return new Date(nowMs + days * DAY_MS).toISOString();
+}
+
+// --- Ladder math --------------------------------------------------------------
+
+/**
+ * Given the ladder position a "Got it" grade is advancing *from*, returns the
+ * next interval in days. A currentInterval not found on the ladder (i.e. 0,
+ * every brand-new or just-lapsed card) advances to the first rung. Already at
+ * the top rung stays there — SPEC gives no further-growth rule and explicitly
+ * rules out a configurable ladder, so the top rung just repeats.
+ */
+export function nextGoodInterval(currentIntervalDays: number): number {
+  const idx = REVIEW_LADDER_DAYS.indexOf(currentIntervalDays as (typeof REVIEW_LADDER_DAYS)[number]);
+  if (idx === -1) return REVIEW_LADDER_DAYS[0];
+  return REVIEW_LADDER_DAYS[Math.min(idx + 1, REVIEW_LADDER_DAYS.length - 1)];
+}
+
+/** A freshly-introduced card: due immediately, step 0. */
+export function introduceCardState(nowMs: number): ReviewCardState {
+  const now = isoAt(nowMs);
+  return { due: now, interval: 0, lapses: 0, reps: 0, lastGrade: null, introducedAt: now };
+}
+
+/**
+ * Applies a grade to a card's scheduling state (SPEC: "Again → interval 0
+ * (repeat this session, +lapse), Got it → next interval in ladder ... Again
+ * resets to step 0"). `introducedAt` is carried over unchanged — it's a
+ * fixed provenance stamp, not something grading ever touches.
+ */
+export function gradeCardState(state: ReviewCardState, grade: ReviewGrade, nowMs: number): ReviewCardState {
+  if (grade === "again") {
+    return { ...state, interval: 0, lapses: state.lapses + 1, lastGrade: "again", due: isoAt(nowMs) };
+  }
+  const interval = nextGoodInterval(state.interval);
+  return { ...state, interval, reps: state.reps + 1, lastGrade: "good", due: isoAfterDays(nowMs, interval) };
+}
+
+export function isDue(state: ReviewCardState, nowMs: number): boolean {
+  return new Date(state.due).getTime() <= nowMs;
+}
+
+// --- Streak (SPEC UI: "summary state ... + streak line") ---------------------
+
+/**
+ * A day-over-day study streak, bumped once per calendar day the first time a
+ * grade is recorded that day (repeat grades the same day are no-ops). Not a
+ * stats page (SPEC non-goal) — just enough state for the one summary line
+ * the Review view shows at session end.
+ */
+export function bumpStreak(prev: Streak | undefined, nowMs: number): Streak {
+  const today = dayKeyUTC(nowMs);
+  if (prev && prev.lastDay === today) return prev;
+  const yesterday = dayKeyUTC(nowMs - DAY_MS);
+  const count = prev && prev.lastDay === yesterday ? prev.count + 1 : 1;
+  return { count, lastDay: today };
+}
+
+// --- Card derivation (SPEC "Cards") -------------------------------------------
+
+export interface ReviewCardBase {
+  id: string;
+  projectId: string;
+  projectTitle: string;
+  sourceType: "local" | "youtube";
+  /** Local sources only — lets the client build a video-stream/clip-loop URL without a second round trip. */
+  sourcePath?: string;
+  /** YouTube sources only — lets the client build an "Open at timestamp" link. */
+  sourceVideoId?: string;
+  t: number;
+}
+
+export interface ReviewBubbleCard extends ReviewCardBase {
+  kind: "bubble";
+  text: string;
+  shot: string | null;
+}
+
+export interface ReviewPearlCard extends ReviewCardBase {
+  kind: "pearl";
+  label: string;
+  insight: string;
+  importance: 1 | 2 | 3;
+}
+
+export type ReviewCard = ReviewBubbleCard | ReviewPearlCard;
+
+/**
+ * Derives the review cards currently backed by live study artifacts for one
+ * project (SPEC "Cards": bubble cards from bubbles that carry text, pearl
+ * cards from analysis pearls — stub analyses excluded outside dev). Never
+ * touches disk; the route assembles `bubbles`/`analysis` first. Ids are
+ * stable (`bubble:<projectId>:<bubbleId>`, `pearl:<projectId>:<t>`) so
+ * scheduling state in review.json survives across calls, and orphan-dropping
+ * falls straight out of comparing this output against review.json's tracked
+ * card ids (see `buildReviewQueue`).
+ */
+export function deriveLiveCards(
+  project: Project,
+  bubbles: readonly Bubble[],
+  analysis: Analysis | null,
+  stubAnalysesVisible: boolean
+): ReviewCard[] {
+  const sourceType = project.source.type;
+  const sourcePath = project.source.type === "local" ? project.source.path : undefined;
+  const sourceVideoId = project.source.type === "youtube" ? project.source.videoId : undefined;
+
+  const cards: ReviewCard[] = [];
+
+  for (const b of bubbles) {
+    // SPEC: "Bubble card (bubble with text)" — a screenshot-only bubble
+    // (empty text) never produces a card.
+    if (!b.text || !b.text.trim()) continue;
+    cards.push({
+      id: `bubble:${project.id}:${b.id}`,
+      kind: "bubble",
+      projectId: project.id,
+      projectTitle: project.title,
+      sourceType,
+      sourcePath,
+      sourceVideoId,
+      t: b.t,
+      text: b.text,
+      shot: b.shot ?? null,
+    });
+  }
+
+  const analysisVisible = analysis !== null && (analysis.source === "model" || (analysis.source === "stub" && stubAnalysesVisible));
+  if (analysisVisible && analysis) {
+    for (const p of analysis.pearls) {
+      cards.push({
+        id: `pearl:${project.id}:${p.t}`,
+        kind: "pearl",
+        projectId: project.id,
+        projectTitle: project.title,
+        sourceType,
+        sourcePath,
+        sourceVideoId,
+        t: p.t,
+        label: p.label,
+        insight: p.insight,
+        importance: p.importance,
+      });
+    }
+  }
+
+  return cards.sort((a, b) => a.t - b.t);
+}
+
+// --- Queue derivation (SPEC "GET /api/review/queue") --------------------------
+
+export interface ReviewQueueCounts {
+  due: number;
+  new: number;
+  total: number;
+}
+
+export interface BuildReviewQueueResult {
+  /** Updated review state — orphans dropped, newly-introduced cards added. Caller persists this. */
+  state: ReviewState;
+  dueCards: ReviewCard[];
+  counts: ReviewQueueCounts;
+}
+
+/**
+ * Joins live artifact-derived cards with persisted scheduling state:
+ * - Orphan dropping: any tracked card whose id isn't in `liveCards` anymore
+ *   (the bubble/pearl behind it was deleted) is dropped from state silently
+ *   (SPEC: "Deleted artifacts drop their cards silently").
+ * - New-card introduction: any live card not yet tracked is introduced (due
+ *   immediately) up to `dailyCap` remaining for today (SPEC: "capped at 20
+ *   new/day"); cards beyond the cap are simply left untracked and
+ *   reconsidered next call (e.g. once the day rolls over).
+ * - Due computation: a tracked card is included in `dueCards` iff its `due`
+ *   timestamp is `<= nowMs`.
+ *
+ * `dueCards` preserves `liveCards`' order (stable/sorted by the caller), so
+ * output ordering is deterministic for a given input — important for tests
+ * and for a UI that shouldn't reshuffle mid-session.
+ */
+export function buildReviewQueue(
+  liveCards: readonly ReviewCard[],
+  priorState: ReviewState,
+  nowMs: number,
+  dailyCap: number = NEW_CARDS_DAILY_CAP
+): BuildReviewQueueResult {
+  const liveIds = new Set(liveCards.map((c) => c.id));
+
+  // Orphan dropping.
+  const cards: Record<string, ReviewCardState> = {};
+  for (const [id, cardState] of Object.entries(priorState.cards)) {
+    if (liveIds.has(id)) cards[id] = cardState;
+  }
+
+  const today = dayKeyUTC(nowMs);
+  const introducedToday = Object.values(cards).filter(
+    (c) => dayKeyUTC(new Date(c.introducedAt).getTime()) === today
+  ).length;
+  let remainingCap = Math.max(0, dailyCap - introducedToday);
+
+  // New-card introduction, in liveCards' stable order.
+  for (const live of liveCards) {
+    if (remainingCap <= 0) break;
+    if (cards[live.id]) continue;
+    cards[live.id] = introduceCardState(nowMs);
+    remainingCap--;
+  }
+
+  const dueCards: ReviewCard[] = [];
+  let newCount = 0;
+  for (const live of liveCards) {
+    const cardState = cards[live.id];
+    if (!cardState) continue; // not introduced this call (over the daily cap) — simply absent from the queue
+    if (!isDue(cardState, nowMs)) continue;
+    dueCards.push(live);
+    if (cardState.reps === 0 && cardState.lastGrade === null) newCount++;
+  }
+
+  return {
+    state: { ...priorState, cards },
+    dueCards,
+    counts: { due: dueCards.length, new: newCount, total: liveCards.length },
+  };
+}
