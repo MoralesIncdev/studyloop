@@ -24,7 +24,7 @@ import {
 import { isTranscriptVisuallyOpen } from "../lib/selectors";
 import { formatTimestamp } from "../lib/time";
 import { Icon } from "../components/icons";
-import type { RelatedVideo, TranscriptSegment } from "../lib/types";
+import type { ContinuityCandidate, TranscriptSegment } from "../lib/types";
 import styles from "./RightRail.module.css";
 
 interface Props {
@@ -78,52 +78,83 @@ function RailCard({
   );
 }
 
-function UpNextCard({ video, onOpen, opening }: { video: RelatedVideo; onOpen: () => void; opening: boolean }): JSX.Element {
+// V3-C C1 "Concept Continuity rail" (SPEC/PEDAGOGY.md §6): replaces the raw
+// youtube-related-list "Up next" cabinet — candidates now come from
+// GET /api/projects/:id/continuity (server/src/lib/continuity.ts's weighted
+// scorer), each with human-readable `reasons` rendered as chips ("teaches
+// closed guard", "channel ranks for 3 of your topics") so the learner sees
+// *why* a video is suggested, never just "YouTube thinks you'll watch this".
+function ContinuityCard({
+  candidate,
+  onOpen,
+  opening,
+}: {
+  candidate: ContinuityCandidate;
+  onOpen: () => void;
+  opening: boolean;
+}): JSX.Element {
   return (
     <button type="button" className={styles.upNextCard} onClick={onOpen} disabled={opening}>
       <span className={styles.upNextThumb}>
-        {video.thumbnailUrl ? (
-          <img src={video.thumbnailUrl} alt="" className={styles.upNextThumbImg} loading="lazy" />
+        {candidate.thumbnailUrl ? (
+          <img src={candidate.thumbnailUrl} alt="" className={styles.upNextThumbImg} loading="lazy" />
         ) : (
           <span className={styles.upNextThumbGlyph} aria-hidden="true">
             <Icon name="play" size={22} />
           </span>
         )}
-        {video.durationSeconds != null && (
-          <span className={styles.upNextDuration}>{formatTimestamp(video.durationSeconds)}</span>
+        {candidate.durationSeconds != null && (
+          <span className={styles.upNextDuration}>{formatTimestamp(candidate.durationSeconds)}</span>
         )}
         {opening && <span className={styles.upNextOverlay}>Opening…</span>}
       </span>
       <span className={styles.upNextBody}>
-        <span className={styles.upNextTitle}>{video.title}</span>
-        <span className={styles.upNextAuthor}>{video.author}</span>
-        {video.viewCountText && <span className={styles.upNextViews}>{video.viewCountText}</span>}
+        <span className={styles.upNextTitle}>{candidate.title}</span>
+        <span className={styles.upNextAuthor}>{candidate.author}</span>
+        {candidate.reasons.length > 0 && (
+          <span className={styles.reasonChips}>
+            {candidate.reasons.slice(0, 3).map((reason, i) => (
+              <span key={i} className={styles.reasonChip}>
+                {reason}
+              </span>
+            ))}
+          </span>
+        )}
       </span>
     </button>
   );
 }
 
-function UpNextCabinet(): JSX.Element | null {
+function ContinuityCabinet(): JSX.Element | null {
   const currentProject = useStudyLoopStore((s) => s.currentProject);
+  const candidates = useStudyLoopStore((s) => s.continuityCandidates);
+  const continuityLoading = useStudyLoopStore((s) => s.continuityLoading);
+  const loadContinuity = useStudyLoopStore((s) => s.loadContinuity);
   const openOrCreateYoutubeProject = useStudyLoopStore((s) => s.openOrCreateYoutubeProject);
-  const refreshRelated = useStudyLoopStore((s) => s.refreshRelated);
+  const openOrCreateLocalProject = useStudyLoopStore((s) => s.openOrCreateLocalProject);
   const navigate = useStudyLoopStore((s) => s.navigate);
-  const [refreshing, setRefreshing] = useState(false);
   const [openingVideoId, setOpeningVideoId] = useState<string | null>(null);
 
-  // SPEC: "Local videos: section hidden entirely (no dead space)" — this is
-  // stricter than the V2-A placeholder, which rendered an explanation card
-  // for local sources too. A youtube source with no related yet (fresh
-  // resolve, or Innertube came back empty) still renders the card shell so
-  // the refresh button and empty state are reachable.
-  if (!currentProject || currentProject.source.type !== "youtube") return null;
+  if (!currentProject) return null;
+  // SPEC: "local-video projects: section shows library-based suggestions
+  // only... hide when empty" — a youtube source still renders the shell
+  // (with a refresh button) even with zero candidates, same as the old
+  // Up-next cabinet's empty state; local hides entirely rather than showing
+  // dead space.
+  if (currentProject.source.type === "local" && candidates.length === 0 && !continuityLoading) return null;
 
-  const related = currentProject.related ?? [];
-
-  const handleOpen = async (video: RelatedVideo): Promise<void> => {
-    setOpeningVideoId(video.videoId);
+  const handleOpen = async (candidate: ContinuityCandidate): Promise<void> => {
+    setOpeningVideoId(candidate.videoId);
     try {
-      const project = await openOrCreateYoutubeProject(video.videoId);
+      const project =
+        candidate.kind === "youtube"
+          ? await openOrCreateYoutubeProject(candidate.videoId)
+          : await openOrCreateLocalProject({
+              videoPath: candidate.videoPath ?? candidate.videoId,
+              title: candidate.title,
+              transcriptPath: candidate.transcriptPath,
+              durationSeconds: candidate.durationSeconds,
+            });
       navigate({ view: "study", projectId: project.id });
     } catch {
       // store already toasted the error
@@ -132,14 +163,9 @@ function UpNextCabinet(): JSX.Element | null {
     }
   };
 
-  const handleRefresh = async (): Promise<void> => {
-    if (refreshing) return;
-    setRefreshing(true);
-    try {
-      await refreshRelated();
-    } finally {
-      setRefreshing(false);
-    }
+  const handleRefresh = (): void => {
+    if (continuityLoading) return;
+    void loadContinuity();
   };
 
   return (
@@ -150,27 +176,29 @@ function UpNextCabinet(): JSX.Element | null {
         </div>
         <button
           type="button"
-          className={`${styles.tickerMuteButton} ${refreshing ? styles.spinning : ""}`}
-          onClick={() => void handleRefresh()}
-          disabled={refreshing}
-          title="Refresh related videos"
-          aria-label="Refresh related videos"
+          className={`${styles.tickerMuteButton} ${continuityLoading ? styles.spinning : ""}`}
+          onClick={handleRefresh}
+          disabled={continuityLoading}
+          title="Refresh suggestions"
+          aria-label="Refresh suggestions"
         >
           <Icon name="refresh" size={16} />
         </button>
       </div>
-      {related.length === 0 ? (
+      {candidates.length === 0 ? (
         <div className={styles.upNextEmpty}>
-          No related videos yet — try the refresh button, or Innertube may be unreachable right now.
+          {continuityLoading
+            ? "Finding what to watch next…"
+            : "No suggestions yet — try the refresh button, or Innertube may be unreachable right now."}
         </div>
       ) : (
         <div className={styles.upNextList}>
-          {related.map((video) => (
-            <UpNextCard
-              key={video.videoId}
-              video={video}
-              opening={openingVideoId === video.videoId}
-              onOpen={() => void handleOpen(video)}
+          {candidates.map((candidate) => (
+            <ContinuityCard
+              key={`${candidate.kind}-${candidate.videoId}`}
+              candidate={candidate}
+              opening={openingVideoId === candidate.videoId}
+              onOpen={() => void handleOpen(candidate)}
             />
           ))}
         </div>
@@ -267,8 +295,83 @@ export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
 
       <OthersAnalysisCard />
 
-      <UpNextCabinet />
+      <OverlayDiffCabinet />
+
+      <ContinuityCabinet />
     </div>
+  );
+}
+
+/**
+ * V3-C C4 "Overlay diff-on-import" (SPEC: "what they marked that you didn't"
+ * — "the gap is the lesson"). Server computes the set-difference
+ * (lib/overlayDiff.ts, ±15s tolerance) fresh on every GET /overlays against
+ * the project's CURRENT bubbles/pearls — see routes/share.ts — so a row
+ * disappears naturally once the learner adds their own mark near it, on top
+ * of the explicit per-row dismiss below.
+ */
+function OverlayDiffCabinet(): JSX.Element | null {
+  const overlays = useStudyLoopStore((s) => s.overlays);
+  const overlaysVisible = useStudyLoopStore((s) => s.overlaysVisible);
+  const dismissedKeys = useStudyLoopStore((s) => s.dismissedOverlayDiffKeys);
+  const dismissRow = useStudyLoopStore((s) => s.dismissOverlayDiffRow);
+  const controller = useStudyLoopStore((s) => s.controller);
+
+  if (!overlaysVisible) return null;
+
+  const groups = overlays
+    .map((o) => ({
+      fileName: o.fileName,
+      handle: o.bundle.shareHandle,
+      rows: o.diff.filter((m) => !dismissedKeys.has(`${o.fileName}:${m.kind}:${m.t}`)),
+    }))
+    .filter((g) => g.rows.length > 0);
+
+  if (groups.length === 0) return null;
+
+  return (
+    <section className={styles.card}>
+      <div className={styles.cardHeaderRow}>
+        <div className={styles.cardHeaderStatic}>
+          <span className={styles.cardTitle}>What they marked</span>
+        </div>
+      </div>
+      <div className={styles.diffGroups}>
+        {groups.map((group) => (
+          <div key={group.fileName} className={styles.diffGroup}>
+            <div className={styles.diffGroupHeader}>
+              From {group.handle} — {group.rows.length} moment{group.rows.length === 1 ? "" : "s"} you haven&rsquo;t marked
+            </div>
+            <ul className={styles.diffList}>
+              {group.rows.map((mark, i) => (
+                <li key={`${mark.kind}-${mark.t}-${i}`} className={styles.diffRow}>
+                  <button
+                    type="button"
+                    className={styles.diffSeekButton}
+                    onClick={() => controller?.seek(Math.max(0, mark.t - 5))}
+                  >
+                    <span className={styles.diffTime}>{formatTimestamp(mark.t)}</span>
+                    <span className={styles.diffKind} data-kind={mark.kind}>
+                      {mark.kind === "pearl" ? "pearl" : "note"}
+                    </span>
+                    <span className={styles.diffText}>{mark.text || "(no caption)"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.diffDismiss}
+                    onClick={() => dismissRow(group.fileName, mark)}
+                    aria-label="Dismiss this suggestion"
+                    title="Dismiss"
+                  >
+                    <Icon name="close" size={12} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

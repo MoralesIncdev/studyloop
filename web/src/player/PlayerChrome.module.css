@@ -34,3 +34,59 @@
 .progressWrap {
   padding: 0 8px;
 }
+
+/* V3-C C5 "Attention heatmap": one-time legend line above the strip.
+   `position: relative; z-index: 1` is load-bearing, not decorative: the
+   heatmap strip inside .progressWrap right below is absolutely positioned
+   with `bottom: 100%` (see HeatmapStrip.tsx), which extends it 32px UPWARD
+   from the top of the seek track — right into this row's own box, since the
+   gap between them is only a few px. Positioned elements paint above
+   normal-flow siblings regardless of DOM order, so without this the
+   strip's (invisible, but `pointer-events: auto` when interactive) hit
+   area silently ate every click aimed at the Dismiss button below —
+   found via browser click-testing, not visible in a static screenshot. */
+.attentionLegend {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 8px 4px;
+  padding: 4px 8px;
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sm);
+  font-size: var(--type-12);
+  color: var(--text-secondary);
+  width: fit-content;
+  max-width: calc(100% - 16px);
+}
+
+.attentionLegendClose {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 2px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.attentionLegendClose:hover {
+  background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), transparent;
+  color: var(--text-primary);
+}
+
+.attentionLegendClose:active {
+  background: linear-gradient(var(--pressed-overlay), var(--pressed-overlay)), transparent;
+}
+
+.attentionLegendClose:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}

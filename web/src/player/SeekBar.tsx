@@ -1,10 +1,13 @@
 // YouTube-style progress bar: red played-portion, hover time tooltip, click-to-seek,
 // and marker layers rendered purely from props — bubble pins and concept ticks —
 // plus an optional heatmap density strip (SPEC "Player chrome" — see HeatmapStrip).
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatTimestamp } from "../lib/time";
+import { marksForClickRatio } from "../lib/attentionHeatmap";
+import type { HeatmapMark } from "../lib/types";
 import { Icon } from "../components/icons";
 import { Tooltip } from "../components/Tooltip";
+import { AttentionPopover } from "./AttentionPopover";
 import { HeatmapStrip } from "./HeatmapStrip";
 import styles from "./SeekBar.module.css";
 
@@ -51,8 +54,13 @@ interface Props {
   onSeekBubble?: (t: number) => void;
   /** Called when a pearl diamond is clicked, instead of onSeek. Defaults to onSeek. */
   onSeekPearl?: (t: number) => void;
-  /** Density buckets in [0,1] for the heatmap strip above the bar (SPEC "Player chrome"). */
-  heatmap?: number[];
+  /** V3-C C5 "Attention heatmap": own-marks layer, density buckets in [0,1] (SPEC "Player chrome"). */
+  attentionOwn?: number[];
+  /** Overlays layer (all imported bundles combined), independently normalized — never merged with `attentionOwn`. */
+  attentionOverlays?: number[];
+  /** Raw marks behind both layers, resolved locally on click (lib/attentionHeatmap.ts) — omit to render the strip decoratively (no click-to-inspect). */
+  attentionMarks?: { own: HeatmapMark[]; overlays: HeatmapMark[] };
+  attentionBucketCount?: number;
 }
 
 export function SeekBar({
@@ -67,13 +75,24 @@ export function SeekBar({
   onSeek,
   onSeekBubble,
   onSeekPearl,
-  heatmap,
+  attentionOwn,
+  attentionOverlays,
+  attentionMarks,
+  attentionBucketCount,
 }: Props): JSX.Element {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<{ x: number; t: number } | null>(null);
   const [hoverBubble, setHoverBubble] = useState<SeekBarBubbleMarker | null>(null);
   const [hoverPearl, setHoverPearl] = useState<SeekBarPearlMarker | null>(null);
   const [dragging, setDragging] = useState(false);
+  // V3-C C5: click-to-inspect popover state — the ratio (0..1) of the click
+  // that opened it, or null when closed.
+  const [inspectRatio, setInspectRatio] = useState<number | null>(null);
+
+  const inspectMarks = useMemo<HeatmapMark[]>(() => {
+    if (inspectRatio === null || !attentionMarks || !attentionBucketCount || duration <= 0) return [];
+    return marksForClickRatio(inspectRatio, duration, attentionBucketCount, attentionMarks.own, attentionMarks.overlays);
+  }, [inspectRatio, attentionMarks, attentionBucketCount, duration]);
 
   const timeAtClientX = useCallback(
     (clientX: number): number => {
@@ -100,6 +119,7 @@ export function SeekBar({
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
+      setInspectRatio(null); // any plain-track click (not the strip itself, which stopPropagation()s) closes an open popover
       onSeek(timeAtClientX(e.clientX));
     },
     [onSeek, timeAtClientX]
@@ -112,6 +132,15 @@ export function SeekBar({
     },
     [onSeek, timeAtClientX]
   );
+
+  useEffect(() => {
+    if (inspectRatio === null) return undefined;
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") setInspectRatio(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [inspectRatio]);
 
   useEffect(() => {
     if (!dragging) return undefined;
@@ -154,7 +183,17 @@ export function SeekBar({
         aria-valuenow={Math.round(currentTime)}
         aria-valuetext={formatTimestamp(currentTime)}
       >
-        {heatmap && <HeatmapStrip buckets={heatmap} />}
+        {(attentionOwn || attentionOverlays) && (
+          <HeatmapStrip
+            own={attentionOwn ?? []}
+            overlays={attentionOverlays}
+            onInspect={
+              attentionMarks
+                ? (ratio) => setInspectRatio((cur) => (cur === ratio ? null : ratio))
+                : undefined
+            }
+          />
+        )}
         {loopA != null && loopB != null && (
           <div
             className={styles.loopRange}
@@ -260,6 +299,14 @@ export function SeekBar({
           </div>
         )}
       </div>
+      {inspectRatio !== null && (
+        <AttentionPopover
+          marks={inspectMarks}
+          anchorRatio={inspectRatio}
+          onSeek={onSeek}
+          onClose={() => setInspectRatio(null)}
+        />
+      )}
     </div>
   );
 }

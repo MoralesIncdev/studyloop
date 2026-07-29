@@ -389,3 +389,107 @@
   color: var(--text-disabled);
   cursor: default;
 }
+
+/* V3-C C3 "Post-compile 'What's next'" */
+.whatsNext {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-hairline);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.whatsNextTitle {
+  font-size: var(--type-13);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.whatsNextList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.whatsNextItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  text-align: left;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.whatsNextItem:hover:not(:disabled) {
+  background: var(--hover-overlay);
+}
+
+.whatsNextItem:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.whatsNextThumb {
+  width: 56px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--radius-xs);
+  background: var(--surface-popover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  overflow: hidden;
+}
+
+.whatsNextThumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.whatsNextBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.whatsNextItemTitle {
+  font-size: var(--type-13);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.whatsNextAuthor {
+  font-size: var(--type-11);
+  color: var(--text-secondary);
+}
+
+.whatsNextReasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.whatsNextReasonChip {
+  font-size: var(--type-11);
+  color: var(--text-secondary);
+  background: var(--surface-popover);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  padding: 1px 7px;
+  line-height: 1.5;
+}

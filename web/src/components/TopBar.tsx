@@ -9,12 +9,19 @@ import { useStudyLoopStore } from "../state/store";
 import { api, ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/time";
 import { Icon } from "../components/icons";
-import type { LibraryItem, RelatedVideo } from "../lib/types";
+import type { LibraryItem, RelatedVideo, SearchIntent } from "../lib/types";
 import styles from "./TopBar.module.css";
 
 const SEARCH_DEBOUNCE_MS = 300;
 const MAX_LIBRARY_RESULTS = 6;
 const MAX_YOUTUBE_RESULTS = 6;
+
+/** V3-C C2 "Search intent toggles" (SPEC/PEDAGOGY.md §6). */
+const INTENT_OPTIONS: { value: SearchIntent; label: string }[] = [
+  { value: "overview", label: "Overview" },
+  { value: "deep_dive", label: "Deep dive" },
+  { value: "troubleshooting", label: "Troubleshooting" },
+];
 
 interface FlatRow {
   section: "library" | "youtube";
@@ -40,6 +47,8 @@ export function TopBar(): JSX.Element {
   const openOrCreateYoutubeProject = useStudyLoopStore((s) => s.openOrCreateYoutubeProject);
   const pushToast = useStudyLoopStore((s) => s.pushToast);
   const reviewDueCount = useStudyLoopStore((s) => s.reviewCounts?.due ?? 0);
+  const searchIntent = useStudyLoopStore((s) => s.searchIntent);
+  const setSearchIntent = useStudyLoopStore((s) => s.setSearchIntent);
 
   const [query, setQuery] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -63,9 +72,11 @@ export function TopBar(): JSX.Element {
     return () => window.removeEventListener("mousedown", onPointerDown);
   }, []);
 
-  // Debounced GET /api/search?q=. A trailing empty query clears results
-  // immediately (no request, dropdown just closes) rather than waiting out
-  // the debounce.
+  // Debounced GET /api/search?q=[&intent=]. A trailing empty query clears
+  // results immediately (no request, dropdown just closes) rather than
+  // waiting out the debounce. V3-C C2: re-runs immediately on an intent
+  // toggle too (searchIntent in the dependency array) — the reshaped
+  // youtube-only query only affects the youtube half of the results.
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = query.trim();
@@ -79,7 +90,7 @@ export function TopBar(): JSX.Element {
     debounceRef.current = setTimeout(() => {
       const requestId = ++requestIdRef.current;
       void api
-        .search(q)
+        .search(q, searchIntent)
         .then((res) => {
           if (requestId !== requestIdRef.current) return; // superseded by a newer keystroke
           setLibraryResults(res.library.slice(0, MAX_LIBRARY_RESULTS));
@@ -104,7 +115,7 @@ export function TopBar(): JSX.Element {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query]);
+  }, [query, searchIntent]);
 
   useEffect(() => {
     setActiveIndex(-1);
@@ -207,6 +218,26 @@ export function TopBar(): JSX.Element {
         </form>
         {dropdownOpen && query.trim().length > 0 && (
           <div id="topbar-search-dropdown" className={styles.dropdown} role="listbox">
+            {/* V3-C C2 "Search intent toggles" (SPEC/PEDAGOGY.md §6): only
+                reshapes the youtube half of the query (see lib/search.ts) —
+                off by default, sticky per session (store.searchIntent, not
+                persisted across reloads). */}
+            <div className={styles.intentRow} role="group" aria-label="Search intent">
+              {INTENT_OPTIONS.map((opt) => {
+                const active = searchIntent === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={`${styles.intentChip} ${active ? styles.intentChipActive : ""}`}
+                    aria-pressed={active}
+                    onClick={() => setSearchIntent(active ? null : opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
             <div className={styles.dropdownSection}>
               <div className={styles.dropdownLabel}>Your library</div>
               {searching && libraryResults.length === 0 && (

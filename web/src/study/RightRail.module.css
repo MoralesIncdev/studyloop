@@ -288,3 +288,141 @@
   font-size: var(--type-11);
   color: var(--text-secondary);
 }
+
+/* V3-C C1 "Concept Continuity rail": reason chips ("teaches closed guard",
+   "channel ranks for 3 of your topics") — the visible "why" behind each
+   suggestion (PEDAGOGY §6: "every recommendation displays why"). */
+.reasonChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.reasonChip {
+  font-size: var(--type-11);
+  color: var(--text-secondary);
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  padding: 1px 7px;
+  line-height: 1.5;
+}
+
+/* V3-C C4 "Overlay diff-on-import": "From <handle> — N moments you haven't marked". */
+.diffGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 10px 12px;
+}
+
+.diffGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.diffGroupHeader {
+  font-size: var(--type-12);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  padding: 0 4px;
+}
+
+.diffList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.diffRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.diffSeekButton {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.diffSeekButton:hover,
+.diffSeekButton:focus-visible {
+  background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), transparent;
+}
+
+.diffSeekButton:active {
+  background: linear-gradient(var(--pressed-overlay), var(--pressed-overlay)), transparent;
+}
+
+.diffTime {
+  font-size: var(--type-11);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.diffKind {
+  font-size: var(--type-11);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.diffKind[data-kind="pearl"] {
+  color: var(--accent-blue);
+}
+
+.diffText {
+  font-size: var(--type-12);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.diffDismiss {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 6px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.diffDismiss:hover {
+  background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), transparent;
+  color: var(--text-primary);
+}
+
+.diffDismiss:active {
+  background: linear-gradient(var(--pressed-overlay), var(--pressed-overlay)), transparent;
+}
+
+.diffDismiss:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}

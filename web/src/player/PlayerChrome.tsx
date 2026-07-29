@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import { useStudyLoopStore } from "../state/store";
 import { api } from "../lib/api";
 import { analysisConceptToConceptCard, hashHueForHandle } from "../lib/analysisFormat";
+import { Icon } from "../components/icons";
 import { SeekBar, type SeekBarOverlayMarker } from "./SeekBar";
 import { PlayerControls } from "./PlayerControls";
 import styles from "./PlayerChrome.module.css";
@@ -31,10 +32,15 @@ export function PlayerChrome({ frameRef, onVisibleChange }: Props): JSX.Element 
   const bubbles = useStudyLoopStore((s) => s.bubbles);
   const concepts = useStudyLoopStore((s) => s.concepts);
   const analysis = useStudyLoopStore((s) => s.analysis);
-  const heatmapBuckets = useStudyLoopStore((s) => s.heatmapBuckets);
+  const heatmapOwn = useStudyLoopStore((s) => s.heatmapOwn);
+  const heatmapOverlays = useStudyLoopStore((s) => s.heatmapOverlays);
+  const heatmapMarks = useStudyLoopStore((s) => s.heatmapMarks);
+  const heatmapBucketCount = useStudyLoopStore((s) => s.heatmapBucketCount);
   const loadHeatmap = useStudyLoopStore((s) => s.loadHeatmap);
   const overlays = useStudyLoopStore((s) => s.overlays);
   const overlaysVisible = useStudyLoopStore((s) => s.overlaysVisible);
+  const attentionLegendSeen = useStudyLoopStore((s) => s.attentionLegendSeen);
+  const dismissAttentionLegend = useStudyLoopStore((s) => s.dismissAttentionLegend);
 
   const [hovering, setHovering] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -148,13 +154,26 @@ export function PlayerChrome({ frameRef, onVisibleChange }: Props): JSX.Element 
       onMouseLeave={handleMouseLeave}
     >
       <div className={`${styles.scrim} ${visible ? styles.scrimVisible : ""}`}>
+        {/* V3-C C5 "Attention heatmap" (SPEC): one-time legend line, shown
+            above the strip the first time there's anything to see it about. */}
+        {!attentionLegendSeen && (heatmapOwn.some((v) => v > 0) || heatmapOverlays.some((v) => v > 0)) && (
+          <div className={styles.attentionLegend}>
+            <span>Attention = where marks concentrate, not importance.</span>
+            <button type="button" className={styles.attentionLegendClose} onClick={dismissAttentionLegend} aria-label="Dismiss">
+              <Icon name="close" size={12} />
+            </button>
+          </div>
+        )}
         <div className={styles.progressWrap}>
           <SeekBar
             currentTime={currentTime}
             duration={duration}
             loopA={loopA}
             loopB={loopB}
-            heatmap={heatmapBuckets}
+            attentionOwn={heatmapOwn}
+            attentionOverlays={heatmapOverlays}
+            attentionMarks={heatmapMarks}
+            attentionBucketCount={heatmapBucketCount}
             bubbles={
               currentProject
                 ? bubbles.map((b) => ({

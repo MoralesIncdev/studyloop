@@ -175,6 +175,31 @@ export function ThemesSection(): JSX.Element | null {
   );
 }
 
+/**
+ * V3-C C6 "Bundle narrative fields" (SPEC): "On import, author's
+ * lessonSummary renders as collapsible intro card atop the overlay rail
+ * section." Defaults collapsed — it's a "read this if you want the
+ * author's framing" affordance, not something that should push the actual
+ * marks/pearls further down the rail every time.
+ */
+function LessonSummaryIntroCard({ summary }: { summary: string }): JSX.Element {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className={styles.introCard}>
+      <button
+        type="button"
+        className={styles.introCardHeader}
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        <Icon name="chevronDown" size={14} className={expanded ? styles.introCardChevronOpen : undefined} />
+        <span>In their own words</span>
+      </button>
+      {expanded && <p className={styles.introCardBody}>{summary}</p>}
+    </div>
+  );
+}
+
 /** SPEC: "'Others' analysis' right-rail section grouped by handle (their pearls/notes read-only, click-seek)". */
 export function OthersAnalysisSection(): JSX.Element | null {
   const overlays = useStudyLoopStore((s) => s.overlays);
@@ -188,12 +213,17 @@ export function OthersAnalysisSection(): JSX.Element | null {
       <h3 className={styles.sectionHeader}>Others&rsquo; analysis</h3>
       {overlays.map((overlay) => {
         const hue = hashHueForHandle(overlay.bundle.shareHandle);
+        const rationales = overlay.bundle.conceptRationales ?? {};
+        const conceptsWithRationale = overlay.bundle.concepts.filter((c) => rationales[c.id]);
         return (
           <div key={overlay.fileName} className={styles.handleGroup}>
             <div className={styles.handleHeader}>
               <span className={styles.handleSwatch} style={{ background: `hsl(${hue}, 70%, 55%)` }} />
               {overlay.bundle.shareHandle}
             </div>
+            {overlay.bundle.lessonSummary?.trim() && (
+              <LessonSummaryIntroCard summary={overlay.bundle.lessonSummary.trim()} />
+            )}
             {overlay.bundle.pearls.length === 0 && overlay.bundle.bubbles.length === 0 && (
               <p className={styles.empty}>No pearls or captures in this bundle.</p>
             )}
@@ -208,6 +238,19 @@ export function OthersAnalysisSection(): JSX.Element | null {
                       </button>
                       <span className={styles.pearlLabel}>{pearl.label}</span>
                     </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {/* V3-C C6: "why this grouping" — the apprenticeship payload
+                (PEDAGOGY §3: "the bundle carries why this person organized
+                it this way"). Only concepts the author actually annotated. */}
+            {conceptsWithRationale.length > 0 && (
+              <ul className={styles.list}>
+                {conceptsWithRationale.map((concept) => (
+                  <li key={concept.id} className={styles.rationaleRow}>
+                    <p className={styles.conceptTitle}>{concept.title}</p>
+                    <p className={styles.rationaleText}>{rationales[concept.id]}</p>
                   </li>
                 ))}
               </ul>
