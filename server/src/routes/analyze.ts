@@ -11,10 +11,12 @@ import { z } from "zod";
 import { getConfig, resolveDataDir, resolveRoots } from "../config.js";
 import { AnalysisSchema, isFakeAnalysisMode, resolveAnalysisClientV3, runAnalysisJobV3 } from "../lib/analysis.js";
 import { AnalysisJobManager, evaluateAnalyzeGuard } from "../lib/analysisJobs.js";
+import { updateRegistryForProject } from "../lib/conceptRegistry.js";
+import { readConceptRegistry, withConceptRegistryLock, writeConceptRegistry } from "../lib/conceptRegistryStore.js";
 import { resolveTranscriptPath } from "../lib/transcriptResolve.js";
 import { loadTranscriptFromText, type TranscriptSegment } from "../lib/transcripts.js";
 import { ProjectIdParamSchema } from "../lib/models.js";
-import { analysisJsonPath, pathExists, readJsonIfExists, readProject, withProjectLock, writeJsonAtomic, writeProject } from "../lib/store.js";
+import { analysisJsonPath, newId, pathExists, readJsonIfExists, readProject, withProjectLock, writeJsonAtomic, writeProject } from "../lib/store.js";
 
 const IdParamSchema = ProjectIdParamSchema;
 const AnalyzeBodySchema = z.object({ force: z.boolean().optional() });
@@ -115,6 +117,33 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
           if (!current) return;
           await writeProject(dataDir, { ...current, domain: analysis.domain, updatedAt: new Date().toISOString() });
         });
+        // V3-D D3 "Concept merge queue": fingerprint every unit from this run
+        // against the dataDir-wide registry (cross-video identity) — v3
+        // analyses with units only; a router failure/v2 legacy run has
+        // nothing to register. Best-effort: a registry write failure
+        // shouldn't fail the analyze run itself (the analysis already
+        // succeeded and is already on disk), so this is intentionally
+        // outside the try/catch's failure path for the run overall — errors
+        // here are logged, not surfaced as an analyze failure.
+        if (analysis.units && analysis.units.length > 0) {
+          try {
+            await withConceptRegistryLock(async () => {
+              const registry = await readConceptRegistry(dataDir);
+              const next = updateRegistryForProject(
+                registry,
+                projectId,
+                analysis.domain ?? "generic",
+                analysis.units!,
+                new Date().toISOString(),
+                newId
+              );
+              await writeConceptRegistry(dataDir, next);
+            });
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.warn(`[analyze] concept registry update failed for project ${projectId}: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
         analysisJobs.done(projectId);
       } catch (err) {
         analysisJobs.error(projectId, err instanceof Error ? err.message : String(err));
