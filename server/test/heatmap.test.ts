@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { bucketizeHeatmap, gaussianKernel, gaussianSmooth, HEATMAP_BUCKET_COUNT, type HeatmapPoint } from "../src/lib/heatmap.js";
+import {
+  buildLayeredHeatmap,
+  bucketizeHeatmap,
+  gaussianKernel,
+  gaussianSmooth,
+  HEATMAP_BUCKET_COUNT,
+  marksNearBucket,
+  type HeatmapMark,
+  type HeatmapPoint,
+  type LayeredHeatmapInput,
+} from "../src/lib/heatmap.js";
 
 describe("gaussianKernel", () => {
   it("is normalized (sums to 1)", () => {
@@ -125,5 +135,124 @@ describe("bucketizeHeatmap", () => {
   it("never returns NaN, even with degenerate inputs", () => {
     const result = bucketizeHeatmap([{ t: 0, weight: 1 }], 100, 1);
     expect(result.every((v) => Number.isFinite(v))).toBe(true);
+  });
+});
+
+// V3-C C5 "Attention heatmap" (PEDAGOGY.md §7) — own/overlay layers built
+// and normalized independently.
+describe("buildLayeredHeatmap", () => {
+  function input(overrides: Partial<LayeredHeatmapInput> = {}): LayeredHeatmapInput {
+    return { ownBubbles: [], ownPearls: [], overlayBubbles: [], overlayPearls: [], ...overrides };
+  }
+
+  it("returns an all-zero own layer and all-zero overlays layer when there's no data at all", () => {
+    const result = buildLayeredHeatmap(input(), 100, 10, 0);
+    expect(result.own).toEqual(new Array(10).fill(0));
+    expect(result.overlays).toEqual(new Array(10).fill(0));
+    expect(result.marks.own).toEqual([]);
+    expect(result.marks.overlays).toEqual([]);
+  });
+
+  it("normalizes the own and overlays layers independently — a single overlay mark still peaks at 1", () => {
+    // Own has 3 bubbles concentrated in one bucket; overlays has a single,
+    // much smaller mark elsewhere. Independent normalization means BOTH
+    // layers still peak at ~1 — neither is visually dwarfed by the other.
+    const result = buildLayeredHeatmap(
+      input({
+        ownBubbles: [{ t: 10, text: "a" }, { t: 10, text: "b" }, { t: 10, text: "c" }],
+        overlayBubbles: [{ t: 90, text: "x", author: "friend" }],
+      }),
+      100,
+      10,
+      0
+    );
+    expect(Math.max(...result.own)).toBeCloseTo(1, 5);
+    expect(Math.max(...result.overlays)).toBeCloseTo(1, 5);
+  });
+
+  it("weights own pearls by importance, same as bubbles=1, within the own layer", () => {
+    const result = buildLayeredHeatmap(
+      input({
+        ownBubbles: [{ t: 10, text: "a" }],
+        ownPearls: [{ t: 90, label: "big pearl", importance: 3 }],
+      }),
+      100,
+      10,
+      0
+    );
+    // bucket for t=10 (weight 1) vs bucket for t=90 (weight 3) — the pearl's bucket must be strictly higher.
+    expect(result.own[9]).toBeGreaterThan(result.own[1]);
+  });
+
+  it("labels own marks with author 'You' and overlay marks with the bundle's shareHandle", () => {
+    const result = buildLayeredHeatmap(
+      input({
+        ownBubbles: [{ t: 10, text: "mine" }],
+        overlayBubbles: [{ t: 20, text: "theirs", author: "gordon" }],
+      }),
+      100,
+      10,
+      0
+    );
+    expect(result.marks.own[0]).toMatchObject({ author: "You", kind: "bubble", text: "mine" });
+    expect(result.marks.overlays[0]).toMatchObject({ author: "gordon", kind: "bubble", text: "theirs" });
+  });
+
+  it("falls back to '(no caption)' for a bubble with empty text, in both layers", () => {
+    const result = buildLayeredHeatmap(
+      input({ ownBubbles: [{ t: 10, text: "" }], overlayBubbles: [{ t: 20, text: "", author: "x" }] }),
+      100,
+      10,
+      0
+    );
+    expect(result.marks.own[0].text).toBe("(no caption)");
+    expect(result.marks.overlays[0].text).toBe("(no caption)");
+  });
+
+  it("combines multiple overlay bundles into a single overlays layer (not one per handle)", () => {
+    const result = buildLayeredHeatmap(
+      input({
+        overlayBubbles: [{ t: 10, text: "a", author: "alice" }, { t: 10, text: "b", author: "bob" }],
+      }),
+      100,
+      10,
+      0
+    );
+    expect(result.marks.overlays).toHaveLength(2);
+    expect(new Set(result.marks.overlays.map((m) => m.author))).toEqual(new Set(["alice", "bob"]));
+  });
+});
+
+describe("marksNearBucket", () => {
+  function mark(overrides: Partial<HeatmapMark> = {}): HeatmapMark {
+    return { t: 0, kind: "bubble", text: "text", author: "You", ...overrides };
+  }
+
+  it("includes a mark exactly in the target bucket", () => {
+    // duration 100, bucketCount 10 -> bucketDuration 10; t=25 -> bucket 2.
+    const marks = [mark({ t: 25 })];
+    expect(marksNearBucket(marks, 2, 10, 100)).toHaveLength(1);
+  });
+
+  it("includes marks in the ±1 neighboring buckets", () => {
+    const marks = [mark({ t: 15, text: "bucket1" }), mark({ t: 25, text: "bucket2" }), mark({ t: 35, text: "bucket3" })];
+    const result = marksNearBucket(marks, 2, 10, 100);
+    expect(result.map((m) => m.text).sort()).toEqual(["bucket1", "bucket2", "bucket3"]);
+  });
+
+  it("excludes marks 2+ buckets away", () => {
+    const marks = [mark({ t: 5, text: "bucket0" }), mark({ t: 25, text: "bucket2" })];
+    const result = marksNearBucket(marks, 2, 10, 100);
+    expect(result.map((m) => m.text)).toEqual(["bucket2"]);
+  });
+
+  it("returns [] for a non-positive duration or bucketCount", () => {
+    expect(marksNearBucket([mark({ t: 5 })], 0, 10, 0)).toEqual([]);
+    expect(marksNearBucket([mark({ t: 5 })], 0, 0, 100)).toEqual([]);
+  });
+
+  it("drops marks outside [0, duration]", () => {
+    const marks = [mark({ t: -5 }), mark({ t: 1000 })];
+    expect(marksNearBucket(marks, 0, 10, 100)).toEqual([]);
   });
 });

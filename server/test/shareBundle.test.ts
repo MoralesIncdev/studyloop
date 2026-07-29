@@ -204,6 +204,88 @@ describe("buildShareBundle / validateShareBundle round trip", () => {
   });
 });
 
+describe("buildShareBundle — V3-C C6 conceptRationales round trip", () => {
+  const concepts = [{ id: "concept-1", title: "Concept 1", summary: "s", body: "b", anchors: [{ t: 65 }] }];
+
+  it("includes a rationale keyed to a real concept id, round-tripping through validate", async () => {
+    const bundle = await buildShareBundle({
+      project: localProject(),
+      notes: "",
+      bubbles: [],
+      shareHandle: "ryan",
+      localDurationSeconds: null,
+      concepts,
+      conceptRationales: { "concept-1": "Grouped these because they share the same entry position." },
+      resolveThumbnail: async () => null,
+    });
+    expect(bundle.conceptRationales).toEqual({ "concept-1": "Grouped these because they share the same entry position." });
+    const validated = validateShareBundle(JSON.stringify(bundle));
+    expect(validated.ok).toBe(true);
+    if (!validated.ok) throw new Error("unreachable");
+    expect(validated.bundle.conceptRationales).toEqual(bundle.conceptRationales);
+  });
+
+  it("omits conceptRationales entirely when none were given — still validates (bundle version stays 1)", async () => {
+    const bundle = await buildShareBundle({
+      project: localProject(),
+      notes: "",
+      bubbles: [],
+      shareHandle: "ryan",
+      localDurationSeconds: null,
+      concepts,
+      resolveThumbnail: async () => null,
+    });
+    expect(bundle.conceptRationales).toBeUndefined();
+    expect(bundle.version).toBe(1);
+    expect(validateShareBundle(JSON.stringify(bundle)).ok).toBe(true);
+  });
+
+  it("drops a rationale keyed to a concept id that isn't in this bundle (stale/mistargeted id)", async () => {
+    const bundle = await buildShareBundle({
+      project: localProject(),
+      notes: "",
+      bubbles: [],
+      shareHandle: "ryan",
+      localDurationSeconds: null,
+      concepts,
+      conceptRationales: { "concept-1": "kept", "not-a-real-concept": "dropped" },
+      resolveThumbnail: async () => null,
+    });
+    expect(bundle.conceptRationales).toEqual({ "concept-1": "kept" });
+  });
+
+  it("drops a blank/whitespace-only rationale", async () => {
+    const bundle = await buildShareBundle({
+      project: localProject(),
+      notes: "",
+      bubbles: [],
+      shareHandle: "ryan",
+      localDurationSeconds: null,
+      concepts,
+      conceptRationales: { "concept-1": "   " },
+      resolveThumbnail: async () => null,
+    });
+    expect(bundle.conceptRationales).toBeUndefined();
+  });
+
+  it("a v1 bundle with no conceptRationales field at all still validates (pre-C6 bundles)", () => {
+    const legacy = {
+      version: 1,
+      createdAt: "2026-07-28T00:00:00Z",
+      shareHandle: "ryan",
+      source: { type: "local", filename: "video.mp4", durationSeconds: 100 },
+      title: "A video",
+      notes: "",
+      bubbles: [],
+      pearls: [],
+      concepts: [],
+      themes: [],
+    };
+    const validated = validateShareBundle(JSON.stringify(legacy));
+    expect(validated.ok).toBe(true);
+  });
+});
+
 describe("validateShareBundle — V3-A lessonSummary tolerance", () => {
   it("validates a legacy bundle JSON with no lessonSummary key at all (pre-V3-A export)", () => {
     const legacy = {

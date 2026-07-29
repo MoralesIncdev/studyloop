@@ -80,3 +80,112 @@ export function bucketizeHeatmap(
   if (max <= 0) return smoothed.map(() => 0);
   return smoothed.map((v) => Math.min(1, Math.max(0, v / max)));
 }
+
+// --- V3-C C5 "Attention heatmap" (PEDAGOGY.md §7) ---------------------------
+//
+// "Aggregated marks measure attention; peaks may be confusion, not value, and
+// crowd signal washes out expert signal. [...] render user layer and overlay
+// layer separately (smooth within, never across)." This is the whole reason
+// GET /api/projects/:id/heatmap now returns TWO independently-bucketed/
+// normalized arrays (`own`, `overlays`) instead of one merged array — merging
+// them (the old V2-C behavior, still exercised by bucketizeHeatmap itself
+// above) let a crowd of imported marks visually dominate the learner's own,
+// and a single normalized peak lost the distinction between "I marked this a
+// lot" and "someone I imported marked this a lot".
+
+export interface HeatmapMark {
+  t: number;
+  kind: "bubble" | "pearl";
+  /** Pearls only. */
+  importance?: 1 | 2 | 3;
+  text: string;
+  /** "You" for the learner's own marks; the overlay's shareHandle otherwise. */
+  author: string;
+}
+
+export interface LayeredHeatmapInput {
+  ownBubbles: readonly { t: number; text: string }[];
+  ownPearls: readonly { t: number; label: string; importance: number }[];
+  overlayBubbles: readonly { t: number; text: string; author: string }[];
+  overlayPearls: readonly { t: number; label: string; importance: number; author: string }[];
+}
+
+export interface LayeredHeatmapResult {
+  own: number[];
+  overlays: number[];
+  marks: { own: HeatmapMark[]; overlays: HeatmapMark[] };
+}
+
+/**
+ * Builds the two independently-smoothed/normalized layers plus the raw mark
+ * lists the click-to-inspect popover needs (SPEC C5: "popover listing marks
+ * within that bucket (±1 bucket): author handle, type, text snippet").
+ * Bubbles weight 1, pearls weight = importance — same relative weighting
+ * within each layer as the pre-V3-C merged heatmap used, just no longer
+ * cross-layer-downweighted (that ×0.5 existed only to keep a merged array
+ * from letting overlays dominate; independent per-layer normalization makes
+ * it moot — each layer's own peak is always 1).
+ */
+export function buildLayeredHeatmap(
+  input: LayeredHeatmapInput,
+  duration: number,
+  bucketCount: number = HEATMAP_BUCKET_COUNT,
+  sigma: number = HEATMAP_SMOOTH_SIGMA
+): LayeredHeatmapResult {
+  const ownPoints: HeatmapPoint[] = [
+    ...input.ownBubbles.map((b) => ({ t: b.t, weight: 1 })),
+    ...input.ownPearls.map((p) => ({ t: p.t, weight: p.importance })),
+  ];
+  const overlayPoints: HeatmapPoint[] = [
+    ...input.overlayBubbles.map((b) => ({ t: b.t, weight: 1 })),
+    ...input.overlayPearls.map((p) => ({ t: p.t, weight: p.importance })),
+  ];
+
+  const ownMarks: HeatmapMark[] = [
+    ...input.ownBubbles.map((b): HeatmapMark => ({ t: b.t, kind: "bubble", text: b.text || "(no caption)", author: "You" })),
+    ...input.ownPearls.map(
+      (p): HeatmapMark => ({ t: p.t, kind: "pearl", importance: clampImportance(p.importance), text: p.label, author: "You" })
+    ),
+  ];
+  const overlayMarks: HeatmapMark[] = [
+    ...input.overlayBubbles.map(
+      (b): HeatmapMark => ({ t: b.t, kind: "bubble", text: b.text || "(no caption)", author: b.author })
+    ),
+    ...input.overlayPearls.map(
+      (p): HeatmapMark => ({ t: p.t, kind: "pearl", importance: clampImportance(p.importance), text: p.label, author: p.author })
+    ),
+  ];
+
+  return {
+    own: bucketizeHeatmap(ownPoints, duration, bucketCount, sigma),
+    overlays: bucketizeHeatmap(overlayPoints, duration, bucketCount, sigma),
+    marks: { own: ownMarks, overlays: overlayMarks },
+  };
+}
+
+function clampImportance(n: number): 1 | 2 | 3 {
+  if (n >= 3) return 3;
+  if (n <= 1) return 1;
+  return 2;
+}
+
+/**
+ * Marks within ±1 bucket of the bucket containing `t` (SPEC C5: "popover
+ * listing marks within that bucket (±1 bucket)"). `bucketIndex` is derived
+ * the same way bucketizeHeatmap's own loop derives it, so the popover's
+ * notion of "which bucket" always matches what was actually plotted there.
+ */
+export function marksNearBucket(
+  marks: readonly HeatmapMark[],
+  bucketIndex: number,
+  bucketCount: number,
+  duration: number
+): HeatmapMark[] {
+  if (duration <= 0 || bucketCount <= 0) return [];
+  const bucketDuration = duration / bucketCount;
+  return marks.filter((m) => {
+    if (m.t < 0 || m.t > duration) return false;
+    const idx = Math.min(bucketCount - 1, Math.floor(m.t / bucketDuration));
+    return Math.abs(idx - bucketIndex) <= 1;
+  });
+}
