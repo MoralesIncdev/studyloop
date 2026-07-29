@@ -31,6 +31,11 @@ function splitWordBoundaries(input: string): string {
   s = s.replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
   // lowercase/digit -> uppercase: "openGuard" -> "open Guard".
   s = s.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+  // Authorship "by" glued to the preceding word when the next word is
+  // capitalized: "Passesby Gordon" -> "Passes by Gordon". Filename patterns
+  // like "<Title>by<Author>" are common in instructional libraries; the 3+
+  // char prefix guard keeps short real words ("Baby", "Ruby") intact.
+  s = s.replace(/\b([A-Za-z][a-z]{2,}?)by (?=[A-Z])/g, "$1 by ");
   // letter <-> digit boundaries, either direction: "Volume1" -> "Volume 1", "4Kvideo" -> "4 Kvideo".
   s = s.replace(/([A-Za-z])([0-9])/g, "$1 $2");
   s = s.replace(/([0-9])([A-Za-z])/g, "$1 $2");
@@ -46,11 +51,14 @@ function splitWordBoundaries(input: string): string {
  * never re-cases the rest of a word).
  */
 function normalizeWords(words: string[]): string[] {
-  return words.map((word) => {
+  return words.map((word, index) => {
     if (!word) return word;
     const bare = word.replace(/[^A-Za-z0-9&]/g, "");
     const acronym = ACRONYM_BY_UPPER.get(bare.toUpperCase());
     if (acronym) return acronym;
+    // Title-case convention: the authorship preposition stays lowercase
+    // mid-title ("Sweep the World by Bernardo Faria"), never at position 0.
+    if (index > 0 && bare.toLowerCase() === "by") return word.toLowerCase();
     return word.charAt(0).toUpperCase() + word.slice(1);
   });
 }

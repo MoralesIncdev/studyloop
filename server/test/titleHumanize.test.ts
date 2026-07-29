@@ -8,7 +8,7 @@ describe("humanizeVideoTitle", () => {
 
   it("produces a sensible split for a longer run-together filename (real filename from this library)", () => {
     expect(humanizeVideoTitle("HighPercentageGiPassesbyGordonRyan1")).toBe(
-      "High Percentage Gi Passesby Gordon Ryan 1"
+      "High Percentage Gi Passes by Gordon Ryan 1"
     );
   });
 
@@ -75,5 +75,18 @@ describe("humanizeVideoTitle", () => {
       expect(humanizeVideoTitle("OpenGuardSeatedVolume1", undefined)).toBe("Open Guard Seated Volume 1");
       expect(humanizeVideoTitle("OpenGuardSeatedVolume1", null)).toBe("Open Guard Seated Volume 1");
     });
+  });
+});
+
+describe("authorship 'by' splitting", () => {
+  it("splits a glued authorship 'by' before a capitalized name", () => {
+    expect(humanizeVideoTitle("SweepTheWorldbyBernardoFaria")).toBe(
+      "Sweep The World by Bernardo Faria",
+    );
+  });
+
+  it("never splits short real words ending in 'by'", () => {
+    expect(humanizeVideoTitle("RubyGordon")).toBe("Ruby Gordon");
+    expect(humanizeVideoTitle("BabyShark")).toBe("Baby Shark");
   });
 });

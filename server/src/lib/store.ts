@@ -3,6 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { BubbleSchema, ProjectSchema, type Bubble, type Project } from "./models.js";
 import { isInsideRoot } from "./paths.js";
+import { humanizeVideoTitle } from "./titleHumanize.js";
 
 /**
  * Atomic write: write to a temp file in the same directory, then rename over
@@ -220,10 +221,21 @@ export async function readProject(dataDir: string, id: string): Promise<Project 
   // Migration: older project.json files predate `watchedUpTo`. Rather than
   // silently defaulting to 0 (which would make previously-covered concepts
   // vanish from the compiled doc), seed it from lastPosition on first read.
+  let project = parsed;
   if (raw.watchedUpTo === undefined) {
-    return { ...parsed, watchedUpTo: parsed.lastPosition };
+    project = { ...project, watchedUpTo: project.lastPosition };
   }
-  return parsed;
+  // Migration: projects created before title humanization landed persisted the
+  // raw filename as their title ("OpenGuardSeatedVolume1"). If the stored title
+  // still exactly matches the source file's basename, present the humanized
+  // form instead — read-time only, so a user-edited title is never touched.
+  if (project.source.type === "local" && project.source.path) {
+    const base = path.basename(project.source.path, path.extname(project.source.path));
+    if (project.title === base) {
+      project = { ...project, title: humanizeVideoTitle(base) };
+    }
+  }
+  return project;
 }
 
 /**
