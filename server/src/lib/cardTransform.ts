@@ -10,6 +10,7 @@ import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { ANALYSIS_MAX_TOKENS, type AnalysisOutcome } from "./analysis.js";
+import type { Domain } from "./models.js";
 
 /** SPEC B4: "<40 chars or no '?' etc. heuristic". Deviation from literal wording: implemented as an OR of three cheap fragment signals (empty, short, no terminal punctuation) rather than a single length check — a one-word bubble like "Interesting" is 11 chars (obviously weak) but "Watch the hip angle here, not the shoulder" is 43 chars and reads as a complete thought; length alone would mis-classify both. */
 export function isWeakBubbleText(text: string): boolean {
@@ -43,6 +44,8 @@ export interface CardTransformInput {
   /** Extra context: the bubble's own text (already the quote for bubbles, so empty there) or a pearl's label. */
   note: string;
   kind: "bubble" | "pearl";
+  /** V3-D D4 "domain-routed" card transformation — the owning project's domain (undefined for a v2 analysis, a project with no domain yet, or "generic"), shapes the question STYLE below. */
+  domain?: Domain;
 }
 
 const CARD_TRANSFORM_SYSTEM_PROMPT = `You turn a learner's study-session note or a pearl of insight into a spaced-repetition review card. Given the source text, produce:
@@ -50,6 +53,28 @@ const CARD_TRANSFORM_SYSTEM_PROMPT = `You turn a learner's study-session note or
 - "back": the answer, stated plainly.
 - "why": one sentence explaining why the answer is correct or why it matters — corrective feedback, not a restatement of the answer.
 Keep all three fields short (front/why under 160 characters, back under 240). Base the card only on the given text — never invent facts not present in it.`;
+
+/**
+ * V3-D D4 "Card transformation becomes domain-routed: the transformation
+ * prompt uses the project domain to shape question style (mechanistic why /
+ * sourcing / scenario application / notation)." Appended to the shared
+ * system prompt above — same "one shared JSON schema, only the text
+ * changes" pattern as lib/analysis.ts's DOMAIN_MODULES.
+ */
+const CARD_TRANSFORM_DOMAIN_MODULES: Record<Domain, string> = {
+  biology: 'Question style: mechanistic why. Prefer a "front" that asks HOW or WHY the mechanism works, not just what it is.',
+  history:
+    'Question style: sourcing. Prefer a "front" that asks who claims this and on what basis, or what kind of source/perspective it reflects.',
+  music: 'Question style: notation. Prefer a "front" that asks the learner to map the idea to notation, key, or how it would sound.',
+  physical_skill:
+    'Question style: scenario application. Prefer a "front" phrased as a live scenario ("you\'re in X, opponent does Y — what next?") rather than an abstract definition.',
+  generic: "No specific domain lens applies — use your best general judgment for question style.",
+};
+
+function buildCardTransformSystemPrompt(domain?: Domain): string {
+  if (!domain) return CARD_TRANSFORM_SYSTEM_PROMPT;
+  return `${CARD_TRANSFORM_SYSTEM_PROMPT}\n\n${CARD_TRANSFORM_DOMAIN_MODULES[domain]}`;
+}
 
 function buildCardTransformUserPrompt(input: CardTransformInput): string {
   const parts = [`Kind: ${input.kind}`, `Source text: ${input.quote}`];
@@ -74,7 +99,7 @@ export class AnthropicCardTransformClient implements CardTransformLLMClient {
       response = await this.client.messages.create({
         model,
         max_tokens: Math.min(1024, ANALYSIS_MAX_TOKENS),
-        system: CARD_TRANSFORM_SYSTEM_PROMPT,
+        system: buildCardTransformSystemPrompt(input.domain),
         messages: [{ role: "user", content: buildCardTransformUserPrompt(input) }],
         output_config: { format: { type: "json_schema", schema: CARD_TRANSFORM_JSON_SCHEMA } },
       });
@@ -101,6 +126,44 @@ export class AnthropicCardTransformClient implements CardTransformLLMClient {
   }
 }
 
+/**
+ * V3-D D4: deterministic domain-shaped question stem for the fake client —
+ * mirrors CARD_TRANSFORM_DOMAIN_MODULES' style guidance (mechanistic-why /
+ * sourcing / notation / scenario-application) without a network call, so
+ * "domain question routing" is exercisable/testable in fake mode. `pearl`
+ * gets a direct question; `bubble` keeps its cloze/fill-in-the-blank shape
+ * but with a domain-flavored lead-in.
+ */
+function domainFront(domain: Domain | undefined, kind: CardTransformInput["kind"], source: string): string {
+  const s = source.slice(0, 80);
+  if (kind === "bubble") {
+    switch (domain) {
+      case "biology":
+        return `Mechanism check — fill in the blank: ${s} — ___`;
+      case "history":
+        return `Sourcing check — fill in the blank: ${s} — ___`;
+      case "music":
+        return `Notation check — fill in the blank: ${s} — ___`;
+      case "physical_skill":
+        return `Scenario check — fill in the blank: ${s} — ___`;
+      default:
+        return `Fill in the blank: ${s} — ___`;
+    }
+  }
+  switch (domain) {
+    case "biology":
+      return `Why does this happen: "${s}"?`;
+    case "history":
+      return `Who claims this, and on what basis: "${s}"?`;
+    case "music":
+      return `How would you notate: "${s}"?`;
+    case "physical_skill":
+      return `You're mid-technique — what's next after: "${s}"?`;
+    default:
+      return `Why does this matter: "${s}"?`;
+  }
+}
+
 /** Deterministic — no network call, mirrors FakeAnalysisClient's role for STUDYLOOP_FAKE_ANALYSIS=1 / tests. */
 export class FakeCardTransformClient implements CardTransformLLMClient {
   async transform(input: CardTransformInput, _model?: string): Promise<AnalysisOutcome<CardTransformResult>> {
@@ -108,7 +171,7 @@ export class FakeCardTransformClient implements CardTransformLLMClient {
     return {
       kind: "ok",
       data: {
-        front: input.kind === "pearl" ? `Why does this matter: "${source.slice(0, 80)}"?` : `Fill in the blank: ${source.slice(0, 80)} — ___`,
+        front: domainFront(input.domain, input.kind, source),
         back: input.note.trim() || source,
         why: "This connects directly back to the source material at this moment in the video.",
       },
@@ -234,4 +297,26 @@ export function attachTransforms<TCard extends TransformableCard>(
     const entry = cache[c.id];
     return entry ? { ...c, transformed: { front: entry.front, back: entry.back, why: entry.why } } : c;
   });
+}
+
+/**
+ * V3-D D4 "improve this card": unconditionally overwrites one card's cache
+ * entry — the explicit-regeneration counterpart to fillTransformCache's
+ * "skip if already cached" policy. Kept as its own tiny pure function (not
+ * inlined in the route) so the "cache overwrite is a plain object merge,
+ * nothing fancier" behavior stays directly unit-testable.
+ *
+ * Merge note (V3-B review fix #2 x V3-D D4): the written entry carries
+ * `sourceHash` forward from the caller's `result` (the route stamps it via
+ * `hashCardTransformInput` before calling in) — omitting it here would make
+ * fillTransformCache's hash-invalidation treat a just-regenerated card as a
+ * pre-migration entry and silently drop/refetch it on the very next queue
+ * load, undoing the user's explicit "improve" action before they ever see it.
+ */
+export function withTransformResult(
+  cached: Readonly<Record<string, CachedCardTransform>>,
+  cardId: string,
+  result: CachedCardTransform
+): Record<string, CachedCardTransform> {
+  return { ...cached, [cardId]: result };
 }

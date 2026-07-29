@@ -17,3 +17,58 @@
   flex-direction: column;
   gap: 4px;
 }
+
+/* V3-D D2 "REINFORCE step (repeat slot)" — a lightweight recall nudge, 2
+   positions after a threshold unit. Deliberately quieter/smaller than a full
+   UnitProposalCard: it's a quick-recall prompt, not a new proposal. */
+.reinforceCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed color-mix(in srgb, var(--accent-amber) 40%, var(--border-default));
+  background: color-mix(in srgb, var(--accent-amber) 6%, transparent);
+}
+
+.reinforceHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--type-11);
+  font-weight: var(--weight-medium);
+  color: var(--accent-amber);
+}
+
+.reinforceSeek {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--accent-blue);
+  font-size: var(--type-11);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.reinforcePrompt {
+  margin: 0;
+  font-size: var(--type-12);
+  color: var(--text-secondary);
+}
+
+.reinforceAck {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+  font-size: var(--type-11);
+  cursor: pointer;
+}
+
+.reinforceCard[data-done="true"] .reinforceAck {
+  color: var(--accent-green);
+  border-color: color-mix(in srgb, var(--accent-green) 40%, transparent);
+  cursor: default;
+}

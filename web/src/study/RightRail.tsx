@@ -219,6 +219,9 @@ export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
   const playbackFocus = useStudyLoopStore((s) => s.playbackFocus);
   const focusOverride = useStudyLoopStore((s) => s.focusOverride);
   const setFocusOverride = useStudyLoopStore((s) => s.setFocusOverride);
+  // V3-D D3: "badge on the Concepts rail header ('Review merges · N')".
+  const mergeCandidateCount = useStudyLoopStore((s) => s.mergeCandidates.length);
+  const setMergeQueueOpen = useStudyLoopStore((s) => s.setMergeQueueOpen);
 
   // V3-A A1: the purge visually forces Transcript collapsed on top of the
   // user's persisted `railOpenSection` — Concepts is never purged. Shared
@@ -271,19 +274,35 @@ export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
         expanded={conceptsVisuallyOpen}
         onToggle={() => selectSection("concepts", conceptsVisuallyOpen)}
         headerAction={
-          <button
-            type="button"
-            className={styles.tickerMuteButton}
-            onClick={(e) => {
-              e.stopPropagation();
-              setConceptTickerMuted(!conceptTickerMuted);
-            }}
-            title={conceptTickerMuted ? "Unmute concept chips" : "Mute concept chips"}
-            aria-label={conceptTickerMuted ? "Unmute concept chips" : "Mute concept chips"}
-            aria-pressed={conceptTickerMuted}
-          >
-            <Icon name={conceptTickerMuted ? "notificationsOff" : "notifications"} size={16} />
-          </button>
+          <>
+            {mergeCandidateCount > 0 && (
+              <button
+                type="button"
+                className={styles.mergeQueueBadge}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMergeQueueOpen(true);
+                }}
+                title="Concepts that look like the same idea across your projects"
+              >
+                <Icon name="copy" size={13} />
+                Review merges · {mergeCandidateCount}
+              </button>
+            )}
+            <button
+              type="button"
+              className={styles.tickerMuteButton}
+              onClick={(e) => {
+                e.stopPropagation();
+                setConceptTickerMuted(!conceptTickerMuted);
+              }}
+              title={conceptTickerMuted ? "Unmute concept chips" : "Mute concept chips"}
+              aria-label={conceptTickerMuted ? "Unmute concept chips" : "Mute concept chips"}
+              aria-pressed={conceptTickerMuted}
+            >
+              <Icon name={conceptTickerMuted ? "notificationsOff" : "notifications"} size={16} />
+            </button>
+          </>
         }
       >
         <div className={styles.conceptsViewport}>

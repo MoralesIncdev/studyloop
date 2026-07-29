@@ -1,6 +1,7 @@
 // V3-B B3 "Study Path rail tab" — topo sort + cycle/low-confidence fallback.
+// V3-D D2 "REINFORCE step insertion" tests live at the bottom of this file.
 import { describe, expect, it } from "vitest";
-import { PATH_EDGE_CONFIDENCE_THRESHOLD, topoSortUnits } from "./studyPath";
+import { buildStudyPathSteps, PATH_EDGE_CONFIDENCE_THRESHOLD, topoSortUnits, type StudyPathStep } from "./studyPath";
 import type { AnalysisEdge, AnalysisUnit } from "./types";
 
 function unit(id: string, t: number, overrides: Partial<AnalysisUnit> = {}): AnalysisUnit {
@@ -12,6 +13,7 @@ function unit(id: string, t: number, overrides: Partial<AnalysisUnit> = {}): Ana
     body: "b",
     anchors: [{ t, quote: "q" }],
     confidence: 0.9,
+    threshold: false,
     ...overrides,
   };
 }
@@ -111,5 +113,74 @@ describe("topoSortUnits — cycle fallback", () => {
     const edges = [edge("a", "b", "REQUIRES"), edge("b", "c", "REQUIRES"), edge("c", "a", "REQUIRES"), edge("d", "e", "PROCEDURE_STEP")];
     const result = topoSortUnits(units, edges);
     expect(result.map((u) => u.id).sort()).toEqual(["a", "b", "c", "d", "e"]);
+  });
+});
+
+// --- V3-D D2 "Study Path inserts a REINFORCE step (repeat slot) 2 positions
+// after a threshold unit" ----------------------------------------------------
+
+function stepIds(steps: StudyPathStep[]): string[] {
+  return steps.map((s) => (s.kind === "unit" ? s.unit.id : s.id));
+}
+
+describe("buildStudyPathSteps — no threshold units", () => {
+  it("is identical to topoSortUnits' order, wrapped as unit steps, when nothing is threshold-flagged", () => {
+    const units = [unit("a", 10), unit("b", 20), unit("c", 30)];
+    const steps = buildStudyPathSteps(units, []);
+    expect(steps.every((s) => s.kind === "unit")).toBe(true);
+    expect(stepIds(steps)).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("buildStudyPathSteps — REINFORCE insertion", () => {
+  it("inserts a reinforce step exactly 2 positions after a threshold unit", () => {
+    const units = [unit("a", 10, { threshold: true }), unit("b", 20), unit("c", 30), unit("d", 40)];
+    const steps = buildStudyPathSteps(units, []);
+    // order: a(threshold), b, c, d -> reinforce:a inserted at index 2 (after b, before c)
+    expect(stepIds(steps)).toEqual(["a", "b", "reinforce:a", "c", "d"]);
+    expect(steps[2]).toEqual({ kind: "reinforce", id: "reinforce:a", afterUnit: units[0] });
+  });
+
+  it("clamps to the end of the path when the threshold unit is near the tail", () => {
+    const units = [unit("a", 10), unit("b", 20, { threshold: true }), unit("c", 30)];
+    const steps = buildStudyPathSteps(units, []);
+    // b is at index 1; 1+2=3 clamps to steps.length (3) -> appended at the end.
+    expect(stepIds(steps)).toEqual(["a", "b", "c", "reinforce:b"]);
+  });
+
+  it("handles multiple threshold units without corrupting later insertion positions", () => {
+    const units = [
+      unit("a", 10, { threshold: true }),
+      unit("b", 20),
+      unit("c", 30, { threshold: true }),
+      unit("d", 40),
+      unit("e", 50),
+    ];
+    const steps = buildStudyPathSteps(units, []);
+    // Original order: a, b, c, d, e (indices 0..4).
+    // reinforce:a targets index 0+2=2 (before c); reinforce:c targets index 2+2=4 (before e, in ORIGINAL indexing).
+    expect(stepIds(steps)).toEqual(["a", "b", "reinforce:a", "c", "d", "reinforce:c", "e"]);
+  });
+
+  it("inserts one reinforce step per threshold unit even when two threshold units are adjacent", () => {
+    const units = [unit("a", 10, { threshold: true }), unit("b", 20, { threshold: true }), unit("c", 30), unit("d", 40)];
+    const steps = buildStudyPathSteps(units, []);
+    expect(stepIds(steps).filter((id) => id.startsWith("reinforce:"))).toEqual(["reinforce:a", "reinforce:b"]);
+    expect(stepIds(steps)).toHaveLength(6);
+  });
+
+  it("never drops or duplicates a unit step, regardless of how many are threshold-flagged", () => {
+    const units = ["a", "b", "c", "d", "e"].map((id, i) => unit(id, i * 10, { threshold: i % 2 === 0 }));
+    const steps = buildStudyPathSteps(units, []);
+    const unitSteps = steps.filter((s): s is Extract<StudyPathStep, { kind: "unit" }> => s.kind === "unit");
+    expect(unitSteps.map((s) => s.unit.id).sort()).toEqual(["a", "b", "c", "d", "e"]);
+  });
+
+  it("composes with edge-based ordering (REINFORCE follows the topo-sorted position, not raw input order)", () => {
+    // b REQUIRES a -> topo order is [a, b]; a is threshold -> reinforce:a lands 2 after (clamped to end).
+    const units = [unit("b", 999, { threshold: false }), unit("a", 1, { threshold: true })];
+    const edges = [edge("b", "a", "REQUIRES")];
+    const steps = buildStudyPathSteps(units, edges);
+    expect(stepIds(steps)).toEqual(["a", "b", "reinforce:a"]);
   });
 });

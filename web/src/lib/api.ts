@@ -13,11 +13,15 @@ import type {
   HealthResponse,
   HeatmapResponse,
   LibraryResponse,
+  MergeCandidatesResponse,
+  MergedConceptsResponse,
+  MergeResolveAction,
   OverlayMeta,
   PatchProjectBody,
   PearlReviewAddsResponse,
   Project,
   RevealResponse,
+  ReviewCardTransform,
   ReviewGrade,
   ReviewQueueResponse,
   SearchIntent,
@@ -191,6 +195,21 @@ export const api = {
     request<PearlReviewAddsResponse>(`/api/projects/${encodeURIComponent(id)}/pearls/review-adds`),
   addPearlToReview: (id: string, t: number) =>
     request<PearlReviewAddsResponse>(`/api/projects/${encodeURIComponent(id)}/pearls/${encodeURIComponent(t)}/review-add`, {
+      method: "POST",
+    }),
+
+  // --- V3-D D3: concept merge queue ------------------------------------------------
+  getMergeCandidates: () => request<MergeCandidatesResponse>("/api/registry/merge-candidates"),
+  resolveMergeCandidate: (candidateId: string, action: MergeResolveAction) =>
+    request<{ candidates: number }>(`/api/registry/merge-candidates/${encodeURIComponent(candidateId)}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    }),
+  getMergedConcepts: (id: string) => request<MergedConceptsResponse>(`/api/projects/${encodeURIComponent(id)}/merged-concepts`),
+
+  // --- V3-D D4: domain-routed card transformation — "improve this card" -----------
+  improveReviewCard: (cardId: string) =>
+    request<{ transformed: ReviewCardTransform | null }>(`/api/review/cards/${encodeURIComponent(cardId)}/improve`, {
       method: "POST",
     }),
 

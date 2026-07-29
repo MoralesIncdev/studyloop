@@ -134,6 +134,39 @@ export interface ContinuityWeights {
   gapFill: number;
 }
 
+/** V3-D D3 "also in ⟨other project⟩" chip source — one other project a unit's canonical registry entry also spans. */
+export interface MergedConceptRef {
+  projectId: string;
+  projectTitle: string;
+}
+
+/** GET /api/projects/:id/merged-concepts response: {[unitId]: other projects the same registry concept spans}. */
+export type MergedConceptsResponse = Record<string, MergedConceptRef[]>;
+
+// --- V3-D D3: Concept merge queue (mirrors server/src/routes/registry.ts) --
+
+export interface MergeCandidateSide {
+  projectId: string;
+  projectTitle: string;
+  unitId: string;
+  label: string;
+  summary: string;
+}
+
+export interface MergeCandidate {
+  id: string;
+  domain: Domain;
+  similarity: number;
+  left: MergeCandidateSide;
+  right: MergeCandidateSide;
+}
+
+export interface MergeCandidatesResponse {
+  candidates: MergeCandidate[];
+}
+
+export type MergeResolveAction = "merge" | "link" | "ignore";
+
 /** GET/PUT /api/config response shape — the server never echoes the actual key back. */
 export interface StudyLoopConfig {
   dataDir: string;
@@ -199,6 +232,33 @@ export interface UnitAnchor {
   quote: string;
 }
 
+/**
+ * V3-D D1 "Domain overlay fields" — mirrors server/src/lib/analysis.ts's
+ * UnitOverlaySchema 1:1. Flat across every domain (a unit only ever
+ * populates the subset its project's domain cares about); every field
+ * optional — rendered as the unit card's collapsed-by-default "Advanced"
+ * fold (see concepts/UnitProposalCard.tsx).
+ */
+export interface UnitOverlay {
+  // biology
+  levelOfOrganization?: string;
+  mechanismType?: string;
+  entities?: string[];
+  // history
+  sourceType?: string;
+  causationType?: string;
+  actors?: string[];
+  perspectiveFlag?: string;
+  // music
+  schema?: string;
+  notation?: string;
+  keyContext?: string;
+  // physical_skill
+  triggers?: string[];
+  failureModes?: string[];
+  drillPairing?: string;
+}
+
 export interface AnalysisUnit {
   id: string;
   type: UnitType;
@@ -207,6 +267,10 @@ export interface AnalysisUnit {
   body: string;
   anchors: UnitAnchor[];
   confidence: number;
+  /** V3-D D1: absent when nothing in the transcript supported an overlay field for this unit's domain. */
+  overlay?: UnitOverlay;
+  /** V3-D D2 "Threshold-concept tagging": true when this unit "unlocks later material" (PEDAGOGY). */
+  threshold: boolean;
 }
 
 export interface AnalysisEdge {
@@ -391,6 +455,8 @@ export interface ReviewUnitCard extends ReviewCardBase {
   label: string;
   summary: string;
   userTake: string | null;
+  /** V3-D D2: carried through from the underlying unit's threshold flag. */
+  threshold: boolean;
 }
 
 export type ReviewCard = ReviewBubbleCard | ReviewPearlCard | ReviewUnitCard;

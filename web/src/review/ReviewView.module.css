@@ -185,6 +185,29 @@
   transform: scale(.98);
 }
 
+/* V3-D D4 "improve this card" — small text button (SPEC), deliberately
+   quieter than mediaActionButton's outlined pill so it doesn't compete with
+   the primary Again/Got it decision. */
+.improveButton {
+  align-self: center;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: var(--type-12);
+  cursor: pointer;
+  padding: 2px 0;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.improveButton:hover:not(:disabled) {
+  color: var(--text-secondary);
+}
+
+.improveButton:disabled {
+  color: var(--text-disabled);
+  cursor: default;
+}
+
 .reveal {
   display: flex;
   flex-direction: column;

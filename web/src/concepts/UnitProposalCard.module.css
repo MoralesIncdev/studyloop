@@ -320,3 +320,108 @@
 .rationaleInput::placeholder {
   color: var(--text-tertiary);
 }
+
+/* V3-D D2 "Threshold-concept tagging": subtle key-icon badge + one-line
+   banner — deliberately quiet (amber, not alarming red) since this signals
+   "pay extra attention", not an error/warning state. */
+.thresholdBadge {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent-amber);
+  flex-shrink: 0;
+}
+
+.thresholdBanner {
+  margin: 0;
+  font-size: var(--type-11);
+  color: var(--accent-amber);
+  font-style: italic;
+}
+
+/* V3-D D1 "Advanced fold": domain overlay fields, collapsed by default,
+   dimmed label — never competes visually with the generation slot/body. */
+.advancedFold {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.advancedToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: var(--type-11);
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.advancedToggle:hover {
+  color: var(--text-secondary);
+}
+
+.advancedLabel {
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.advancedChevronOpen {
+  transform: rotate(180deg);
+}
+
+.advancedList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 6px 8px;
+  background: var(--surface-overlay);
+  border-radius: var(--radius-sm);
+}
+
+.advancedRow {
+  display: flex;
+  gap: 6px;
+  font-size: var(--type-11);
+  line-height: 1.4;
+}
+
+.advancedKey {
+  flex-shrink: 0;
+  min-width: 120px;
+  color: var(--text-tertiary);
+}
+
+.advancedValue {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+/* V3-D D3 "also in ⟨project⟩" chip — merged/linked units from the concept registry. */
+.mergedChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mergedChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px dashed var(--border-default);
+  color: var(--text-tertiary);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  font-size: var(--type-11);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+
+.mergedChip:hover {
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+}

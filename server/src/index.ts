@@ -25,6 +25,7 @@ import { reviewRoutes } from "./routes/review.js";
 import { attestationRoutes } from "./routes/attestation.js";
 import { continuityRoutes } from "./routes/continuity.js";
 import { pearlReviewRoutes } from "./routes/pearlReview.js";
+import { registryRoutes } from "./routes/registry.js";
 import { getHealth } from "./lib/health.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -83,6 +84,7 @@ async function main(): Promise<void> {
   await app.register(attestationRoutes);
   await app.register(continuityRoutes);
   await app.register(pearlReviewRoutes);
+  await app.register(registryRoutes);
 
   // Out-of-box polish: lets the web app disable screenshot controls with a
   // clear tooltip instead of a failed request when ffmpeg/yt-dlp aren't on

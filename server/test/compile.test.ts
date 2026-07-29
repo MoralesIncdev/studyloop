@@ -241,6 +241,7 @@ describe("renderCompiledDocument — V3-B B2 attested vs 'Not yet reviewed' unit
       body: "Full AI body of the attested unit.",
       anchors: [{ t: 65, quote: "q" }],
       confidence: 0.9,
+      threshold: false,
     },
     {
       id: "u-untouched",
@@ -250,6 +251,7 @@ describe("renderCompiledDocument — V3-B B2 attested vs 'Not yet reviewed' unit
       body: "Body the reader should never see.",
       anchors: [{ t: 200, quote: "q2" }],
       confidence: 0.8,
+      threshold: false,
     },
   ];
 

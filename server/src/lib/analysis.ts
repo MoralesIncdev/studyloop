@@ -73,6 +73,55 @@ export type EdgeType = z.infer<typeof EdgeTypeSchema>;
 export const UnitAnchorSchema = z.object({ t: z.number().nonnegative(), quote: z.string() });
 export type UnitAnchor = z.infer<typeof UnitAnchorSchema>;
 
+// --- V3-D D1: domain overlay fields — PEDAGOGY §2 "domain lenses are prompt
+// modules + optional overlay fields, not separate engines" ------------------
+//
+// One flat schema shared across every domain (SPEC: "zod optional
+// everywhere") rather than a per-domain discriminated union — a unit only
+// ever gets the subset of fields its project's domain module asked for
+// (DOMAIN_MODULES below tells the model which ones), everything else stays
+// undefined and is stripped before being persisted (see mergeOverlayFields).
+// This is also the wire-level shape (ChunkUnitRawSchema.overlay below) —
+// unlike unitLabel's "" sentinel convention, there's no need for a separate
+// raw/clean pair here: a present-but-empty string from a structured-output
+// call still parses fine against `.optional()` (optional only governs
+// whether the KEY may be absent, not what a present value may be), and
+// mergeOverlayFields already treats "" the same as "absent" when merging.
+export const UnitOverlaySchema = z.object({
+  // biology
+  levelOfOrganization: z.string().optional(),
+  mechanismType: z.string().optional(),
+  entities: z.array(z.string()).optional(),
+  // history
+  sourceType: z.string().optional(),
+  causationType: z.string().optional(),
+  actors: z.array(z.string()).optional(),
+  perspectiveFlag: z.string().optional(),
+  // music
+  schema: z.string().optional(),
+  notation: z.string().optional(),
+  keyContext: z.string().optional(),
+  // physical_skill
+  triggers: z.array(z.string()).optional(),
+  failureModes: z.array(z.string()).optional(),
+  drillPairing: z.string().optional(),
+});
+export type UnitOverlay = z.infer<typeof UnitOverlaySchema>;
+
+const OVERLAY_STRING_KEYS = [
+  "levelOfOrganization",
+  "mechanismType",
+  "sourceType",
+  "causationType",
+  "perspectiveFlag",
+  "schema",
+  "notation",
+  "keyContext",
+  "drillPairing",
+] as const satisfies readonly (keyof UnitOverlay)[];
+
+const OVERLAY_ARRAY_KEYS = ["entities", "actors", "triggers", "failureModes"] as const satisfies readonly (keyof UnitOverlay)[];
+
 export const AnalysisUnitSchema = z.object({
   id: z.string(),
   type: UnitTypeSchema,
@@ -81,6 +130,16 @@ export const AnalysisUnitSchema = z.object({
   body: z.string(),
   anchors: z.array(UnitAnchorSchema),
   confidence: z.number().min(0).max(1),
+  /** V3-D D1: domain-specific structured fields (see UnitOverlaySchema) — absent on v2/pre-D1 units and whenever nothing in the transcript supported any field for this unit's domain. */
+  overlay: UnitOverlaySchema.optional(),
+  /**
+   * V3-D D2 "Threshold-concept tagging": true when this unit is
+   * transformative/integrative/troublesome — PEDAGOGY-sense "unlocks later
+   * material" once grasped. `.default(false)` (not `.optional()`) so every
+   * reader gets a concrete boolean rather than needing `?? false` at every
+   * call site — legacy analysis.json files simply backfill to false on read.
+   */
+  threshold: z.boolean().default(false),
 });
 export type AnalysisUnit = z.infer<typeof AnalysisUnitSchema>;
 
@@ -300,6 +359,10 @@ const ChunkUnitRawSchema = z.object({
   body: z.string(),
   anchors: z.array(UnitAnchorSchema),
   confidence: z.number().min(0).max(1),
+  /** V3-D D1 — optional at the wire level too (not just the final AnalysisUnit) so pre-D1 fixtures/callers keep compiling unchanged. */
+  overlay: UnitOverlaySchema.optional(),
+  /** V3-D D2 — optional (absent treated as false, see mergeUnitsByFingerprint) for the same reason. */
+  threshold: z.boolean().optional(),
 });
 type ChunkUnitRaw = z.infer<typeof ChunkUnitRawSchema>;
 
@@ -344,6 +407,48 @@ const UNIT_ANCHOR_JSON_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+/**
+ * V3-D D1: every overlay field, across every domain, in one flat required
+ * object (matching UnitOverlaySchema's shape) — structured outputs want
+ * every property present, so "doesn't apply to this unit/domain" is modeled
+ * as "" / [] (same sentinel convention CHUNK_V3_JSON_SCHEMA already uses for
+ * pearls' unitLabel), cleaned up post-parse by mergeUnitsByFingerprint.
+ */
+const OVERLAY_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    levelOfOrganization: { type: "string" },
+    mechanismType: { type: "string" },
+    entities: { type: "array", items: { type: "string" } },
+    sourceType: { type: "string" },
+    causationType: { type: "string" },
+    actors: { type: "array", items: { type: "string" } },
+    perspectiveFlag: { type: "string" },
+    schema: { type: "string" },
+    notation: { type: "string" },
+    keyContext: { type: "string" },
+    triggers: { type: "array", items: { type: "string" } },
+    failureModes: { type: "array", items: { type: "string" } },
+    drillPairing: { type: "string" },
+  },
+  required: [
+    "levelOfOrganization",
+    "mechanismType",
+    "entities",
+    "sourceType",
+    "causationType",
+    "actors",
+    "perspectiveFlag",
+    "schema",
+    "notation",
+    "keyContext",
+    "triggers",
+    "failureModes",
+    "drillPairing",
+  ],
+  additionalProperties: false,
+} as const;
+
 const CHUNK_V3_JSON_SCHEMA = {
   type: "object",
   properties: {
@@ -373,8 +478,10 @@ const CHUNK_V3_JSON_SCHEMA = {
           body: { type: "string" },
           anchors: { type: "array", items: UNIT_ANCHOR_JSON_SCHEMA },
           confidence: { type: "number" },
+          overlay: OVERLAY_JSON_SCHEMA,
+          threshold: { type: "boolean" },
         },
-        required: ["type", "label", "summary", "body", "anchors", "confidence"],
+        required: ["type", "label", "summary", "body", "anchors", "confidence", "overlay", "threshold"],
         additionalProperties: false,
       },
     },
@@ -455,17 +562,23 @@ function buildRouterUserPrompt(sampleText: string): string {
  * The JSON schema stays identical across domains (CHUNK_V3_JSON_SCHEMA);
  * only this text changes which unit types/edge types the model reaches for.
  */
+/**
+ * V3-D D1: each module now also names the `overlay` sub-fields this domain
+ * cares about (everything else on the unit's `overlay` stays empty — the
+ * JSON schema is identical across domains, per the comment above; only this
+ * text changes which fields get filled in).
+ */
 const DOMAIN_MODULES: Record<Domain, string> = {
   biology:
-    "Domain lens: biology/systems. Favor MECHANISM units for causal chains, feedback loops, and levels of organization; use REQUIRES/PART_OF edges to connect a mechanism to the components or prerequisite mechanisms it depends on.",
+    'Domain lens: biology/systems. Favor MECHANISM units for causal chains, feedback loops, and levels of organization; use REQUIRES/PART_OF edges to connect a mechanism to the components or prerequisite mechanisms it depends on. Where the transcript supports it, fill in overlay.levelOfOrganization (e.g. "cell", "organ system"), overlay.mechanismType (e.g. "feedback loop", "causal chain"), and overlay.entities (the components/molecules/organs involved) — leave every other overlay field empty.',
   history:
-    "Domain lens: history. Favor CLAIM units, and in each unit's body note who is claiming it and on what basis (primary/secondary sourcing, corroboration, perspective) where the transcript supports it; use REQUIRES edges for causal chains between events.",
+    'Domain lens: history. Favor CLAIM units, and in each unit\'s body note who is claiming it and on what basis (primary/secondary sourcing, corroboration, perspective) where the transcript supports it; use REQUIRES edges for causal chains between events. Where supported, fill in overlay.sourceType (e.g. "primary", "secondary"), overlay.causationType (e.g. "proximate", "structural", "contingent"), overlay.actors (who is involved), and overlay.perspectiveFlag (whose viewpoint this reflects) — leave every other overlay field empty.',
   music:
-    "Domain lens: music theory. Favor CLAIM units for theory statements and EXAMPLE units for the passages/sounds that illustrate them; use EXAMPLE_OF edges to link a specific example to the concept it demonstrates, and note notation-to-sound pairings in the body where audible.",
+    "Domain lens: music theory. Favor CLAIM units for theory statements and EXAMPLE units for the passages/sounds that illustrate them; use EXAMPLE_OF edges to link a specific example to the concept it demonstrates, and note notation-to-sound pairings in the body where audible. Where supported, fill in overlay.schema (the theory schema/pattern named), overlay.notation (how it would appear notated), and overlay.keyContext (the key/mode in play) — leave every other overlay field empty.",
   physical_skill:
-    "Domain lens: physical skill. Favor PROCEDURE units for ordered steps, triggers, and failure modes; use PROCEDURE_STEP edges between consecutive steps of the same procedure.",
+    "Domain lens: physical skill. Favor PROCEDURE units for ordered steps, triggers, and failure modes; use PROCEDURE_STEP edges between consecutive steps of the same procedure. Where supported, fill in overlay.triggers (what cue starts this step), overlay.failureModes (common ways it goes wrong), and overlay.drillPairing (a drill that isolates it) — leave every other overlay field empty.",
   generic:
-    "No specific domain lens applies — keep unit-type emphasis balanced across CLAIM/MECHANISM/PROCEDURE/EXAMPLE/BOUNDARY rather than favoring one.",
+    "No specific domain lens applies — keep unit-type emphasis balanced across CLAIM/MECHANISM/PROCEDURE/EXAMPLE/BOUNDARY rather than favoring one. Leave every overlay field empty; this lens doesn't use them.",
 };
 
 function buildChunkV3SystemPrompt(domain: Domain): string {
@@ -473,7 +586,7 @@ function buildChunkV3SystemPrompt(domain: Domain): string {
 
 Extract:
 - "pearls": specific, memorable insights worth remembering, each anchored to the timestamp (in seconds) where it's said. A label under 60 characters, a 1-3 sentence insight, an importance rating (3 = critical/central point, 2 = useful supporting point, 1 = minor/incidental detail), and "unitLabel": the exact label of the unit below this pearl illustrates, or "" if none fits.
-- "units": typed knowledge units on a universal spine — each is exactly one of CLAIM (an assertion), MECHANISM (how/why something works), PROCEDURE (an ordered how-to), EXAMPLE (a concrete instance), or BOUNDARY (a limit, exception, or "this doesn't apply when…"). Each unit has a short "label" (used to link edges/pearls to it — keep it stable and specific, not a generic phrase), a 1-2 sentence "summary", a longer markdown "body", one or more "anchors" (each an exact "quote" from the transcript plus its timestamp "t" in seconds), and a "confidence" 0-1 for how clearly the transcript supports this unit as extracted.
+- "units": typed knowledge units on a universal spine — each is exactly one of CLAIM (an assertion), MECHANISM (how/why something works), PROCEDURE (an ordered how-to), EXAMPLE (a concrete instance), or BOUNDARY (a limit, exception, or "this doesn't apply when…"). Each unit has a short "label" (used to link edges/pearls to it — keep it stable and specific, not a generic phrase), a 1-2 sentence "summary", a longer markdown "body", one or more "anchors" (each an exact "quote" from the transcript plus its timestamp "t" in seconds), a "confidence" 0-1 for how clearly the transcript supports this unit as extracted, an "overlay" object of domain-specific structured fields (which ones to fill in is named by the domain lens below — leave the rest as "" or []), and "threshold": true only when this unit is a transformative/integrative/troublesome idea — one that later material genuinely depends on understanding, a concept that "unlocks" the rest of the video once grasped (most units are NOT threshold — false otherwise).
 - "edges": relationships between two units you extracted THIS segment — "sourceLabel"/"targetLabel" must exactly match "label" fields above, "type" is one of REQUIRES (source requires target as a prerequisite), PART_OF (source is part of target), EXAMPLE_OF (source is an example of target), or PROCEDURE_STEP (source is the step before target in the same procedure), plus the supporting "quote" and a "confidence" 0-1. Only emit edges between two units both present in this same segment's "units" list.
 
 ${DOMAIN_MODULES[domain]}
@@ -619,6 +732,45 @@ export class AnthropicAnalysisClient implements AnalysisLLMClient, AnalysisLLMCl
 }
 
 /**
+ * V3-D D1: deterministic domain-shaped overlay for FakeAnalysisClient's
+ * primary unit — mirrors DOMAIN_MODULES' "which fields this domain fills in"
+ * without ever hitting the network. Purely a function of (domain, label,
+ * chunk.index) so two runs over the same input produce byte-identical
+ * output, matching this class's own doc comment below.
+ */
+function fakeOverlayFor(domain: Domain, label: string, chunk: TranscriptChunk): UnitOverlay {
+  switch (domain) {
+    case "biology":
+      return {
+        levelOfOrganization: chunk.index % 2 === 0 ? "cell" : "organ system",
+        mechanismType: "feedback loop",
+        entities: [label],
+      };
+    case "history":
+      return {
+        sourceType: chunk.index % 2 === 0 ? "primary" : "secondary",
+        causationType: "structural",
+        actors: [label],
+        perspectiveFlag: "single-perspective",
+      };
+    case "music":
+      return {
+        schema: label,
+        notation: `Notation sketch for "${label}"`,
+        keyContext: chunk.index % 2 === 0 ? "C major" : "A minor",
+      };
+    case "physical_skill":
+      return {
+        triggers: [`opponent posture at ${formatTimestamp(chunk.startSec)}`],
+        failureModes: [`losing ${label.toLowerCase()}`],
+        drillPairing: `Drill: isolate ${label}`,
+      };
+    case "generic":
+      return {};
+  }
+}
+
+/**
  * Deterministic fake client — no network call, no API key required. Used when
  * `STUDYLOOP_FAKE_ANALYSIS=1` (see routes/analyze.ts), and directly injectable
  * in tests. Derives pearls/concepts from the chunk's own text so output still
@@ -709,7 +861,7 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
     return { kind: "ok", data: { domain: best } };
   }
 
-  async runChunkV3(chunk: TranscriptChunk, _domain: Domain, _model?: string): Promise<AnalysisOutcome<ChunkV3Result>> {
+  async runChunkV3(chunk: TranscriptChunk, domain: Domain, _model?: string): Promise<AnalysisOutcome<ChunkV3Result>> {
     const mid = chunk.startSec + (chunk.endSec - chunk.startSec) / 2;
     const words = chunk.text.replace(/\[[^\]]*\]/g, "").trim().split(/\s+/).filter(Boolean);
     const labelSeed = words.slice(0, 6).join(" ").trim();
@@ -724,6 +876,8 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
     const confidence = Math.round((0.5 + (chunk.index % 5) * 0.08) * 100) / 100;
     const leadQuote = words.slice(0, 12).join(" ") || primaryLabel;
     const tailQuote = words.slice(-12).join(" ") || secondaryLabel;
+    // V3-D D2: every third chunk's primary unit is flagged threshold — deterministic (no randomness), and frequent enough that a short fake-mode transcript still exercises the REINFORCE-step/priority-scheduling paths.
+    const threshold = chunk.index % 3 === 0;
     return {
       kind: "ok",
       data: {
@@ -744,6 +898,8 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
             body: `A closer look at this segment, walking through the key points raised between ${formatTimestamp(chunk.startSec)} and ${formatTimestamp(chunk.endSec)}.`,
             anchors: [{ t: chunk.startSec, quote: leadQuote }],
             confidence,
+            overlay: fakeOverlayFor(domain, primaryLabel, chunk),
+            threshold,
           },
           {
             type: "EXAMPLE",
@@ -752,6 +908,7 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
             body: `An example drawn from around ${formatTimestamp(chunk.endSec)} that illustrates the point above.`,
             anchors: [{ t: chunk.endSec, quote: tailQuote }],
             confidence: Math.min(1, confidence + 0.1),
+            threshold: false,
           },
         ],
         edges: [
@@ -941,8 +1098,14 @@ export async function runAnalysisJob(params: AnalysisJobParams): Promise<Analysi
 
 // --- V3-B B1: deterministic typed-spine merge (label-fingerprint) ----------
 
-/** Same slug shape as slugifyTitle, but returns "" for a label with no alphanumeric characters instead of a "concept" fallback — callers decide how to handle that case (see mergeUnitsByFingerprint). */
-function fingerprintLabel(label: string): string {
+/**
+ * Same slug shape as slugifyTitle, but returns "" for a label with no
+ * alphanumeric characters instead of a "concept" fallback — callers decide
+ * how to handle that case (see mergeUnitsByFingerprint). Exported for reuse
+ * by lib/conceptRegistry.ts (V3-D D3), which fingerprints unit labels the
+ * same way for cross-video identity matching.
+ */
+export function fingerprintLabel(label: string): string {
   return label
     .toLowerCase()
     .trim()
@@ -966,6 +1129,28 @@ function average(values: readonly number[]): number {
  * one — mirrors assignConceptIds' "concept" fallback, but without the false
  * merge that reusing one shared fallback string would cause here.
  */
+/**
+ * V3-D D1: merges a fingerprint-group's raw `overlay` objects into one —
+ * scalar fields keep the first non-empty value across the group, array
+ * fields union (deduped). Groups with no overlay content on any member (the
+ * common case — most units don't populate overlay at all, and the generic
+ * domain never does) return `{}`, which mergeUnitsByFingerprint below
+ * converts to `undefined` rather than persisting an empty object.
+ */
+function mergeOverlayFields(group: readonly ChunkUnitRaw[]): UnitOverlay {
+  const overlays = group.map((g) => g.overlay).filter((o): o is UnitOverlay => o !== undefined);
+  const result: UnitOverlay = {};
+  for (const key of OVERLAY_STRING_KEYS) {
+    const value = overlays.map((o) => o[key]).find((v) => Boolean(v?.trim()));
+    if (value) result[key] = value;
+  }
+  for (const key of OVERLAY_ARRAY_KEYS) {
+    const union = [...new Set(overlays.flatMap((o) => o[key] ?? []))];
+    if (union.length > 0) result[key] = union;
+  }
+  return result;
+}
+
 export function mergeUnitsByFingerprint(units: readonly ChunkUnitRaw[]): AnalysisUnit[] {
   const order: string[] = [];
   const groups = new Map<string, ChunkUnitRaw[]>();
@@ -996,6 +1181,7 @@ export function mergeUnitsByFingerprint(units: readonly ChunkUnitRaw[]): Analysi
     const anchorByT = new Map<number, string>();
     for (const g of group) for (const a of g.anchors) if (!anchorByT.has(a.t)) anchorByT.set(a.t, a.quote);
     const anchors = [...anchorByT.entries()].sort((a, b) => a[0] - b[0]).map(([t, quote]) => ({ t, quote }));
+    const mergedOverlay = mergeOverlayFields(group);
     return {
       id: fp,
       type: bestType,
@@ -1004,6 +1190,11 @@ export function mergeUnitsByFingerprint(units: readonly ChunkUnitRaw[]): Analysi
       body,
       anchors,
       confidence: average(group.map((g) => g.confidence)),
+      // V3-D D1/D2: overlay collapses to undefined rather than `{}` (nothing
+      // for the Advanced fold to show); threshold is true if ANY unit in the
+      // group was flagged (never "average away" a threshold signal).
+      overlay: Object.keys(mergedOverlay).length > 0 ? mergedOverlay : undefined,
+      threshold: group.some((g) => g.threshold === true),
     };
   });
 }

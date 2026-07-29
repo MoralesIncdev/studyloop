@@ -91,10 +91,67 @@ describe("mergeUnitsByFingerprint", () => {
   });
 });
 
+// --- V3-D D1/D2: overlay + threshold merging ------------------------------
+
+describe("mergeUnitsByFingerprint — V3-D D1 overlay merging", () => {
+  const base = {
+    type: "MECHANISM" as const,
+    label: "Same Concept",
+    summary: "s",
+    body: "b",
+    anchors: [],
+    confidence: 0.5,
+  };
+
+  it("omits overlay entirely (undefined, not {}) when no unit in the group carries one", () => {
+    const merged = mergeUnitsByFingerprint([{ ...base }]);
+    expect(merged[0].overlay).toBeUndefined();
+  });
+
+  it("keeps a single unit's overlay, dropping empty-string/empty-array sentinel fields", () => {
+    const merged = mergeUnitsByFingerprint([
+      { ...base, overlay: { levelOfOrganization: "cell", mechanismType: "", entities: ["mitochondria"], sourceType: "" } },
+    ]);
+    expect(merged[0].overlay).toEqual({ levelOfOrganization: "cell", entities: ["mitochondria"] });
+  });
+
+  it("unions array overlay fields (deduped) and keeps the first non-empty scalar across the group", () => {
+    const merged = mergeUnitsByFingerprint([
+      { ...base, overlay: { entities: ["hip", "shoulder"], mechanismType: "feedback loop" } },
+      { ...base, overlay: { entities: ["shoulder", "knee"], mechanismType: "causal chain" } },
+    ]);
+    expect(merged[0].overlay?.entities).toEqual(["hip", "shoulder", "knee"]);
+    // First non-empty wins — the group's first unit already had a non-empty mechanismType.
+    expect(merged[0].overlay?.mechanismType).toBe("feedback loop");
+  });
+
+  it("falls through to a later unit's scalar field when an earlier one in the group left it empty", () => {
+    const merged = mergeUnitsByFingerprint([
+      { ...base, overlay: { mechanismType: "" } },
+      { ...base, overlay: { mechanismType: "feedback loop" } },
+    ]);
+    expect(merged[0].overlay?.mechanismType).toBe("feedback loop");
+  });
+});
+
+describe("mergeUnitsByFingerprint — V3-D D2 threshold merging", () => {
+  const base = { type: "CLAIM" as const, label: "Same Concept", summary: "s", body: "b", anchors: [], confidence: 0.5 };
+
+  it("defaults to false when no unit in the group is flagged (including when threshold is entirely absent)", () => {
+    const merged = mergeUnitsByFingerprint([{ ...base }]);
+    expect(merged[0].threshold).toBe(false);
+  });
+
+  it("is true if ANY unit in the fingerprint group was flagged threshold", () => {
+    const merged = mergeUnitsByFingerprint([{ ...base, threshold: false }, { ...base, threshold: true }]);
+    expect(merged[0].threshold).toBe(true);
+  });
+});
+
 describe("mergeEdgesByFingerprint", () => {
   const units: AnalysisUnit[] = [
-    { id: "a", type: "CLAIM", label: "A", summary: "s", body: "b", anchors: [], confidence: 0.9 },
-    { id: "b", type: "EXAMPLE", label: "B", summary: "s", body: "b", anchors: [], confidence: 0.9 },
+    { id: "a", type: "CLAIM", label: "A", summary: "s", body: "b", anchors: [], confidence: 0.9, threshold: false },
+    { id: "b", type: "EXAMPLE", label: "B", summary: "s", body: "b", anchors: [], confidence: 0.9, threshold: false },
   ];
 
   it("resolves sourceLabel/targetLabel to unit ids and averages confidence across duplicates", () => {
@@ -161,7 +218,7 @@ describe("resolvePearlUnitId", () => {
 describe("unitsToConceptsMirror", () => {
   it("maps each unit onto the legacy AnalysisConcept shape 1:1", () => {
     const units: AnalysisUnit[] = [
-      { id: "u1", type: "MECHANISM", label: "L", summary: "S", body: "B", anchors: [{ t: 5, quote: "q" }], confidence: 0.9 },
+      { id: "u1", type: "MECHANISM", label: "L", summary: "S", body: "B", anchors: [{ t: 5, quote: "q" }], confidence: 0.9, threshold: false },
     ];
     expect(unitsToConceptsMirror(units)).toEqual([{ id: "u1", title: "L", summary: "S", body: "B", anchors: [{ t: 5 }] }]);
   });
@@ -201,6 +258,75 @@ describe("AnalysisSchema (v3 round-trip)", () => {
     expect(parsed.domain).toBeUndefined();
     expect(parsed.units).toBeUndefined();
     expect(parsed.edges).toBeUndefined();
+  });
+
+  it("parses a unit with a full overlay object and threshold:true (V3-D D1/D2)", () => {
+    const parsed = AnalysisSchema.parse({
+      generatedAt: "2026-01-01T00:00:00Z",
+      model: "claude-opus-5",
+      version: 3,
+      source: "model",
+      domain: "biology",
+      pearls: [],
+      concepts: [],
+      themes: [],
+      units: [
+        {
+          id: "u1",
+          type: "MECHANISM",
+          label: "T",
+          summary: "S",
+          body: "B",
+          anchors: [],
+          confidence: 0.7,
+          overlay: { levelOfOrganization: "cell", entities: ["mitochondria"] },
+          threshold: true,
+        },
+      ],
+      edges: [],
+    });
+    expect(parsed.units![0].overlay).toEqual({ levelOfOrganization: "cell", entities: ["mitochondria"] });
+    expect(parsed.units![0].threshold).toBe(true);
+  });
+
+  it("defaults threshold to false and overlay to undefined when both are absent (legacy/pre-D1 units)", () => {
+    const parsed = AnalysisSchema.parse({
+      generatedAt: "2026-01-01T00:00:00Z",
+      model: "claude-opus-5",
+      version: 3,
+      pearls: [],
+      concepts: [],
+      themes: [],
+      units: [{ id: "u1", type: "CLAIM", label: "T", summary: "S", body: "B", anchors: [], confidence: 0.5 }],
+      edges: [],
+    });
+    expect(parsed.units![0].threshold).toBe(false);
+    expect(parsed.units![0].overlay).toBeUndefined();
+  });
+
+  it("tolerates an overlay object with only some fields set — zod optional everywhere (SPEC D1)", () => {
+    const parsed = AnalysisSchema.parse({
+      generatedAt: "2026-01-01T00:00:00Z",
+      model: "claude-opus-5",
+      version: 3,
+      pearls: [],
+      concepts: [],
+      themes: [],
+      units: [
+        {
+          id: "u1",
+          type: "PROCEDURE",
+          label: "T",
+          summary: "S",
+          body: "B",
+          anchors: [],
+          confidence: 0.5,
+          overlay: { drillPairing: "isolation drill" },
+        },
+      ],
+      edges: [],
+    });
+    expect(parsed.units![0].overlay).toEqual({ drillPairing: "isolation drill" });
   });
 
   it("rejects a version outside {2,3}", () => {
@@ -267,6 +393,46 @@ describe("runAnalysisJobV3 (fake client end-to-end — no live API calls)", () =
     expect(analysis.concepts.length).toBe(analysis.units!.length);
     // At least one pearl resolved a unitId (fake client always tags unitLabel = its own primary unit's label).
     expect(analysis.pearls.some((p) => p.unitId)).toBe(true);
+    // V3-D D2: fake mode deterministically flags every 3rd chunk's primary unit threshold.
+    expect(analysis.units!.some((u) => u.threshold)).toBe(true);
+    expect(analysis.units!.some((u) => u.threshold === false)).toBe(true);
+  });
+
+  it("V3-D D1: emits a domain-shaped overlay on the primary unit, deterministically, for every non-generic domain", async () => {
+    const segments: TranscriptSegment[] = [segment(0, 480, "posture control passing the guard")];
+    const client = new FakeAnalysisClient();
+
+    for (const domain of ["biology", "history", "music", "physical_skill"] as const) {
+      const routed: AnalysisLLMClientV3 = {
+        runRouter: async () => ({ kind: "ok", data: { domain } }),
+        runChunkV3: (chunk, d) => client.runChunkV3(chunk, d, "claude-opus-5"),
+        runMergeV3: (pearls) => client.runMergeV3(pearls, "claude-opus-5"),
+      };
+      // eslint-disable-next-line no-await-in-loop -- small fixed domain list, sequential is fine in a test
+      const analysis = await runAnalysisJobV3({ segments, model: "claude-opus-5", client: routed });
+      expect(analysis.domain).toBe(domain);
+      const primary = analysis.units!.find((u) => u.type !== "EXAMPLE");
+      expect(primary?.overlay).toBeDefined();
+      expect(Object.keys(primary!.overlay!).length).toBeGreaterThan(0);
+    }
+
+    // generic: overlay stays absent (empty object collapses to undefined — see mergeOverlayFields).
+    const genericRouted: AnalysisLLMClientV3 = {
+      runRouter: async () => ({ kind: "ok", data: { domain: "generic" } }),
+      runChunkV3: (chunk, d) => client.runChunkV3(chunk, d, "claude-opus-5"),
+      runMergeV3: (pearls) => client.runMergeV3(pearls, "claude-opus-5"),
+    };
+    const genericAnalysis = await runAnalysisJobV3({ segments, model: "claude-opus-5", client: genericRouted });
+    expect(genericAnalysis.units!.every((u) => u.overlay === undefined)).toBe(true);
+  });
+
+  it("V3-D D1/D2: two runs over the same input produce byte-identical overlay/threshold output (no randomness)", async () => {
+    const segments: TranscriptSegment[] = [segment(0, 480, "posture control passing the guard")];
+    const a = await runAnalysisJobV3({ segments, model: "claude-opus-5", client: new FakeAnalysisClient() });
+    const b = await runAnalysisJobV3({ segments, model: "claude-opus-5", client: new FakeAnalysisClient() });
+    expect(a.units!.map((u) => ({ overlay: u.overlay, threshold: u.threshold }))).toEqual(
+      b.units!.map((u) => ({ overlay: u.overlay, threshold: u.threshold }))
+    );
   });
 
   it("reports progress up to 100", async () => {
