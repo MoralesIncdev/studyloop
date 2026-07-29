@@ -18,6 +18,9 @@ import type {
   HealthResponse,
   HeatmapMark,
   LibraryItem,
+  MergeCandidate,
+  MergedConceptsResponse,
+  MergeResolveAction,
   OverlayMeta,
   Project,
   ReviewCard,
@@ -478,6 +481,22 @@ export interface StudyLoopStore {
   exitReviewSession: () => void;
   /** "Open at timestamp" (SPEC): nudges the project to resume at the card's t, then navigates into the watch view. Best-effort — still navigates even if the PATCH fails. */
   openReviewCardInStudy: (card: ReviewCard) => Promise<void>;
+  /** V3-D D4 "improve this card": forces a fresh LLM transform for the current card's back, overwriting its cache entry — requires an API key (same gate as startAnalyze). */
+  reviewImproving: boolean;
+  improveCurrentReviewCard: () => Promise<void>;
+
+  // --- V3-D D3 "Concept merge queue" ------------------------------------------------------
+  /** Loaded app-wide on mount (alongside reviewCounts) so the Concepts rail badge has a count regardless of which project is open. */
+  mergeCandidates: MergeCandidate[];
+  mergeCandidatesLoading: boolean;
+  /** Side-by-side resolve panel open/closed (rail badge toggles this). */
+  mergeQueueOpen: boolean;
+  setMergeQueueOpen: (open: boolean) => void;
+  loadMergeCandidates: () => Promise<void>;
+  resolveMergeCandidateAction: (candidateId: string, action: MergeResolveAction) => Promise<void>;
+  /** "also in ⟨project⟩" chip source — per-project, loaded alongside attestations in loadProjectSession. */
+  mergedConcepts: MergedConceptsResponse;
+  loadMergedConcepts: () => Promise<void>;
 
   // --- toasts -----------------------------------------------------------------------
   toasts: Toast[];
@@ -896,6 +915,17 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       }
     })();
 
+    // V3-D D3: "also in ⟨project⟩" chip source — presentational, fails quiet.
+    const mergedConceptsPromise = (async () => {
+      try {
+        const res = await api.getMergedConcepts(id);
+        if (!isCurrent()) return;
+        set({ mergedConcepts: res });
+      } catch {
+        // ignore — chip just won't show for this session
+      }
+    })();
+
     if (project.transcript.type === "file") {
       set({ transcriptLoading: true });
       try {
@@ -917,6 +947,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       overlaysPromise,
       attestationsPromise,
       continuityPromise,
+      mergedConceptsPromise,
     ]);
   },
   clearProjectSession: () => {
@@ -1706,6 +1737,87 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       // (the user can scrub to the timestamp manually).
     }
     get().navigate({ view: "study", projectId: card.projectId });
+  },
+
+  // --- V3-D D4 "improve this card" -------------------------------------------------------
+  reviewImproving: false,
+  improveCurrentReviewCard: async () => {
+    const session = get().reviewSession;
+    if (!session || session.cards.length === 0 || get().reviewImproving) return;
+    // Same gate as startAnalyze: no key configured -> toast + open Settings.
+    const config = get().config ?? (await get().loadConfig());
+    if (!config) return;
+    if (!config.anthropicApiKeySet) {
+      get().pushToast("Add an Anthropic API key in Settings to improve cards", "info");
+      get().navigate({ view: "settings" });
+      return;
+    }
+    const current = session.cards[0];
+    set({ reviewImproving: true });
+    try {
+      const res = await api.improveReviewCard(current.id);
+      set({ reviewImproving: false });
+      if (!res.transformed) {
+        get().pushToast("Could not improve this card", "error");
+        return;
+      }
+      const transformed = res.transformed;
+      set((state) =>
+        state.reviewSession
+          ? { reviewSession: { ...state.reviewSession, cards: state.reviewSession.cards.map((c) => (c.id === current.id ? { ...c, transformed } : c)) } }
+          : {}
+      );
+      get().pushToast("Card improved", "success");
+    } catch (err) {
+      set({ reviewImproving: false });
+      get().pushToast(`Could not improve card: ${errorMessage(err)}`, "error");
+    }
+  },
+
+  // --- V3-D D3 "Concept merge queue" -----------------------------------------------------
+  mergeCandidates: [],
+  mergeCandidatesLoading: false,
+  mergeQueueOpen: false,
+  setMergeQueueOpen: (open) => set({ mergeQueueOpen: open }),
+  loadMergeCandidates: async () => {
+    set({ mergeCandidatesLoading: true });
+    try {
+      const res = await api.getMergeCandidates();
+      set({ mergeCandidates: res.candidates, mergeCandidatesLoading: false });
+    } catch {
+      // Badge/panel data — fail quiet (same reasoning as loadReviewCounts): a
+      // failed background poll shouldn't greet the user with an error toast.
+      set({ mergeCandidatesLoading: false });
+    }
+  },
+  resolveMergeCandidateAction: async (candidateId, action) => {
+    // Optimistic removal — the panel shouldn't wait on a round trip to stop
+    // showing a decision the learner just made.
+    const prev = get().mergeCandidates;
+    set({ mergeCandidates: prev.filter((c) => c.id !== candidateId) });
+    try {
+      await api.resolveMergeCandidate(candidateId, action);
+      // Refresh merged-concepts chips for the current project (no-op if none
+      // is open) — a "merge"/"link" resolve may have just made one of its
+      // units span another project for the first time.
+      void get().loadMergedConcepts();
+    } catch (err) {
+      set({ mergeCandidates: prev });
+      get().pushToast(`Could not resolve this merge: ${errorMessage(err)}`, "error");
+    }
+  },
+  mergedConcepts: {},
+  loadMergedConcepts: async () => {
+    const project = get().currentProject;
+    if (!project) return;
+    const projectId = project.id;
+    try {
+      const res = await api.getMergedConcepts(projectId);
+      if (get().currentProject?.id !== projectId) return; // navigated away mid-request
+      set({ mergedConcepts: res });
+    } catch {
+      // presentational chip data — fail quiet, same as loadContinuity
+    }
   },
 
   // --- V3-C C1 "Concept Continuity rail" -----------------------------------------------------

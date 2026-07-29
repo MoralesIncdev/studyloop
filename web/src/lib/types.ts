@@ -137,6 +137,30 @@ export interface MergedConceptRef {
 /** GET /api/projects/:id/merged-concepts response: {[unitId]: other projects the same registry concept spans}. */
 export type MergedConceptsResponse = Record<string, MergedConceptRef[]>;
 
+// --- V3-D D3: Concept merge queue (mirrors server/src/routes/registry.ts) --
+
+export interface MergeCandidateSide {
+  projectId: string;
+  projectTitle: string;
+  unitId: string;
+  label: string;
+  summary: string;
+}
+
+export interface MergeCandidate {
+  id: string;
+  domain: Domain;
+  similarity: number;
+  left: MergeCandidateSide;
+  right: MergeCandidateSide;
+}
+
+export interface MergeCandidatesResponse {
+  candidates: MergeCandidate[];
+}
+
+export type MergeResolveAction = "merge" | "link" | "ignore";
+
 /** GET/PUT /api/config response shape — the server never echoes the actual key back. */
 export interface StudyLoopConfig {
   dataDir: string;

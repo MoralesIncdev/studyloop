@@ -13,10 +13,14 @@ import type {
   HealthResponse,
   HeatmapResponse,
   LibraryResponse,
+  MergeCandidatesResponse,
+  MergedConceptsResponse,
+  MergeResolveAction,
   OverlayMeta,
   PatchProjectBody,
   Project,
   RevealResponse,
+  ReviewCardTransform,
   ReviewGrade,
   ReviewQueueResponse,
   SearchIntent,
@@ -183,6 +187,21 @@ export const api = {
   clearAttestation: (id: string, unitId: string) =>
     request<AttestationsFile>(`/api/projects/${encodeURIComponent(id)}/attestations/${encodeURIComponent(unitId)}`, {
       method: "DELETE",
+    }),
+
+  // --- V3-D D3: concept merge queue ------------------------------------------------
+  getMergeCandidates: () => request<MergeCandidatesResponse>("/api/registry/merge-candidates"),
+  resolveMergeCandidate: (candidateId: string, action: MergeResolveAction) =>
+    request<{ candidates: number }>(`/api/registry/merge-candidates/${encodeURIComponent(candidateId)}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    }),
+  getMergedConcepts: (id: string) => request<MergedConceptsResponse>(`/api/projects/${encodeURIComponent(id)}/merged-concepts`),
+
+  // --- V3-D D4: domain-routed card transformation — "improve this card" -----------
+  improveReviewCard: (cardId: string) =>
+    request<{ transformed: ReviewCardTransform | null }>(`/api/review/cards/${encodeURIComponent(cardId)}/improve`, {
+      method: "POST",
     }),
 
   videoStreamUrl: (path: string) => `/api/video/stream?path=${encodeURIComponent(path)}`,

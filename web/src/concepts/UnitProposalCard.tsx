@@ -92,6 +92,9 @@ export function UnitProposalCard({ unit }: Props): JSX.Element {
   const saveUnitBody = useStudyLoopStore((s) => s.saveUnitBody);
   const dismissUnit = useStudyLoopStore((s) => s.dismissUnit);
   const clearUnitAttestation = useStudyLoopStore((s) => s.clearUnitAttestation);
+  // V3-D D3 "also in ⟨other project⟩" chip — populated once GET /api/projects/:id/merged-concepts loads (state/store.ts loadMergedConcepts, fired alongside attestations on project open).
+  const mergedIn = useStudyLoopStore((s) => s.mergedConcepts[unit.id]);
+  const navigate = useStudyLoopStore((s) => s.navigate);
 
   const [take, setTake] = useState(entry?.userTake ?? "");
   /** Set by an explicit Skip, or by clicking Reveal with a non-empty take — "typing anything (or explicit skip) unlocks reveal" (SPEC B2). */
@@ -184,6 +187,23 @@ export function UnitProposalCard({ unit }: Props): JSX.Element {
 
       {/* V3-D D2: "one-line banner on the card ('This idea unlocks later material')". */}
       {unit.threshold && <p className={styles.thresholdBanner}>This idea unlocks later material</p>}
+
+      {/* V3-D D3: "Merged units display a subtle 'also in ⟨other project⟩' chip linking there." */}
+      {mergedIn && mergedIn.length > 0 && (
+        <div className={styles.mergedChips}>
+          {mergedIn.map((ref) => (
+            <button
+              key={ref.projectId}
+              type="button"
+              className={styles.mergedChip}
+              onClick={() => navigate({ view: "study", projectId: ref.projectId })}
+              title={`Also appears in "${ref.projectTitle}"`}
+            >
+              also in {ref.projectTitle}
+            </button>
+          ))}
+        </div>
+      )}
 
       {!noviceMode && generationSlot}
 

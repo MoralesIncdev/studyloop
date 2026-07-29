@@ -13,6 +13,7 @@ import { PlayerChrome } from "../player/PlayerChrome";
 import { CCOverlay } from "../player/CCOverlay";
 import { RightRail } from "./RightRail";
 import { NotationModal } from "../notes/NotationModal";
+import { MergeQueuePanel } from "../concepts/MergeQueuePanel";
 import { ConceptChipStrip } from "../concepts/ConceptChipStrip";
 import { CompileFlow } from "./CompileFlow";
 import { AnalyzeButton } from "./AnalyzeButton";
@@ -212,6 +213,7 @@ export function StudyView({ projectId }: Props): JSX.Element {
       </div>
 
       <NotationModal />
+      <MergeQueuePanel />
     </div>
   );
 }

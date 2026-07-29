@@ -150,6 +150,30 @@
   animation: rail-spin 900ms linear infinite;
 }
 
+/* V3-D D3 "badge on the Concepts rail header ('Review merges · N')" — quiet
+   until there's something to review, then reads as an actionable pill (not
+   an alarm — amber/red are reserved for the threshold/danger vocabulary). */
+.mergeQueueBadge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 8px;
+  background: color-mix(in srgb, var(--accent-blue) 14%, transparent);
+  border: none;
+  color: var(--accent-blue);
+  border-radius: var(--radius-pill);
+  padding: 4px 10px;
+  font-size: var(--type-11);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.mergeQueueBadge:hover {
+  background: color-mix(in srgb, var(--accent-blue) 24%, transparent);
+}
+
 @keyframes rail-spin {
   to { transform: rotate(360deg); }
 }

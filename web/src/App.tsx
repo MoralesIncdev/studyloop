@@ -11,6 +11,7 @@ export default function App(): JSX.Element {
   const route = useStudyLoopStore((s) => s.route);
   const loadHealth = useStudyLoopStore((s) => s.loadHealth);
   const loadReviewCounts = useStudyLoopStore((s) => s.loadReviewCounts);
+  const loadMergeCandidates = useStudyLoopStore((s) => s.loadMergeCandidates);
 
   // Checked once per app load (not per-project) — see store.ts loadHealth.
   useEffect(() => {
@@ -22,6 +23,13 @@ export default function App(): JSX.Element {
   useEffect(() => {
     void loadReviewCounts();
   }, [loadReviewCounts]);
+
+  // V3-D D3: Concepts rail badge count — loaded app-wide on mount so it's
+  // ready the instant a project opens, regardless of which one; the panel
+  // itself refreshes again on open (see MergeQueuePanel.tsx).
+  useEffect(() => {
+    void loadMergeCandidates();
+  }, [loadMergeCandidates]);
 
   return (
     <>

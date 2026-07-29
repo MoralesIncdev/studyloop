@@ -335,6 +335,12 @@
 }
 
 /* V3-D D3 "also in ⟨project⟩" chip — merged/linked units from the concept registry. */
+.mergedChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .mergedChip {
   display: inline-flex;
   align-items: center;

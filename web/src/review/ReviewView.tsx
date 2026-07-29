@@ -118,6 +118,24 @@ function CardFront({ card }: { card: ReviewCard }): JSX.Element {
   );
 }
 
+/**
+ * V3-D D4 "improve this card": a small text button — requires an API key
+ * (state/store.ts improveCurrentReviewCard applies the same gate
+ * startAnalyze uses). Unit cards have nothing to regenerate (their front is
+ * a client-composed "your take" prompt, not an LLM transform), so this
+ * never renders for them.
+ */
+function ImproveCardButton({ card }: { card: ReviewCard }): JSX.Element | null {
+  const improving = useStudyLoopStore((s) => s.reviewImproving);
+  const improveCurrentReviewCard = useStudyLoopStore((s) => s.improveCurrentReviewCard);
+  if (card.kind === "unit") return null;
+  return (
+    <button type="button" className={styles.improveButton} disabled={improving} onClick={() => void improveCurrentReviewCard()}>
+      {improving ? "Improving…" : "Improve this card"}
+    </button>
+  );
+}
+
 function CardBack({ card }: { card: ReviewCard }): JSX.Element {
   if (card.kind === "unit") {
     return (
@@ -134,6 +152,7 @@ function CardBack({ card }: { card: ReviewCard }): JSX.Element {
       <p className={styles.backText}>{backText}</p>
       {card.transformed?.why && <p className={styles.whyText}>{card.transformed.why}</p>}
       <LapseMediaAction card={card} />
+      <ImproveCardButton card={card} />
     </>
   );
 }
