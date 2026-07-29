@@ -47,3 +47,27 @@ export function activeConcepts(concepts: readonly ConceptCard[], t: number): Act
 export function passedConcepts(concepts: readonly ConceptCard[], t: number): ConceptCard[] {
   return concepts.filter((card) => card.anchors.some((a) => a.t != null && a.t <= t));
 }
+
+/**
+ * V3-A A1 "state-aware surface purge": whether the right-rail Transcript
+ * card is *actually* visible right now — the user's persisted
+ * `railOpenSection` choice, minus whatever the playback-focus purge is
+ * currently forcing collapsed on top of it. `focusOverride` ("the user
+ * always wins") suspends the purge, so an override during playback counts
+ * as visually open too, same as being paused.
+ *
+ * This is the single source of truth for "is the transcript expanded" —
+ * RightRail.tsx uses it to render the card's own expand/collapse state, and
+ * CCOverlay.tsx uses it for the CC/transcript redundancy rule (never two
+ * full text streams at once, PEDAGOGY §4 — see V3-A review finding #2,
+ * where CCOverlay previously reimplemented this with a formula that missed
+ * the focusOverride case).
+ */
+export function isTranscriptVisuallyOpen(
+  railOpenSection: "transcript" | "concepts" | null,
+  playbackFocus: boolean,
+  focusOverride: boolean
+): boolean {
+  const purged = playbackFocus && !focusOverride;
+  return railOpenSection === "transcript" && !purged;
+}

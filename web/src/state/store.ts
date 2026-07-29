@@ -113,11 +113,20 @@ function clearPlaybackFocusTimer(): void {
 export type RailSectionId = "transcript" | "concepts";
 
 const RAIL_SECTION_STORAGE_PREFIX = "studyloop:railSection:";
-export function loadStoredRailSection(projectId: string): RailSectionId | null {
+/**
+ * `"none"` (both sections collapsed) is a distinct, valid persisted choice —
+ * not the same as "nothing has ever been stored" (`null`). Collapsing those
+ * two into a single `null` return here previously made the loader's
+ * `?? "transcript"` fallback (see loadProjectSession) treat a genuine
+ * persisted "none" as missing and reopen Transcript on every reload
+ * (V3-A review finding #6) — callers must branch on the literal `"none"`
+ * string themselves rather than relying on `??`.
+ */
+export function loadStoredRailSection(projectId: string): RailSectionId | "none" | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(RAIL_SECTION_STORAGE_PREFIX + projectId);
-    if (raw === "transcript" || raw === "concepts") return raw;
+    if (raw === "transcript" || raw === "concepts" || raw === "none") return raw;
     return null;
   } catch {
     return null;
@@ -251,9 +260,17 @@ export interface StudyLoopStore {
   transcriptLoading: boolean;
   loadProjectSession: (id: string) => Promise<void>;
   clearProjectSession: () => void;
+  /**
+   * Returns `true` on success, `false` on failure (a toast is already pushed
+   * either way) — never throws. Callers that must not proceed past a failed
+   * save (e.g. CompileFlow's synthesis checkpoint, which would otherwise
+   * silently discard the learner's writing — V3-A review finding #1) check
+   * the return value; fire-and-forget callers (periodic position autosave)
+   * can keep ignoring it via `void`.
+   */
   patchCurrentProject: (
     patch: Partial<Pick<Project, "title" | "lastPosition" | "watchedUpTo" | "lessonSummary">>
-  ) => Promise<void>;
+  ) => Promise<boolean>;
 
   // --- concepts (F7) ---------------------------------------------------------------
   concepts: ConceptCard[];
@@ -636,7 +653,14 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       isPlaying: false,
       playbackFocus: false,
       focusOverride: false,
-      railOpenSection: loadStoredRailSection(id) ?? "transcript",
+      // "none" is a genuine persisted choice (both sections collapsed) and
+      // must restore to `null` (the runtime "nothing open" state — see
+      // setRailOpenSection), not fall through to the "transcript" default
+      // that only applies when nothing was ever stored.
+      railOpenSection: (() => {
+        const stored = loadStoredRailSection(id);
+        return stored === "none" ? null : stored ?? "transcript";
+      })(),
       highlightedConceptId: null,
       volume: get().volume,
       ccEnabled: false,
@@ -810,15 +834,17 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   },
   patchCurrentProject: async (patch) => {
     const project = get().currentProject;
-    if (!project) return;
+    if (!project) return false;
     try {
       const updated = await api.patchProject(project.id, patch);
       set((state) => ({
         currentProject: state.currentProject?.id === updated.id ? updated : state.currentProject,
         projects: state.projects.map((p) => (p.id === updated.id ? updated : p)),
       }));
+      return true;
     } catch (err) {
       get().pushToast(`Could not save progress: ${errorMessage(err)}`, "error");
+      return false;
     }
   },
 
@@ -1183,7 +1209,10 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   compileResult: null,
   runCompile: async () => {
     const project = get().currentProject;
-    if (!project) return;
+    // V3-A review finding #5: a duplicate invocation (e.g. Escape re-firing
+    // a modal's onClose during CompileFlow's synthesis→caption→compile
+    // handoff) must no-op rather than issuing a second POST /compile.
+    if (!project || get().compiling) return;
     set({ compiling: true });
     try {
       // The compiled doc must reflect the very latest notes edit and

@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { activeConcepts, passedConcepts } from "../lib/selectors";
+import { AI_CONCEPT_ID_PREFIX } from "../lib/analysisFormat";
 import { formatTimestamp } from "../lib/time";
 import { Icon } from "../components/icons";
 import { ConceptOverlay } from "./ConceptOverlay";
@@ -52,16 +53,37 @@ export function ConceptsDock(): JSX.Element {
 
   const rowRefs = useRef<Record<string, HTMLLIElement | null>>({});
 
-  // V3-A A4: scroll the chip-highlighted row into view, then self-clear the
-  // highlight after a few seconds (the store never auto-clears — a chip
-  // click can fire again on the exact same card, and each fresh click should
-  // restart the pulse).
+  // Hoisted above the highlight effect below (it needs to know whether the
+  // target row is currently filtered out by the search box).
+  const q = query.trim().toLowerCase();
+  const matchesQuery = (card: ConceptCard): boolean =>
+    !q || card.title.toLowerCase().includes(q) || card.body.toLowerCase().includes(q);
+
+  // V3-A A4 + review finding #4: scroll the chip-highlighted row into view,
+  // expand it (doc concepts: the full ConceptOverlay — "for doc concepts
+  // open the overlay/expanded state"), and self-clear the highlight after a
+  // few seconds (the store never auto-clears — a chip click can fire again
+  // on the exact same card, and each fresh click should restart the pulse).
+  // AI-breakdown concepts (`ai:<id>`) are AnalysisSections' AiBreakdownSection's
+  // concern, not this component's — it has no row for them.
   useEffect(() => {
-    if (!highlightedConceptId) return undefined;
+    if (!highlightedConceptId || highlightedConceptId.startsWith(AI_CONCEPT_ID_PREFIX)) return undefined;
+    const target = concepts.find((c) => c.id === highlightedConceptId);
+    if (!target) return undefined;
+    if (q && !matchesQuery(target)) {
+      // The rail's own search filter would otherwise hide the chip's target
+      // entirely — SPEC A4 requires it actually be reachable. Clear the
+      // filter; this effect re-runs (via the `q` dependency below) once the
+      // row is back in the DOM.
+      setQuery("");
+      return undefined;
+    }
     rowRefs.current[highlightedConceptId]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setExpandedCard(target);
     const timer = setTimeout(clearHighlightedConcept, HIGHLIGHT_DURATION_MS);
     return () => clearTimeout(timer);
-  }, [highlightedConceptId, clearHighlightedConcept]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- matchesQuery is a fresh closure every render over `q`, already a dep
+  }, [highlightedConceptId, clearHighlightedConcept, concepts, q]);
 
   const attached = !!currentProject?.conceptDoc?.path;
 
@@ -94,10 +116,6 @@ export function ConceptsDock(): JSX.Element {
   }, [concepts]);
 
   const unanchoredCards = useMemo(() => concepts.filter((c) => !c.anchors.some((a) => a.t != null)), [concepts]);
-
-  const q = query.trim().toLowerCase();
-  const matchesQuery = (card: ConceptCard): boolean =>
-    !q || card.title.toLowerCase().includes(q) || card.body.toLowerCase().includes(q);
 
   const visibleAnchored = anchoredRows.filter((r) => matchesQuery(r.card));
   const visibleUnanchored = unanchoredCards.filter(matchesQuery);

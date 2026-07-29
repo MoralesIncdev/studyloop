@@ -29,13 +29,25 @@ export interface UsePresenceResult {
   state: PresenceState;
 }
 
-export function usePresence(open: boolean, exitDurationMs: number): UsePresenceResult {
+export function usePresence(open: boolean, exitDurationMs: number, onExited?: () => void): UsePresenceResult {
   const [mounted, setMounted] = useState(open);
   const [state, setState] = useState<PresenceState>(open ? "open" : "closing");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Whether this dialog has actually been open at least once — a dialog
+  // that starts out closed (the common case: every ModalShell caller in
+  // this codebase renders unconditionally with `open` starting false) must
+  // not schedule an unmount timer or fire `onExited` on mount; there was
+  // never anything showing to close.
+  const hasOpenedRef = useRef(open);
+  // Latest-ref so the timer (scheduled once per `open` transition, per the
+  // effect's deps below) always invokes the caller's current callback rather
+  // than whatever was in scope when the timer was created.
+  const onExitedRef = useRef(onExited);
+  onExitedRef.current = onExited;
 
   useEffect(() => {
     if (open) {
+      hasOpenedRef.current = true;
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
@@ -44,15 +56,22 @@ export function usePresence(open: boolean, exitDurationMs: number): UsePresenceR
       setState("open");
       return undefined;
     }
+    if (!hasOpenedRef.current) return undefined; // never opened — nothing to close
     setState("closing");
-    // Use a functional check via a ref-free re-read: only start the unmount
-    // timer if we were actually showing something (avoids scheduling a timer
-    // on first mount when a dialog starts out closed).
-    timerRef.current = setTimeout(() => setMounted(false), exitDurationMs);
+    timerRef.current = setTimeout(() => {
+      setMounted(false);
+      // Fires exactly once the exit animation has actually finished — callers
+      // use this to gate mounting a *next* dialog until this one is fully
+      // gone (V3-A review finding #5: CompileFlow's synthesis→caption
+      // handoff previously opened the caption dialog immediately on close,
+      // overlapping two focus traps and letting a stale Escape listener
+      // re-invoke the close handler and double-fire a compile).
+      onExitedRef.current?.();
+    }, exitDurationMs);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- exitDurationMs is expected to stay constant per call site
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- exitDurationMs is expected to stay constant per call site; onExited is read via ref
   }, [open]);
 
   return { mounted, state };
@@ -73,6 +92,15 @@ interface ModalShellProps {
   onSubmit?: FormEventHandler<HTMLFormElement>;
   /** Focused on open instead of the card itself (e.g. NotationModal's textarea). */
   initialFocusRef?: RefObject<HTMLElement>;
+  /**
+   * Fires once, exactly when this dialog has fully finished closing (after
+   * its exit animation, i.e. once `mounted` would become false) — never on
+   * initial mount of a dialog that starts closed. Use this to defer opening
+   * a *next* dialog until this one is completely gone, instead of mounting
+   * it immediately alongside this one's still-active focus trap and Escape
+   * listener (V3-A review finding #5).
+   */
+  onExited?: () => void;
   children: ReactNode;
 }
 
@@ -88,9 +116,10 @@ export function ModalShell({
   cardAs = "div",
   onSubmit,
   initialFocusRef,
+  onExited,
   children,
 }: ModalShellProps): JSX.Element | null {
-  const { mounted, state } = usePresence(open, exitDurationMs);
+  const { mounted, state } = usePresence(open, exitDurationMs, onExited);
   const cardRef = useRef<HTMLElement>(null);
   const invokerRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);

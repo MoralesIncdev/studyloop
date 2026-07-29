@@ -136,13 +136,13 @@ export function NotationModal(): JSX.Element | null {
         </header>
 
         <div className={styles.content}>
-          <div className={styles.thumb}>
-            {displayModal.shotLoading && <div className={styles.spinner} aria-label="Capturing frame…" />}
-            {!displayModal.shotLoading && displayModal.shot && (
-              <img className={styles.thumbImg} src={api.shotUrl(currentProject.id, displayModal.shot)} alt="" />
-            )}
-            {!displayModal.shotLoading && !displayModal.shot && <div className={styles.noFrame}>No frame</div>}
-          </div>
+          {/* V3-A review finding #3: the screenshot is auto-captured
+              reference material exactly like the quote/concept — it must
+              not sit ahead of the note field in DOM or visual order (SPEC
+              A2, PEDAGOGY §1 generate-first). It now lives inside the same
+              demoted Reference block below the textarea, dimmed like the
+              rest of that block, instead of a full-opacity column that used
+              to render first. */}
           <div className={styles.fields}>
             {/* V3-A A2: the learner's own words come first (PEDAGOGY §1
                 generate-first) — the ghost prompt rotates one-per-open (see
@@ -156,7 +156,11 @@ export function NotationModal(): JSX.Element | null {
               disabled={waitingForShot}
             />
 
-            {(displayModal.conceptTitle || displayModal.quote) && (
+            {(displayModal.conceptTitle ||
+              displayModal.quote ||
+              displayModal.shotLoading ||
+              displayModal.shot ||
+              displayModal.shotFailed) && (
               <div className={styles.referenceBlock}>
                 <span className={styles.referenceLabel}>Reference</span>
                 {displayModal.conceptTitle && (
@@ -186,6 +190,20 @@ export function NotationModal(): JSX.Element | null {
                     >
                       <Icon name="close" size={12} />
                     </button>
+                  </div>
+                )}
+
+                {(displayModal.shotLoading || displayModal.shot || displayModal.shotFailed) && (
+                  <div className={styles.referenceShot}>
+                    {displayModal.shotLoading && <div className={styles.shotSpinner} aria-label="Capturing frame…" />}
+                    {!displayModal.shotLoading && displayModal.shot && (
+                      <img
+                        className={styles.referenceShotImg}
+                        src={api.shotUrl(currentProject.id, displayModal.shot)}
+                        alt=""
+                      />
+                    )}
+                    {!displayModal.shotLoading && !displayModal.shot && <span className={styles.noFrame}>No frame</span>}
                   </div>
                 )}
               </div>

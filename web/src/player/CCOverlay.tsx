@@ -3,12 +3,14 @@
 // Nudged up when the hover chrome is visible so it never sits under the controls.
 //
 // V3-A A1 "CC/transcript redundancy rule": the CC overlay renders only while
-// playbackFocus is active OR the transcript rail card is collapsed — never
-// two full text streams at once (PEDAGOGY §4). While paused with the
-// transcript expanded, CC hides; the instant playbackFocus kicks in (or the
-// user collapses the transcript), CC is free to render again.
+// the transcript rail card is effectively collapsed — never two full text
+// streams at once (PEDAGOGY §4), regardless of *why* the transcript is
+// expanded (purge-suspended pause, or a manual focusOverride during
+// playback — V3-A review finding #2: a prior formula here only accounted
+// for the paused case and left CC showing alongside an override-expanded
+// transcript during playback).
 import { useStudyLoopStore } from "../state/store";
-import { activeSegmentIndex } from "../lib/selectors";
+import { activeSegmentIndex, isTranscriptVisuallyOpen } from "../lib/selectors";
 import styles from "./CCOverlay.module.css";
 
 interface Props {
@@ -24,8 +26,7 @@ export function CCOverlay({ chromeVisible }: Props): JSX.Element | null {
   const focusOverride = useStudyLoopStore((s) => s.focusOverride);
 
   if (!ccEnabled) return null;
-  const transcriptExpanded = railOpenSection === "transcript" && !(playbackFocus && !focusOverride);
-  if (!playbackFocus && transcriptExpanded) return null;
+  if (isTranscriptVisuallyOpen(railOpenSection, playbackFocus, focusOverride)) return null;
   const idx = activeSegmentIndex(segments, currentTime);
   if (idx < 0) return null;
   const text = segments[idx].text;

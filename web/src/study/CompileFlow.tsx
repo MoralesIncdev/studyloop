@@ -73,24 +73,33 @@ export function CompileFlow(): JSX.Element | null {
     void runCompile();
   };
 
-  // Closing the synthesis step any way (Save & continue, Skip, X, Escape,
-  // backdrop click) proceeds to the next step — "never blocks" (SPEC). Only
-  // "Save & continue" persists the draft.
+  // Closing the synthesis step any way (Skip, X, Escape, backdrop click)
+  // proceeds to the next step — "never blocks" (SPEC). "Save & continue"
+  // only proceeds once the PATCH actually succeeds (see below). Either way,
+  // `proceedAfterSynthesis` itself does NOT run here — it's wired as the
+  // synthesis ModalShell's `onExited` (V3-A review finding #5), so the
+  // caption/compile step never mounts until this dialog's own exit
+  // animation has actually finished (no overlapping focus traps, and a
+  // stray Escape hitting the still-closing dialog can't re-trigger it since
+  // there's nothing left here for it to call).
   const handleSynthesisSaveAndContinue = async (): Promise<void> => {
     setSavingSynthesis(true);
-    try {
-      await patchCurrentProject({ lessonSummary: synthesisText.trim() });
-    } finally {
-      setSavingSynthesis(false);
-      setSynthesisOpen(false);
-      proceedAfterSynthesis();
+    const saved = await patchCurrentProject({ lessonSummary: synthesisText.trim() });
+    setSavingSynthesis(false);
+    if (!saved) {
+      // V3-A review finding #1 (CRITICAL): a failed PATCH must not discard
+      // the learner's synthesis. patchCurrentProject already pushed an
+      // error toast — keep the modal open with their text exactly as they
+      // left it instead of proceeding to compile with a stale/missing
+      // lessonSummary.
+      return;
     }
+    setSynthesisOpen(false);
   };
 
   const handleSynthesisSkip = (): void => {
     if (savingSynthesis) return;
     setSynthesisOpen(false);
-    proceedAfterSynthesis();
   };
 
   const handleCaptionSave = async (): Promise<void> => {
@@ -100,14 +109,15 @@ export function CompileFlow(): JSX.Element | null {
       await Promise.all(toSave.map(([id, text]) => patchBubble(id, { text: text.trim() })));
     } finally {
       setSavingCaptions(false);
+      // runCompile fires from this dialog's onExited (below), once its exit
+      // animation has actually finished — same overlap/duplicate-invocation
+      // guard as the synthesis step.
       setCaptionPassBubbles(null);
-      void runCompile();
     }
   };
 
   const handleCaptionSkip = (): void => {
     setCaptionPassBubbles(null);
-    void runCompile();
   };
 
   const handleCopy = async (): Promise<void> => {
@@ -142,6 +152,7 @@ export function CompileFlow(): JSX.Element | null {
         overlayClassName={styles.overlay}
         cardClassName={styles.card}
         initialFocusRef={synthesisTextareaRef}
+        onExited={proceedAfterSynthesis}
       >
         <header className={styles.header}>
           <h2 className={styles.cardTitle}>In your own words</h2>
@@ -192,6 +203,7 @@ export function CompileFlow(): JSX.Element | null {
         ariaLabel="Caption these shots?"
         overlayClassName={styles.overlay}
         cardClassName={styles.card}
+        onExited={() => void runCompile()}
       >
         <header className={styles.header}>
           <h2 className={styles.cardTitle}>Caption these before compiling?</h2>

@@ -43,6 +43,17 @@
   color: var(--text-tertiary);
 }
 
+/* V3-A review finding #8: a chip dropping out of the active window plays
+   this exit fade (kept mounted for FADE_DURATION_MS by ConceptChipStrip.tsx's
+   presence tracking) instead of unmounting instantly — "both" so it stays
+   at opacity 0 for the tail end of the mounted window rather than snapping
+   back to visible. `prefers-reduced-motion` clamps this globally (index.css). */
+.chip[data-state="closing"],
+.overflowChip[data-state="closing"] {
+  animation: chip-fade-out var(--duration-fast) var(--ease-standard) both;
+  pointer-events: none;
+}
+
 @keyframes chip-fade-in {
   from {
     opacity: 0;
@@ -51,5 +62,16 @@
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+@keyframes chip-fade-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(2px);
   }
 }

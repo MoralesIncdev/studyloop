@@ -21,6 +21,7 @@ import {
   OthersAnalysisSection,
   isAnalysisVisible,
 } from "../concepts/AnalysisSections";
+import { isTranscriptVisuallyOpen } from "../lib/selectors";
 import { formatTimestamp } from "../lib/time";
 import { Icon } from "../components/icons";
 import type { RelatedVideo, TranscriptSegment } from "../lib/types";
@@ -190,9 +191,10 @@ export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
   const setFocusOverride = useStudyLoopStore((s) => s.setFocusOverride);
 
   // V3-A A1: the purge visually forces Transcript collapsed on top of the
-  // user's persisted `railOpenSection` — Concepts is never purged.
-  const transcriptPurged = playbackFocus && !focusOverride;
-  const transcriptVisuallyOpen = railOpenSection === "transcript" && !transcriptPurged;
+  // user's persisted `railOpenSection` — Concepts is never purged. Shared
+  // with CCOverlay.tsx (lib/selectors.ts) so both agree on what "expanded"
+  // means (V3-A review finding #2).
+  const transcriptVisuallyOpen = isTranscriptVisuallyOpen(railOpenSection, playbackFocus, focusOverride);
   const conceptsVisuallyOpen = railOpenSection === "concepts";
 
   // codex P1-5: Transcript and Concepts are the two "large" sections — only

@@ -404,6 +404,144 @@ describe("patchCurrentProject — V3-A lessonSummary round trip", () => {
     );
     vi.unstubAllGlobals();
   });
+
+  // V3-A review finding #1 (CRITICAL): a failed PATCH must not silently
+  // discard the learner's synthesis. patchCurrentProject now returns a
+  // boolean (false on failure, never throws) so CompileFlow's
+  // handleSynthesisSaveAndContinue can keep its modal open — with the
+  // draft text untouched — instead of proceeding to close/compile on stale
+  // data. This test covers the store half of that contract; the component
+  // half (modal stays open, text intact) is exercised by the browser
+  // spot-check per the review's DoD.
+  it("returns false (never throws) and leaves currentProject untouched when the PATCH fails, toasting the error", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response("server error", { status: 500, statusText: "Internal Server Error" })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const before = useStudyLoopStore.getState().currentProject;
+    const ok = await useStudyLoopStore.getState().patchCurrentProject({ lessonSummary: "Would be lost on failure" });
+
+    expect(ok).toBe(false);
+    expect(useStudyLoopStore.getState().currentProject).toBe(before); // unchanged — no lessonSummary applied
+    expect(useStudyLoopStore.getState().toasts.some((t) => t.kind === "error")).toBe(true);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("runCompile in-flight guard (V3-A review finding #5)", () => {
+  beforeEach(() => {
+    const project = makeProject("p1", "Project 1");
+    useStudyLoopStore.setState({
+      currentProject: project,
+      compiling: false,
+      compileResult: null,
+      notes: "",
+      currentTime: 0,
+      toasts: [],
+    });
+  });
+
+  it("a second call while a compile is already in flight no-ops — only one POST /compile fires", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/notes")) return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+      if (url.includes("/compile")) return Promise.resolve(jsonResponse({ path: "exports/p1.md", markdown: "# P1" }));
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    // `compiling` flips true synchronously, before either call's first
+    // `await` yields — so back-to-back calls with no `await` in between
+    // (mirrors a doubled Escape/onExited invocation) guarantee the second
+    // call's guard check already sees `compiling: true` from the first,
+    // regardless of how fast the mocked network resolves.
+    const first = useStudyLoopStore.getState().runCompile();
+    const second = useStudyLoopStore.getState().runCompile();
+    await Promise.all([first, second]);
+
+    const compileCallCount = fetchMock.mock.calls.filter(([input]) => String(input).includes("/compile")).length;
+    expect(compileCallCount).toBe(1);
+    expect(useStudyLoopStore.getState().compileResult).toEqual({ path: "exports/p1.md", markdown: "# P1" });
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("loadProjectSession — persisted rail-section restore (V3-A review finding #6)", () => {
+  function fakeWindow(initialStorage: Record<string, string> = {}): { localStorage: Storage } {
+    const backing = new Map(Object.entries(initialStorage));
+    return {
+      localStorage: {
+        getItem: (k: string) => (backing.has(k) ? backing.get(k)! : null),
+        setItem: (k: string, v: string) => {
+          backing.set(k, v);
+        },
+        removeItem: (k: string) => backing.delete(k),
+        clear: () => backing.clear(),
+        key: () => null,
+        get length() {
+          return backing.size;
+        },
+      } as Storage,
+    };
+  }
+
+  function stubFetchFor(project: Project) {
+    return vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes(`/api/projects/${project.id}`)) return Promise.resolve(jsonResponse(project));
+      if (url.endsWith("/bubbles")) return Promise.resolve(jsonResponse({ bubbles: [] }));
+      if (url.endsWith("/notes")) {
+        return Promise.resolve(new Response("", { status: 200, headers: { "content-type": "text/markdown" } }));
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+  }
+
+  beforeEach(() => {
+    useStudyLoopStore.setState({
+      currentProject: null,
+      currentProjectLoading: false,
+      sessionRequestId: 0,
+      bubbles: [],
+      bubblesLoading: false,
+      notes: "",
+      notesLoaded: false,
+      transcriptSegments: [],
+      toasts: [],
+    });
+  });
+
+  it('restores railOpenSection to null when "none" (both collapsed) was persisted — not the "transcript" missing-value default', async () => {
+    const project = makeProject("rail-none", "Rail none");
+    vi.stubGlobal("window", fakeWindow({ "studyloop:railSection:rail-none": "none" }));
+    vi.stubGlobal("fetch", stubFetchFor(project));
+
+    await useStudyLoopStore.getState().loadProjectSession("rail-none");
+
+    expect(useStudyLoopStore.getState().railOpenSection).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("still defaults to transcript when nothing was ever persisted for this project", async () => {
+    const project = makeProject("rail-missing", "Rail missing");
+    vi.stubGlobal("window", fakeWindow({}));
+    vi.stubGlobal("fetch", stubFetchFor(project));
+
+    await useStudyLoopStore.getState().loadProjectSession("rail-missing");
+
+    expect(useStudyLoopStore.getState().railOpenSection).toBe("transcript");
+    vi.unstubAllGlobals();
+  });
+
+  it("restores an explicit transcript/concepts choice as before", async () => {
+    const project = makeProject("rail-concepts", "Rail concepts");
+    vi.stubGlobal("window", fakeWindow({ "studyloop:railSection:rail-concepts": "concepts" }));
+    vi.stubGlobal("fetch", stubFetchFor(project));
+
+    await useStudyLoopStore.getState().loadProjectSession("rail-concepts");
+
+    expect(useStudyLoopStore.getState().railOpenSection).toBe("concepts");
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("openOrCreateYoutubeProject (V2-B — search/up-next click target)", () => {

@@ -95,6 +95,20 @@
 .conceptRow {
   padding: 8px;
   border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.conceptRow:hover {
+  background: var(--hover-overlay);
+}
+
+/* V3-A review finding #4: chip-triggered highlight — mirrors ConceptsDock's
+   .itemHighlighted (a brief pulse, self-clears after a few seconds, see
+   AnalysisSections.tsx's HIGHLIGHT_DURATION_MS), not a permanent state. */
+.conceptRowHighlighted {
+  background: color-mix(in srgb, var(--accent-blue) 22%, transparent);
+  transition: background-color 1600ms var(--ease-standard);
 }
 
 .conceptTitle {

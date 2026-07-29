@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeConcepts, activeSegmentIndex, passedConcepts } from "./selectors";
+import { activeConcepts, activeSegmentIndex, isTranscriptVisuallyOpen, passedConcepts } from "./selectors";
 import type { ConceptCard, TranscriptSegment } from "./types";
 
 const segments: TranscriptSegment[] = [
@@ -101,5 +101,33 @@ describe("passedConcepts", () => {
   it("never passes a card with no real anchor, however far playback goes", () => {
     const noAnchor = [{ id: "n1", title: "No anchor", body: "", anchors: [], raw: "" }];
     expect(passedConcepts(noAnchor, 100000)).toEqual([]);
+  });
+});
+
+// V3-A review finding #2: CCOverlay previously reimplemented this formula
+// and missed the focusOverride case (CC stayed visible alongside a
+// manually-expanded transcript during playback). Both RightRail (which
+// section actually renders expanded) and CCOverlay (whether CC may render)
+// must agree — that's the point of sharing one selector.
+describe("isTranscriptVisuallyOpen", () => {
+  it("is open when railOpenSection is transcript and nothing is purging it (paused)", () => {
+    expect(isTranscriptVisuallyOpen("transcript", false, false)).toBe(true);
+  });
+
+  it("is closed when railOpenSection is concepts, or nothing is open", () => {
+    expect(isTranscriptVisuallyOpen("concepts", false, false)).toBe(false);
+    expect(isTranscriptVisuallyOpen(null, false, false)).toBe(false);
+  });
+
+  it("the playback-focus purge forces it closed even though the preference is transcript", () => {
+    expect(isTranscriptVisuallyOpen("transcript", true, false)).toBe(false);
+  });
+
+  it("a focusOverride during playback suspends the purge — transcript is open (and so CC must hide)", () => {
+    expect(isTranscriptVisuallyOpen("transcript", true, true)).toBe(true);
+  });
+
+  it("focusOverride with playbackFocus false (already paused) is simply open, same as no override", () => {
+    expect(isTranscriptVisuallyOpen("transcript", false, true)).toBe(true);
   });
 });

@@ -4,15 +4,29 @@
 import type { AnalysisConcept, ConceptCard, Pearl } from "./types";
 
 /**
+ * Every AI-breakdown concept's `ConceptCard.id` (and `highlightedConceptId`
+ * value when a chip targets one — see ConceptChipStrip.tsx) carries this
+ * prefix so ConceptsDock (doc concepts) and AnalysisSections' AiBreakdownSection
+ * (AI concepts) can each recognize which chip-highlight targets are theirs
+ * to handle (V3-A review finding #4).
+ */
+export const AI_CONCEPT_ID_PREFIX = "ai:";
+
+/**
  * Adapts an AI-breakdown concept into the same `ConceptCard` shape doc
  * concepts use, so it can flow through the existing activeConcepts/
- * passedConcepts selectors and the ConceptChipStrip/ConceptOverlay
- * components unchanged (SPEC: "anchored ones join the ticker windows like
- * doc concepts"). `raw` isn't rendered anywhere; `body` carries the full
- * markdown breakdown (what ConceptOverlay actually displays).
+ * passedConcepts selectors and the ConceptChipStrip components unchanged
+ * (SPEC: "anchored ones join the ticker windows like doc concepts"). `raw`
+ * isn't rendered anywhere; `body` carries the full markdown breakdown.
  */
 export function analysisConceptToConceptCard(concept: AnalysisConcept): ConceptCard {
-  return { id: `ai:${concept.id}`, title: concept.title, body: concept.body, anchors: concept.anchors, raw: concept.body };
+  return {
+    id: `${AI_CONCEPT_ID_PREFIX}${concept.id}`,
+    title: concept.title,
+    body: concept.body,
+    anchors: concept.anchors,
+    raw: concept.body,
+  };
 }
 
 /** Importance-sorted (3 first), then chronological within the same importance — matches the compiled doc's Pearls section. */

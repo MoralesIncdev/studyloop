@@ -4,13 +4,16 @@
 // middle, "AI breakdown" + Themes below — SPEC: "'Pearls' group at top ...
 // themes at the bottom of the panel") plus a standalone "Others' analysis"
 // card for imported overlays.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStudyLoopStore } from "../state/store";
-import { sortPearls, starStates, hashHueForHandle } from "../lib/analysisFormat";
+import { sortPearls, starStates, hashHueForHandle, AI_CONCEPT_ID_PREFIX } from "../lib/analysisFormat";
 import { formatTimestamp } from "../lib/time";
 import { Icon } from "../components/icons";
 import type { Pearl } from "../lib/types";
 import styles from "./AnalysisSections.module.css";
+
+/** Matches ConceptsDock's HIGHLIGHT_DURATION_MS — how long a chip-triggered highlight stays visible before self-clearing. */
+const HIGHLIGHT_DURATION_MS = 2600;
 
 /**
  * codex P0-2 "stub-analysis leakage": `analysis.source === "stub"` means the
@@ -83,20 +86,65 @@ export function PearlsSection(): JSX.Element | null {
 export function AiBreakdownSection(): JSX.Element | null {
   const analysis = useStudyLoopStore((s) => s.analysis);
   const controller = useStudyLoopStore((s) => s.controller);
+  const highlightedConceptId = useStudyLoopStore((s) => s.highlightedConceptId);
+  const clearHighlightedConcept = useStudyLoopStore((s) => s.clearHighlightedConcept);
+
+  // Collapsed by default (title + seek chips only) — clicking a row, or a
+  // concept chip targeting it, reveals the summary. Doc concepts (see
+  // ConceptsDock.tsx) get their own full ConceptOverlay panel for this; AI
+  // concepts have no such overlay, so "expanded" (SPEC A4) means the row
+  // itself (V3-A review finding #4).
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const rowRefs = useRef<Record<string, HTMLLIElement | null>>({});
+
+  const highlightedRawId =
+    highlightedConceptId?.startsWith(AI_CONCEPT_ID_PREFIX) ? highlightedConceptId.slice(AI_CONCEPT_ID_PREFIX.length) : null;
+
+  useEffect(() => {
+    if (!highlightedRawId) return undefined;
+    setExpanded((cur) => (cur.has(highlightedRawId) ? cur : new Set(cur).add(highlightedRawId)));
+    rowRefs.current[highlightedRawId]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = setTimeout(clearHighlightedConcept, HIGHLIGHT_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [highlightedRawId, clearHighlightedConcept]);
 
   if (!analysis || analysis.concepts.length === 0) return null;
+
+  const toggle = (id: string): void => {
+    setExpanded((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   return (
     <section className={styles.section}>
       <h3 className={styles.sectionHeader}>AI breakdown</h3>
       <ul className={styles.list}>
         {analysis.concepts.map((concept) => (
-          <li key={concept.id} className={styles.conceptRow}>
+          <li
+            key={concept.id}
+            ref={(el) => {
+              rowRefs.current[concept.id] = el;
+            }}
+            className={`${styles.conceptRow} ${highlightedRawId === concept.id ? styles.conceptRowHighlighted : ""}`}
+            onClick={() => toggle(concept.id)}
+          >
             <p className={styles.conceptTitle}>{concept.title}</p>
-            <p className={styles.conceptSummary}>{concept.summary}</p>
+            {expanded.has(concept.id) && <p className={styles.conceptSummary}>{concept.summary}</p>}
             <div className={styles.anchorRow}>
               {concept.anchors.map((a, i) => (
-                <button key={i} type="button" className={styles.timeChip} onClick={() => controller?.seek(Math.max(0, a.t - 5))}>
+                <button
+                  key={i}
+                  type="button"
+                  className={styles.timeChip}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    controller?.seek(Math.max(0, a.t - 5));
+                  }}
+                >
                   {formatTimestamp(a.t)}
                 </button>
               ))}
