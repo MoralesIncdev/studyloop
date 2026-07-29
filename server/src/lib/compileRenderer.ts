@@ -1,6 +1,7 @@
 import path from "node:path";
 import { formatTimestamp } from "./time.js";
-import type { AnalysisConcept, Pearl } from "./analysis.js";
+import type { AnalysisConcept, AnalysisUnit, Pearl } from "./analysis.js";
+import { isUnitFeedable, type AttestationsFile } from "./attestation.js";
 import type { Bubble, Source } from "./models.js";
 import type { ConceptCard } from "./concepts.js";
 
@@ -30,6 +31,17 @@ export interface CompileInput {
    */
   analysisPearls?: readonly Pearl[];
   analysisConcepts?: readonly AnalysisConcept[];
+  /**
+   * V3-B B2 "attestation + reveal-gating": when the project's analysis is
+   * v3, `analysisUnits` (+ `unitAttestations`) REPLACE `analysisConcepts`
+   * for the "Concept breakdown" section — attested/generation-touched units
+   * render in full (with the learner's own take, if any), the rest render
+   * as a "Not yet reviewed" titles-only list (SPEC: "Unattested render in
+   * compile under 'Not yet reviewed' as titles only"). Absent/empty on v2
+   * projects, which keep using `analysisConcepts` unchanged.
+   */
+  analysisUnits?: readonly AnalysisUnit[];
+  unitAttestations?: AttestationsFile;
 }
 
 function describeSource(source: Source): string {
@@ -67,6 +79,37 @@ function renderAnalysisPearls(pearls: readonly Pearl[]): string {
   return sorted
     .map((p) => `- ${"★".repeat(p.importance)} **[${formatTimestamp(p.t)}] ${p.label}** — ${p.insight}`)
     .join("\n");
+}
+
+/**
+ * V3-B B2: attested/generation-touched units render in full (summary + body
+ * + the learner's own edited body if they used Edit, + their "your take" if
+ * they typed one); everything else renders as a titles-only "Not yet
+ * reviewed" list — never the AI body for a unit the learner hasn't touched.
+ */
+function renderAnalysisUnitsV3(units: readonly AnalysisUnit[], attestations: AttestationsFile): string {
+  const attested = units.filter((u) => isUnitFeedable(attestations[u.id]));
+  const notYet = units.filter((u) => !isUnitFeedable(attestations[u.id]));
+  const parts: string[] = [];
+
+  if (attested.length > 0) {
+    parts.push(
+      attested
+        .map((u) => {
+          const entry = attestations[u.id];
+          const anchorList = u.anchors.map((a) => `[${formatTimestamp(a.t)}]`).join(", ");
+          const body = entry?.userBody?.trim() || u.body;
+          const lines = [`### ${u.label}${anchorList ? ` (${anchorList})` : ""}`, "", u.summary, "", body];
+          if (entry?.userTake?.trim()) lines.push("", `**Your take:** ${entry.userTake.trim()}`);
+          return lines.join("\n");
+        })
+        .join("\n\n")
+    );
+  }
+  if (notYet.length > 0) {
+    parts.push(["### Not yet reviewed", "", notYet.map((u) => `- ${u.label}`).join("\n")].join("\n"));
+  }
+  return parts.join("\n\n");
 }
 
 function renderAnalysisConcepts(concepts: readonly AnalysisConcept[]): string {
@@ -129,7 +172,9 @@ export function renderCompiledDocument(input: CompileInput): string {
   if (input.analysisPearls && input.analysisPearls.length > 0) {
     parts.push("## Pearls", "", renderAnalysisPearls(input.analysisPearls), "");
   }
-  if (input.analysisConcepts && input.analysisConcepts.length > 0) {
+  if (input.analysisUnits && input.analysisUnits.length > 0) {
+    parts.push("## Concept breakdown", "", renderAnalysisUnitsV3(input.analysisUnits, input.unitAttestations ?? {}), "");
+  } else if (input.analysisConcepts && input.analysisConcepts.length > 0) {
     parts.push("## Concept breakdown", "", renderAnalysisConcepts(input.analysisConcepts), "");
   }
   return parts.join("\n");
