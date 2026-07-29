@@ -24,6 +24,9 @@ export type TranscriptRef = { type: "file"; path: string } | { type: "none" };
 
 export type ConceptProfile = "bjj-curriculum" | "headings";
 
+/** V3-B B1: router-classified (then user-editable) subject-matter domain — mirrors server/src/lib/models.ts DomainSchema. */
+export type Domain = "biology" | "history" | "music" | "physical_skill" | "generic";
+
 export interface ConceptDocRef {
   path?: string;
   profile?: ConceptProfile;
@@ -56,6 +59,10 @@ export interface Project {
   related?: RelatedVideo[];
   /** V3-A "Compile synthesis checkpoint": the learner's own-words summary, written (or skipped) in the compile flow's first step. */
   lessonSummary?: string;
+  /** V3-B B1: the editable domain chip near the channel row. */
+  domain?: Domain;
+  /** V3-B B2: per-project toggle — worked-example-first vs generate-first proposal ordering. */
+  noviceMode?: boolean;
 }
 
 export interface CreateProjectBody {
@@ -79,6 +86,8 @@ export interface PatchProjectBody {
   conceptDoc?: ConceptDocRef;
   transcript?: TranscriptRef;
   lessonSummary?: string;
+  domain?: Domain;
+  noviceMode?: boolean;
 }
 
 export interface TranscriptSegment {
@@ -142,6 +151,8 @@ export interface Pearl {
   label: string;
   insight: string;
   importance: 1 | 2 | 3;
+  /** V3-B B1: links this pearl to a typed unit (analysis.units), when the merge pass could resolve one. */
+  unitId?: string;
 }
 
 export interface AnalysisConceptAnchor {
@@ -161,16 +172,49 @@ export interface AnalysisTheme {
   body: string;
 }
 
+// --- V3-B B1: typed spine (units/edges) — see PEDAGOGY.md §2 ---------------
+
+export type UnitType = "CLAIM" | "MECHANISM" | "PROCEDURE" | "EXAMPLE" | "BOUNDARY";
+export type EdgeType = "REQUIRES" | "PART_OF" | "EXAMPLE_OF" | "PROCEDURE_STEP";
+
+export interface UnitAnchor {
+  t: number;
+  quote: string;
+}
+
+export interface AnalysisUnit {
+  id: string;
+  type: UnitType;
+  label: string;
+  summary: string;
+  body: string;
+  anchors: UnitAnchor[];
+  confidence: number;
+}
+
+export interface AnalysisEdge {
+  source: string;
+  target: string;
+  type: EdgeType;
+  quote: string;
+  confidence: number;
+}
+
 export interface Analysis {
   generatedAt: string;
   model: string;
-  version: 2;
+  version: 2 | 3;
   /** codex P0-2: provenance — "stub" is the offline deterministic demo
    * generator (STUDYLOOP_FAKE_ANALYSIS=1), never rendered outside dev. */
   source: "model" | "stub";
   pearls: Pearl[];
+  /** Kept on every version — v3 populates this as a deterministic mirror of `units` (see server/src/lib/analysis.ts unitsToConceptsMirror). */
   concepts: AnalysisConcept[];
   themes: AnalysisTheme[];
+  /** V3-B B1: present on version:3 analyses only. */
+  domain?: Domain;
+  units?: AnalysisUnit[];
+  edges?: AnalysisEdge[];
 }
 
 export type AnalyzeStatus =
@@ -255,6 +299,13 @@ export interface RevealResponse {
 
 export type ReviewGrade = "again" | "good";
 
+/** V3-B B4 "Card transformation": LLM-generated cloze/question front cached per card in review.json — see server/src/lib/cardTransform.ts. Falls back to the card's own front/back when absent. */
+export interface ReviewCardTransform {
+  front: string;
+  back: string;
+  why: string;
+}
+
 interface ReviewCardBase {
   id: string;
   projectId: string;
@@ -265,6 +316,8 @@ interface ReviewCardBase {
   /** YouTube sources only — builds an "Open at timestamp" link. */
   sourceVideoId?: string;
   t: number;
+  /** V3-B B4: present when a cached LLM transformation exists for this card. */
+  transformed?: ReviewCardTransform;
 }
 
 export interface ReviewBubbleCard extends ReviewCardBase {
@@ -280,7 +333,16 @@ export interface ReviewPearlCard extends ReviewCardBase {
   importance: 1 | 2 | 3;
 }
 
-export type ReviewCard = ReviewBubbleCard | ReviewPearlCard;
+/** V3-B B4: "Attested units become reviewable as generation cards: front = 'your take' prompt for the unit, back = unit summary + user's own take." */
+export interface ReviewUnitCard extends ReviewCardBase {
+  kind: "unit";
+  unitType: UnitType;
+  label: string;
+  summary: string;
+  userTake: string | null;
+}
+
+export type ReviewCard = ReviewBubbleCard | ReviewPearlCard | ReviewUnitCard;
 
 export interface ReviewQueueCounts {
   due: number;
@@ -297,4 +359,26 @@ export interface ReviewQueueResponse {
   due: ReviewCard[];
   counts: ReviewQueueCounts;
   streak: ReviewStreak | null;
+  /** V3-B B4 "Mastery over streaks": cards graduated past the 30-day interval, across every project — the summary screen's headline number. */
+  masteryCount: number;
+}
+
+// --- V3-B B2: Attestation + reveal-gating -----------------------------------
+
+export type AttestationStatus = "attested" | "dismissed";
+
+export interface AttestationEntry {
+  status?: AttestationStatus;
+  userTake?: string;
+  userBody?: string;
+  at: string;
+}
+
+/** `{[unitId]: AttestationEntry}` — GET/PATCH /api/projects/:id/attestations. */
+export type AttestationsFile = Record<string, AttestationEntry>;
+
+export interface AttestationPatchBody {
+  status?: AttestationStatus;
+  userTake?: string;
+  userBody?: string;
 }

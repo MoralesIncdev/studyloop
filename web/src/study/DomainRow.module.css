@@ -1,0 +1,42 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.domainChip {
+  display: inline-flex;
+  align-items: center;
+}
+
+.domainSelect {
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+  font-size: var(--type-12);
+  cursor: pointer;
+}
+
+.domainSelect:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.noviceToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--type-12);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.noviceToggle input {
+  accent-color: var(--accent-blue);
+  cursor: pointer;
+}

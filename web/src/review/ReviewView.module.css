@@ -149,6 +149,16 @@
   white-space: pre-wrap;
 }
 
+.whyText {
+  width: 100%;
+  margin: -8px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--type-13);
+  line-height: 1.5;
+  text-align: left;
+  text-wrap: pretty;
+}
+
 .mediaActionButton {
   display: inline-flex;
   align-items: center;

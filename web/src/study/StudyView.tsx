@@ -16,6 +16,7 @@ import { NotationModal } from "../notes/NotationModal";
 import { ConceptChipStrip } from "../concepts/ConceptChipStrip";
 import { CompileFlow } from "./CompileFlow";
 import { AnalyzeButton } from "./AnalyzeButton";
+import { DomainRow } from "./DomainRow";
 import { ShareFlow } from "./ShareFlow";
 import { ImportOverlayFlow } from "./ImportOverlayFlow";
 import { OverlaysPill, OverlayLegend } from "./OverlaysToggle";
@@ -189,6 +190,8 @@ export function StudyView({ projectId }: Props): JSX.Element {
             </div>
             <AnalyzeButton />
           </div>
+
+          <DomainRow />
 
           <div className={styles.actionPills}>
             <CompileFlow />

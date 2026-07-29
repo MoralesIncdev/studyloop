@@ -1,0 +1,19 @@
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.progress {
+  font-size: var(--type-11);
+  font-weight: var(--weight-medium);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

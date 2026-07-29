@@ -3,6 +3,8 @@
 import type {
   Analysis,
   AnalyzeStatus,
+  AttestationPatchBody,
+  AttestationsFile,
   Bubble,
   ConceptCard,
   ConceptProfile,
@@ -161,6 +163,18 @@ export const api = {
   getReviewQueue: () => request<ReviewQueueResponse>("/api/review/queue"),
   gradeReviewCard: (cardId: string, grade: ReviewGrade) =>
     request<ReviewQueueResponse>("/api/review/grade", { method: "POST", body: JSON.stringify({ cardId, grade }) }),
+
+  // --- V3-B B2: attestation + reveal-gating ----------------------------------------
+  getAttestations: (id: string) => request<AttestationsFile>(`/api/projects/${encodeURIComponent(id)}/attestations`),
+  patchAttestation: (id: string, unitId: string, body: AttestationPatchBody) =>
+    request<AttestationsFile>(`/api/projects/${encodeURIComponent(id)}/attestations/${encodeURIComponent(unitId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  clearAttestation: (id: string, unitId: string) =>
+    request<AttestationsFile>(`/api/projects/${encodeURIComponent(id)}/attestations/${encodeURIComponent(unitId)}`, {
+      method: "DELETE",
+    }),
 
   videoStreamUrl: (path: string) => `/api/video/stream?path=${encodeURIComponent(path)}`,
   shotUrl: (projectId: string, shot: string) =>

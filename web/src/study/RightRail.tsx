@@ -17,10 +17,12 @@ import { ConceptsDock } from "../concepts/ConceptsDock";
 import {
   PearlsSection,
   AiBreakdownSection,
+  UnitsProposalsSection,
   ThemesSection,
   OthersAnalysisSection,
   isAnalysisVisible,
 } from "../concepts/AnalysisSections";
+import { StudyPathSection } from "./StudyPathSection";
 import { isTranscriptVisuallyOpen } from "../lib/selectors";
 import { formatTimestamp } from "../lib/time";
 import { Icon } from "../components/icons";
@@ -212,6 +214,14 @@ export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
   };
 
   const analysisVisible = isAnalysisVisible(analysis);
+  // V3-B B1: v3's typed units replace the flat AI-breakdown concept list
+  // with attestable proposals (UnitsProposalsSection) — v2 analyses (or
+  // none at all) keep the pre-existing AiBreakdownSection unchanged.
+  const isV3 = analysis?.version === 3 && !!analysis.units;
+  // V3-B B3: the Path rail tab only exists once there's a typed spine to
+  // walk — hidden entirely for v2/no-analysis projects (no dead-end tab).
+  const hasPath = isV3 && (analysis!.units?.length ?? 0) > 0;
+  const pathVisuallyOpen = railOpenSection === "path";
 
   return (
     <div className={styles.rail}>
@@ -253,7 +263,7 @@ export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
             <>
               <PearlsSection />
               <ConceptsDock />
-              <AiBreakdownSection />
+              {isV3 ? <UnitsProposalsSection /> : <AiBreakdownSection />}
               <ThemesSection />
             </>
           ) : (
@@ -264,6 +274,20 @@ export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
           )}
         </div>
       </RailCard>
+
+      {hasPath && (
+        <RailCard
+          id="path-rail"
+          title="Path"
+          defaultExpanded={false}
+          expanded={pathVisuallyOpen}
+          onToggle={() => selectSection("path", pathVisuallyOpen)}
+        >
+          <div className={styles.conceptsViewport}>
+            <StudyPathSection />
+          </div>
+        </RailCard>
+      )}
 
       <OthersAnalysisCard />
 

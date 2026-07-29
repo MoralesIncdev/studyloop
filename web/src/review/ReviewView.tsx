@@ -10,6 +10,7 @@ import { useStudyLoopStore } from "../state/store";
 import { Icon } from "../components/icons";
 import { api } from "../lib/api";
 import { formatTimestamp } from "../lib/time";
+import { lapseTier } from "../lib/lapseTier";
 import { ReviewClipPlayer } from "./ReviewClipPlayer";
 import type { ReviewCard } from "../lib/types";
 import styles from "./ReviewView.module.css";
@@ -20,14 +21,25 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
 }
 
-/** Bubble-card back: local sources get a lazy inline clip loop, YouTube sources fall back to "Open at timestamp" (SPEC). */
-function CardMediaAction({ card }: { card: ReviewCard }): JSX.Element | null {
+/**
+ * V3-B B4 "Lapse-to-context pipeline": escalates by how many times THIS card
+ * has been graded "Again" so far this session (state/store.ts
+ * ReviewSessionState.againCounts, via lib/lapseTier.ts) — applies uniformly
+ * across every card kind (bubble/pearl/unit all carry sourceType/sourcePath/
+ * sourceVideoId/t), not just bubbles. ×2: an inline auto-playing clip
+ * (local) or a lighter "at mm:ss" link (YouTube) replaces the old
+ * click-to-play button. ×3: a single "Open in player" action for either
+ * source type — seeds lastPosition, navigates, and (by unmounting this view)
+ * pauses the queue.
+ */
+function LapseMediaAction({ card }: { card: ReviewCard }): JSX.Element | null {
   const openReviewCardInStudy = useStudyLoopStore((s) => s.openReviewCardInStudy);
+  const againCount = useStudyLoopStore((s) => s.reviewSession?.againCounts[card.id] ?? 0);
   const [clipOpen, setClipOpen] = useState(false);
+  const tier = lapseTier(againCount);
 
-  if (card.kind !== "bubble") return null;
-
-  if (card.sourceType === "local" && card.sourcePath) {
+  if (tier === "none" && card.kind !== "bubble") return null; // pearl/unit cards with no lapse escalation yet have no default media action
+  if (tier === "none" && card.kind === "bubble" && card.sourceType === "local" && card.sourcePath) {
     if (clipOpen) return <ReviewClipPlayer src={api.videoStreamUrl(card.sourcePath)} t={card.t} />;
     return (
       <button type="button" className={styles.mediaActionButton} onClick={() => setClipOpen(true)}>
@@ -36,8 +48,7 @@ function CardMediaAction({ card }: { card: ReviewCard }): JSX.Element | null {
       </button>
     );
   }
-
-  if (card.sourceType === "youtube") {
+  if (tier === "none" && card.kind === "bubble" && card.sourceType === "youtube") {
     return (
       <button type="button" className={styles.mediaActionButton} onClick={() => void openReviewCardInStudy(card)}>
         <Icon name="arrowForward" size={16} />
@@ -46,14 +57,46 @@ function CardMediaAction({ card }: { card: ReviewCard }): JSX.Element | null {
     );
   }
 
+  if (tier === "player") {
+    return (
+      <button type="button" className={styles.mediaActionButton} onClick={() => void openReviewCardInStudy(card)}>
+        <Icon name="arrowForward" size={16} />
+        Open in player
+      </button>
+    );
+  }
+
+  // tier === "clip" — ReviewClipPlayer already auto-plays the instant it
+  // mounts (see its own loadedmetadata handler); rendering it directly here
+  // (rather than behind the "Play 10s clip" button) is what makes it
+  // "auto-playing" per SPEC, with no extra prop needed.
+  if (card.sourceType === "local" && card.sourcePath) {
+    return <ReviewClipPlayer src={api.videoStreamUrl(card.sourcePath)} t={card.t} />;
+  }
+  if (card.sourceType === "youtube") {
+    return (
+      <button type="button" className={styles.mediaActionButton} onClick={() => void openReviewCardInStudy(card)}>
+        <Icon name="arrowForward" size={16} />
+        At {formatTimestamp(card.t)}
+      </button>
+    );
+  }
   return null;
 }
 
 function CardFront({ card }: { card: ReviewCard }): JSX.Element {
-  if (card.kind === "pearl") {
+  if (card.kind === "unit") {
     return (
       <>
         <p className={styles.pearlLabel}>{card.label}</p>
+        <p className={styles.prompt}>In your own words — what&rsquo;s the key idea here?</p>
+      </>
+    );
+  }
+  if (card.kind === "pearl") {
+    return (
+      <>
+        <p className={styles.pearlLabel}>{card.transformed?.front ?? card.label}</p>
         <p className={styles.projectTitle}>{card.projectTitle}</p>
       </>
     );
@@ -70,16 +113,27 @@ function CardFront({ card }: { card: ReviewCard }): JSX.Element {
           </>
         )}
       </div>
-      <p className={styles.prompt}>What was your note here?</p>
+      <p className={styles.prompt}>{card.transformed?.front ?? "What was your note here?"}</p>
     </>
   );
 }
 
 function CardBack({ card }: { card: ReviewCard }): JSX.Element {
+  if (card.kind === "unit") {
+    return (
+      <>
+        <p className={styles.backText}>{card.summary}</p>
+        {card.userTake && <p className={styles.whyText}>Your take: {card.userTake}</p>}
+        <LapseMediaAction card={card} />
+      </>
+    );
+  }
+  const backText = card.kind === "bubble" ? (card.transformed?.back ?? card.text) : (card.transformed?.back ?? card.insight);
   return (
     <>
-      <p className={styles.backText}>{card.kind === "bubble" ? card.text : card.insight}</p>
-      <CardMediaAction card={card} />
+      <p className={styles.backText}>{backText}</p>
+      {card.transformed?.why && <p className={styles.whyText}>{card.transformed.why}</p>}
+      <LapseMediaAction card={card} />
     </>
   );
 }
@@ -116,6 +170,7 @@ export function ReviewView(): JSX.Element {
   const sessionLoading = useStudyLoopStore((s) => s.reviewSessionLoading);
   const grading = useStudyLoopStore((s) => s.reviewGrading);
   const reviewCounts = useStudyLoopStore((s) => s.reviewCounts);
+  const masteryCount = useStudyLoopStore((s) => s.masteryCount);
   const startReviewSession = useStudyLoopStore((s) => s.startReviewSession);
   const revealCurrentReviewCard = useStudyLoopStore((s) => s.revealCurrentReviewCard);
   const gradeCurrentReviewCard = useStudyLoopStore((s) => s.gradeCurrentReviewCard);
@@ -194,8 +249,13 @@ export function ReviewView(): JSX.Element {
         )}
 
         {session && session.total > 0 && !current && (
+          // V3-B B4 "Mastery over streaks": the session-summary headline is
+          // the mastery count (cards graduated past the 30-day interval,
+          // across every project), not the streak — streak stays a small
+          // footnote via StreakLine below (PEDAGOGY §5: "streak demoted from
+          // headline to footnote; the celebrated number is concepts locked in").
           <CaughtUpState
-            heading="All caught up"
+            heading={`Concepts locked in: ${masteryCount ?? 0}`}
             body={`Reviewed ${session.clearedCount} card${session.clearedCount === 1 ? "" : "s"} this session.`}
           />
         )}
