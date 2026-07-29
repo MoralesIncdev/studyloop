@@ -131,6 +131,13 @@
   background: color-mix(in srgb, var(--accent-green) 20%, transparent);
 }
 
+/* V3-A A4: chip-triggered highlight — a brief pulse (self-clears after a few
+   seconds, see ConceptsDock's HIGHLIGHT_DURATION_MS), not a permanent state. */
+.itemHighlighted {
+  background: color-mix(in srgb, var(--accent-blue) 22%, transparent);
+  transition: background-color 1600ms var(--ease-standard);
+}
+
 .timeChip {
   background: color-mix(in srgb, var(--accent-blue) 15%, transparent);
   border: none;
@@ -163,6 +170,30 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Reachable "expanded overlay" entry point (V3-A A4) — same visual as
+   .itemTitle, just an actual button so the full ConceptOverlay is one click away. */
+.itemTitleButton {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: left;
+  font-size: var(--type-13);
+  font-family: inherit;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.itemTitleButton:hover {
+  color: var(--accent-blue);
+  text-decoration: underline;
 }
 
 .covered {

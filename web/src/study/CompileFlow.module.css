@@ -204,6 +204,33 @@
   text-wrap: pretty;
 }
 
+.synthesisTextarea {
+  resize: vertical;
+  min-height: 96px;
+  background: var(--surface-bg);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: var(--type-14);
+  font-family: inherit;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.synthesisTextarea:hover {
+  border-color: var(--border-strong);
+}
+
+.synthesisTextarea:focus-visible {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: var(--focus-ring);
+}
+
+.synthesisTextarea::placeholder {
+  color: var(--text-tertiary);
+}
+
 .captionList {
   list-style: none;
   margin: 0;

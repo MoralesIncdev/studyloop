@@ -54,6 +54,8 @@ export interface Project {
   author?: string;
   /** Cached Innertube related-video list (source.type === "youtube" only). */
   related?: RelatedVideo[];
+  /** V3-A "Compile synthesis checkpoint": the learner's own-words summary, written (or skipped) in the compile flow's first step. */
+  lessonSummary?: string;
 }
 
 export interface CreateProjectBody {
@@ -76,6 +78,7 @@ export interface PatchProjectBody {
   watchedUpTo?: number;
   conceptDoc?: ConceptDocRef;
   transcript?: TranscriptRef;
+  lessonSummary?: string;
 }
 
 export interface TranscriptSegment {
@@ -199,6 +202,8 @@ export interface ShareBundle {
   shareHandle: string;
   source: ShareSourceRef;
   title: string;
+  /** V3-A: the learner's own-words synthesis, if written. */
+  lessonSummary?: string;
   notes: string;
   bubbles: ShareBundleBubble[];
   pearls: Pearl[];

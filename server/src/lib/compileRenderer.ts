@@ -15,6 +15,14 @@ export interface CompileInput {
   /** ISO date string, injected for determinism (defaults to now if omitted). */
   compiledAt?: string;
   /**
+   * V3-A "Compile synthesis checkpoint": the learner's own-words summary,
+   * written in the compile flow's first step. Renders as the FIRST section
+   * of the doc; empty/undefined (skipped) renders a visible placeholder line
+   * instead of omitting the section — "visible unfinishedness is the nudge"
+   * (PEDAGOGY §3).
+   */
+  lessonSummary?: string;
+  /**
    * V2-C: when analysis.json exists for this project, compile gains "Pearls"
    * and "Concept breakdown" sections after the user-notes sections (SPEC
    * "Analysis engine" — "Compile v2"). Omitted/undefined when no analysis has
@@ -90,6 +98,7 @@ function renderConcepts(concepts: readonly ConceptCard[], watchedUpTo: number): 
  */
 export function renderCompiledDocument(input: CompileInput): string {
   const compiledAt = input.compiledAt ?? new Date().toISOString().slice(0, 10);
+  const summary = input.lessonSummary?.trim();
   const parts = [
     `# ${input.title}`,
     "",
@@ -97,6 +106,10 @@ export function renderCompiledDocument(input: CompileInput): string {
     `**Compiled:** ${compiledAt}`,
     "",
     "---",
+    "",
+    "## In my own words",
+    "",
+    summary ? summary : "*[Write your summary to complete this lesson]*",
     "",
     "## Notes",
     "",

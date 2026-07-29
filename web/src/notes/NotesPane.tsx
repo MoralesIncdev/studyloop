@@ -68,7 +68,7 @@ export function NotesPane(): JSX.Element {
         <textarea
           ref={textareaRef}
           className={styles.textarea}
-          placeholder="Long-running notes… use @ timestamp to drop in a seek link."
+          placeholder="What do you want to remember — and why does it matter? Use @ timestamp to drop in a seek link."
           value={notes}
           onChange={handleChange}
         />

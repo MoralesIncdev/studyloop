@@ -8,6 +8,20 @@
   background: var(--surface-raised);
   box-shadow: var(--shadow-1);
   overflow: hidden;
+  opacity: 1;
+  transition: opacity var(--duration-panel) var(--ease-standard);
+}
+
+/* V3-A A1: state-aware surface purge — dims while playing, still fully
+   interactive (opacity alone never disables pointer/keyboard interaction).
+   Hover/focus-within restore full opacity immediately. */
+.dock[data-dimmed="true"] {
+  opacity: 0.45;
+}
+
+.dock[data-dimmed="true"]:hover,
+.dock[data-dimmed="true"]:focus-within {
+  opacity: 1;
 }
 
 .tabBar {

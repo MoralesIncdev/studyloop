@@ -5,6 +5,10 @@
 
 ---
 
+## In my own words
+
+*[Write your summary to complete this lesson]*
+
 ## Notes
 
 Concave shoulders are the key habit. Revisit [31:10](#t=1870) for the rocking-chair spine cue.

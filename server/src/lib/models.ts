@@ -61,6 +61,12 @@ export const ProjectSchema = z.object({
   author: z.string().optional(),
   /** Cached Innertube related-video list (source.type === "youtube" only); refreshed via POST /api/youtube/related. */
   related: z.array(RelatedVideoSchema).optional(),
+  /**
+   * V3-A "Compile synthesis checkpoint": the learner's own-words synthesis of
+   * the lesson, written (or skipped) in the compile flow's first step.
+   * Prefills on re-compile; renders as the compiled doc's first section.
+   */
+  lessonSummary: z.string().optional(),
 });
 export type Project = z.infer<typeof ProjectSchema>;
 
@@ -96,6 +102,8 @@ export const PatchProjectBodySchema = z.object({
   watchedUpTo: z.number().nonnegative().optional(),
   conceptDoc: ConceptDocRefSchema.optional(),
   transcript: TranscriptRefSchema.optional(),
+  /** V3-A: the compile checkpoint's synthesis paragraph — saved on "Save & continue", untouched on "Skip". */
+  lessonSummary: z.string().optional(),
 });
 export type PatchProjectBody = z.infer<typeof PatchProjectBodySchema>;
 

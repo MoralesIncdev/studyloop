@@ -94,6 +94,58 @@ describe("renderCompiledDocument (golden file)", () => {
   });
 });
 
+describe("renderCompiledDocument — V3-A 'In my own words' synthesis checkpoint", () => {
+  const source: Source = { type: "youtube", videoId: "abc123", url: "https://youtu.be/abc123" };
+
+  it("renders the visible placeholder line as the FIRST section when lessonSummary is omitted (skipped)", () => {
+    const markdown = renderCompiledDocument({
+      title: "No summary",
+      source,
+      notes: "",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+    });
+    expect(markdown).toContain("## In my own words\n\n*[Write your summary to complete this lesson]*");
+    // It's the first section — before Notes/Captures/Concepts Covered.
+    const ownWordsIdx = markdown.indexOf("## In my own words");
+    expect(ownWordsIdx).toBeGreaterThan(-1);
+    expect(ownWordsIdx).toBeLessThan(markdown.indexOf("## Notes"));
+  });
+
+  it("also renders the placeholder for a blank/whitespace-only lessonSummary", () => {
+    const markdown = renderCompiledDocument({
+      title: "Blank summary",
+      source,
+      notes: "",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+      lessonSummary: "   ",
+    });
+    expect(markdown).toContain("*[Write your summary to complete this lesson]*");
+  });
+
+  it("renders the learner's own-words summary as the first section when provided", () => {
+    const markdown = renderCompiledDocument({
+      title: "With summary",
+      source,
+      notes: "Some notes.",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+      lessonSummary: "This lesson covered grip fighting from a seated open guard.",
+    });
+    expect(markdown).toContain("## In my own words\n\nThis lesson covered grip fighting from a seated open guard.");
+    expect(markdown).not.toContain("[Write your summary to complete this lesson]");
+    const ownWordsIdx = markdown.indexOf("## In my own words");
+    expect(ownWordsIdx).toBeLessThan(markdown.indexOf("## Notes"));
+  });
+});
+
 describe("renderCompiledDocument — V2-C analysis sections", () => {
   const source: Source = { type: "youtube", videoId: "abc123", url: "https://youtu.be/abc123" };
 

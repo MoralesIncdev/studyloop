@@ -1,10 +1,12 @@
-// F10 compile UI: the header "Compile" button plus its two-step modal flow —
-// an optional "caption these?" pass for uncaptioned shots (SPEC: "the
+// F10 compile UI: the header "Compile" button plus its modal flow — V3-A A3
+// adds a synthesis checkpoint FIRST ("In your own words…"), then the
+// existing optional "caption these?" pass for uncaptioned shots (SPEC: "the
 // compile step offers a 5-second caption these pass"), then the compile
 // preview modal (rendered markdown + Copy/Reveal). Network calls (compile,
-// reveal) live in the store per the codebase's convention; the caption-pass
-// open/close state and drafts are ephemeral UI state kept local here.
-import { useEffect, useState } from "react";
+// reveal, the lessonSummary PATCH) live in the store per the codebase's
+// convention; each step's open/close state and drafts are ephemeral UI state
+// kept local here.
+import { useEffect, useRef, useState } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { getUncaptionedBubbles } from "../lib/compileFlow";
 import { api } from "../lib/api";
@@ -22,12 +24,18 @@ export function CompileFlow(): JSX.Element | null {
   const bubbles = useStudyLoopStore((s) => s.bubbles);
   const controller = useStudyLoopStore((s) => s.controller);
   const patchBubble = useStudyLoopStore((s) => s.patchBubble);
+  const patchCurrentProject = useStudyLoopStore((s) => s.patchCurrentProject);
   const compiling = useStudyLoopStore((s) => s.compiling);
   const compileResult = useStudyLoopStore((s) => s.compileResult);
   const runCompile = useStudyLoopStore((s) => s.runCompile);
   const clearCompileResult = useStudyLoopStore((s) => s.clearCompileResult);
   const revealExport = useStudyLoopStore((s) => s.revealExport);
   const pushToast = useStudyLoopStore((s) => s.pushToast);
+
+  const [synthesisOpen, setSynthesisOpen] = useState(false);
+  const [synthesisText, setSynthesisText] = useState("");
+  const [savingSynthesis, setSavingSynthesis] = useState(false);
+  const synthesisTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [captionPassBubbles, setCaptionPassBubbles] = useState<string[] | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -48,7 +56,14 @@ export function CompileFlow(): JSX.Element | null {
 
   if (!currentProject) return null;
 
+  // V3-A A3: the synthesis checkpoint is always the first step — Compile no
+  // longer jumps straight to the caption pass / compile call.
   const handleCompileClick = (): void => {
+    setSynthesisText(currentProject.lessonSummary ?? "");
+    setSynthesisOpen(true);
+  };
+
+  const proceedAfterSynthesis = (): void => {
     const uncaptioned = getUncaptionedBubbles(bubbles);
     if (uncaptioned.length > 0) {
       setDrafts(Object.fromEntries(uncaptioned.map((b) => [b.id, ""])));
@@ -56,6 +71,26 @@ export function CompileFlow(): JSX.Element | null {
       return;
     }
     void runCompile();
+  };
+
+  // Closing the synthesis step any way (Save & continue, Skip, X, Escape,
+  // backdrop click) proceeds to the next step — "never blocks" (SPEC). Only
+  // "Save & continue" persists the draft.
+  const handleSynthesisSaveAndContinue = async (): Promise<void> => {
+    setSavingSynthesis(true);
+    try {
+      await patchCurrentProject({ lessonSummary: synthesisText.trim() });
+    } finally {
+      setSavingSynthesis(false);
+      setSynthesisOpen(false);
+      proceedAfterSynthesis();
+    }
+  };
+
+  const handleSynthesisSkip = (): void => {
+    if (savingSynthesis) return;
+    setSynthesisOpen(false);
+    proceedAfterSynthesis();
   };
 
   const handleCaptionSave = async (): Promise<void> => {
@@ -97,6 +132,57 @@ export function CompileFlow(): JSX.Element | null {
         <Icon name="bookmark" size={16} />
         {compiling ? "Compiling…" : "Compile"}
       </button>
+
+      <ModalShell
+        open={synthesisOpen}
+        onClose={handleSynthesisSkip}
+        closeDisabled={savingSynthesis}
+        exitDurationMs={EXIT_DURATION_MS}
+        ariaLabel="In your own words"
+        overlayClassName={styles.overlay}
+        cardClassName={styles.card}
+        initialFocusRef={synthesisTextareaRef}
+      >
+        <header className={styles.header}>
+          <h2 className={styles.cardTitle}>In your own words</h2>
+          <button
+            type="button"
+            className={styles.closeButton}
+            onClick={handleSynthesisSkip}
+            aria-label="Skip and close"
+            disabled={savingSynthesis}
+          >
+            <Icon name="close" size={18} />
+          </button>
+        </header>
+        <p className={styles.cardSub}>
+          What was this lesson about? Imagine explaining it to someone who hasn&rsquo;t watched.
+        </p>
+        <textarea
+          ref={synthesisTextareaRef}
+          className={styles.synthesisTextarea}
+          value={synthesisText}
+          onChange={(e) => setSynthesisText(e.target.value)}
+          placeholder="This lesson was about…"
+          rows={4}
+          disabled={savingSynthesis}
+        />
+        <div className={styles.cardActions}>
+          <button type="button" className={styles.secondaryButton} onClick={handleSynthesisSkip} disabled={savingSynthesis}>
+            Skip for now
+          </button>
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={() => void handleSynthesisSaveAndContinue()}
+            disabled={savingSynthesis}
+            aria-busy={savingSynthesis}
+          >
+            {savingSynthesis && <span className={styles.buttonSpinner} aria-hidden="true" />}
+            {savingSynthesis ? "Saving…" : "Save & continue"}
+          </button>
+        </div>
+      </ModalShell>
 
       <ModalShell
         open={captionPassBubbles != null}

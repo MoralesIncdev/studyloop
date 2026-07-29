@@ -2,8 +2,16 @@
 // card, per YouTube's own "Show transcript" affordance), Concepts (existing
 // ConceptsDock content restyled as rail cards), and the Up-next cabinet
 // (V2-B: real `project.related` data, see SPEC "Fast YouTube layer").
-import { useEffect, useState, type ReactNode } from "react";
-import { useStudyLoopStore } from "../state/store";
+//
+// V3-A A1 "state-aware surface purge": the Transcript/Concepts accordion
+// choice itself now lives in the store (`railOpenSection`, moved out of local
+// component state) so CCOverlay — a sibling under StudyView, not a rail
+// descendant — can read "is the transcript expanded" for the CC/transcript
+// redundancy rule. During playbackFocus (and no user override), the
+// Transcript card is visually forced collapsed on top of whatever the user's
+// persisted preference is; Concepts is never purged.
+import { useState, type ReactNode } from "react";
+import { useStudyLoopStore, type RailSectionId } from "../state/store";
 import { TranscriptPane } from "../transcript/TranscriptPane";
 import { ConceptsDock } from "../concepts/ConceptsDock";
 import {
@@ -21,34 +29,6 @@ import styles from "./RightRail.module.css";
 interface Props {
   segments: TranscriptSegment[];
   transcriptLoading: boolean;
-}
-
-/** codex P1-5 "rail composure": persists which single large section (Transcript
- * or Concepts) is open, per project, so re-opening a video restores the same
- * layout instead of always defaulting back. */
-const RAIL_SECTION_STORAGE_PREFIX = "studyloop:railSection:";
-
-export type RailSectionId = "transcript" | "concepts";
-
-export function loadStoredRailSection(projectId: string): RailSectionId | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(RAIL_SECTION_STORAGE_PREFIX + projectId);
-    if (raw === "transcript" || raw === "concepts") return raw;
-    if (raw === "none") return null;
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function storeRailSection(projectId: string, section: RailSectionId | null): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(RAIL_SECTION_STORAGE_PREFIX + projectId, section ?? "none");
-  } catch {
-    // Storage can throw in private-browsing/quota-exceeded modes — not worth surfacing.
-  }
 }
 
 function RailCard({
@@ -202,26 +182,31 @@ export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
   const conceptTickerMuted = useStudyLoopStore((s) => s.conceptTickerMuted);
   const setConceptTickerMuted = useStudyLoopStore((s) => s.setConceptTickerMuted);
   const analysis = useStudyLoopStore((s) => s.analysis);
-  const projectId = useStudyLoopStore((s) => s.currentProject?.id);
+  const railOpenSection = useStudyLoopStore((s) => s.railOpenSection);
+  const setRailOpenSection = useStudyLoopStore((s) => s.setRailOpenSection);
+  const isPlaying = useStudyLoopStore((s) => s.isPlaying);
+  const playbackFocus = useStudyLoopStore((s) => s.playbackFocus);
+  const focusOverride = useStudyLoopStore((s) => s.focusOverride);
+  const setFocusOverride = useStudyLoopStore((s) => s.setFocusOverride);
+
+  // V3-A A1: the purge visually forces Transcript collapsed on top of the
+  // user's persisted `railOpenSection` — Concepts is never purged.
+  const transcriptPurged = playbackFocus && !focusOverride;
+  const transcriptVisuallyOpen = railOpenSection === "transcript" && !transcriptPurged;
+  const conceptsVisuallyOpen = railOpenSection === "concepts";
 
   // codex P1-5: Transcript and Concepts are the two "large" sections — only
-  // one is open at a time (default: Transcript open, Concepts collapsed),
-  // and the choice is remembered per project.
-  const [openSection, setOpenSection] = useState<RailSectionId | null>(
-    () => loadStoredRailSection(projectId ?? "") ?? "transcript"
-  );
-
-  useEffect(() => {
-    if (!projectId) return;
-    setOpenSection(loadStoredRailSection(projectId) ?? "transcript");
-  }, [projectId]);
-
-  const selectSection = (section: RailSectionId): void => {
-    setOpenSection((current) => {
-      const next = current === section ? null : section;
-      if (projectId) storeRailSection(projectId, next);
-      return next;
-    });
+  // one is open at a time, and the choice is remembered per project. Toggling
+  // is based on the *visually rendered* open state (accounting for the
+  // purge), not the raw stored preference — otherwise clicking a
+  // purge-collapsed Transcript header while `railOpenSection` still says
+  // "transcript" internally would toggle it further shut instead of
+  // re-opening it. Any manual toggle while playing sets focusOverride
+  // (A1 "the user always wins"), suspending the purge for the rest of this
+  // playing stretch.
+  const selectSection = (section: RailSectionId, currentlyVisuallyOpen: boolean): void => {
+    if (isPlaying) setFocusOverride();
+    setRailOpenSection(currentlyVisuallyOpen ? null : section);
   };
 
   const analysisVisible = isAnalysisVisible(analysis);
@@ -231,8 +216,8 @@ export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
       <RailCard
         title="Transcript"
         defaultExpanded
-        expanded={openSection === "transcript"}
-        onToggle={() => selectSection("transcript")}
+        expanded={transcriptVisuallyOpen}
+        onToggle={() => selectSection("transcript", transcriptVisuallyOpen)}
       >
         <div className={styles.transcriptViewport}>
           <TranscriptPane segments={segments} loading={transcriptLoading} />
@@ -243,8 +228,8 @@ export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
         id="concepts-rail"
         title="Concepts"
         defaultExpanded={false}
-        expanded={openSection === "concepts"}
-        onToggle={() => selectSection("concepts")}
+        expanded={conceptsVisuallyOpen}
+        onToggle={() => selectSection("concepts", conceptsVisuallyOpen)}
         headerAction={
           <button
             type="button"
@@ -253,8 +238,8 @@ export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
               e.stopPropagation();
               setConceptTickerMuted(!conceptTickerMuted);
             }}
-            title={conceptTickerMuted ? "Unmute concept pop-ups" : "Mute concept pop-ups"}
-            aria-label={conceptTickerMuted ? "Unmute concept pop-ups" : "Mute concept pop-ups"}
+            title={conceptTickerMuted ? "Unmute concept chips" : "Mute concept chips"}
+            aria-label={conceptTickerMuted ? "Unmute concept chips" : "Mute concept chips"}
             aria-pressed={conceptTickerMuted}
           >
             <Icon name={conceptTickerMuted ? "notificationsOff" : "notifications"} size={16} />

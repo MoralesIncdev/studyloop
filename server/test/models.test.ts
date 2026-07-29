@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ProjectIdParamSchema, ProjectSchema, RelatedVideoSchema } from "../src/lib/models.js";
+import { PatchProjectBodySchema, ProjectIdParamSchema, ProjectSchema, RelatedVideoSchema } from "../src/lib/models.js";
 
 describe("ProjectIdParamSchema", () => {
   it("accepts a real generated project id (UUID v4 shape)", () => {
@@ -95,5 +95,29 @@ describe("ProjectSchema — related/author (V2-B persistence)", () => {
   it("rejects a project whose related list contains an invalid entry", () => {
     const result = ProjectSchema.safeParse(baseProject({ related: [{ title: "missing videoId/author" }] }));
     expect(result.success).toBe(false);
+  });
+
+  it("V3-A: accepts an optional lessonSummary string", () => {
+    const result = ProjectSchema.safeParse(baseProject({ lessonSummary: "This lesson covered X." }));
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.lessonSummary).toBe("This lesson covered X.");
+  });
+
+  it("V3-A: still parses a project with no lessonSummary at all (pre-V3-A project.json)", () => {
+    const result = ProjectSchema.safeParse(baseProject());
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.lessonSummary).toBeUndefined();
+  });
+});
+
+describe("PatchProjectBodySchema — V3-A lessonSummary", () => {
+  it("accepts a lessonSummary-only patch", () => {
+    const result = PatchProjectBodySchema.safeParse({ lessonSummary: "This lesson covered X." });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts an empty-string lessonSummary (explicit clear)", () => {
+    const result = PatchProjectBodySchema.safeParse({ lessonSummary: "" });
+    expect(result.success).toBe(true);
   });
 });

@@ -13,7 +13,7 @@ import { PlayerChrome } from "../player/PlayerChrome";
 import { CCOverlay } from "../player/CCOverlay";
 import { RightRail } from "./RightRail";
 import { NotationModal } from "../notes/NotationModal";
-import { ConceptTicker } from "../concepts/ConceptTicker";
+import { ConceptChipStrip } from "../concepts/ConceptChipStrip";
 import { CompileFlow } from "./CompileFlow";
 import { AnalyzeButton } from "./AnalyzeButton";
 import { ShareFlow } from "./ShareFlow";
@@ -166,10 +166,12 @@ export function StudyView({ projectId }: Props): JSX.Element {
             {startAt !== undefined && currentProject.source.type === "youtube" && (
               <YouTubePlayer key={currentProject.id} videoId={currentProject.source.videoId} startAt={startAt} />
             )}
-            {startAt !== undefined && <ConceptTicker chromeVisible={chromeHovering} />}
             {startAt !== undefined && <CCOverlay chromeVisible={chromeHovering} />}
             {startAt !== undefined && <PlayerChrome frameRef={frameRef} onVisibleChange={setChromeHovering} />}
           </div>
+
+          {/* V3-A A4: slim chip strip below the player, outside the video frame — replaces the old slide-over ticker. */}
+          <ConceptChipStrip />
 
           <h1 className={styles.title}>{currentProject.title}</h1>
 

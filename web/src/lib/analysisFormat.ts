@@ -1,15 +1,15 @@
 // V2-C: small adapters/helpers shared by the analysis-rendering components
-// (AnalysisPanel, ConceptTicker, PlayerChrome's seek ticks) — kept here rather
-// than duplicated per-component.
+// (AnalysisPanel, ConceptChipStrip, PlayerChrome's seek ticks) — kept here
+// rather than duplicated per-component.
 import type { AnalysisConcept, ConceptCard, Pearl } from "./types";
 
 /**
  * Adapts an AI-breakdown concept into the same `ConceptCard` shape doc
  * concepts use, so it can flow through the existing activeConcepts/
- * passedConcepts selectors and the ConceptTicker/ConceptOverlay components
- * unchanged (SPEC: "anchored ones join the ticker windows like doc
- * concepts"). `raw` isn't rendered anywhere; `body` carries the full
- * markdown breakdown (what ConceptCard/ConceptOverlay actually display).
+ * passedConcepts selectors and the ConceptChipStrip/ConceptOverlay
+ * components unchanged (SPEC: "anchored ones join the ticker windows like
+ * doc concepts"). `raw` isn't rendered anywhere; `body` carries the full
+ * markdown breakdown (what ConceptOverlay actually displays).
  */
 export function analysisConceptToConceptCard(concept: AnalysisConcept): ConceptCard {
   return { id: `ai:${concept.id}`, title: concept.title, body: concept.body, anchors: concept.anchors, raw: concept.body };

@@ -156,6 +156,39 @@ describe("buildShareBundle / validateShareBundle round trip", () => {
     expect(JSON.stringify(bundle)).not.toContain("/Volumes/Library");
   });
 
+  it("V3-A: includes lessonSummary when the project has one, round-tripping through validate", async () => {
+    const bundle = await buildShareBundle({
+      project: localProject({ lessonSummary: "This lesson covered grip fighting." }),
+      notes: "",
+      bubbles: [],
+      shareHandle: "ryan",
+      localDurationSeconds: null,
+      resolveThumbnail: async () => null,
+    });
+    expect(bundle.lessonSummary).toBe("This lesson covered grip fighting.");
+    const raw = JSON.stringify(bundle);
+    const validated = validateShareBundle(raw);
+    expect(validated.ok).toBe(true);
+    if (!validated.ok) throw new Error("unreachable");
+    expect(validated.bundle.lessonSummary).toBe("This lesson covered grip fighting.");
+  });
+
+  it("V3-A: omits lessonSummary (undefined) when the project has none — still validates (optional field, bundle version stays 1)", async () => {
+    const bundle = await buildShareBundle({
+      project: localProject(),
+      notes: "",
+      bubbles: [],
+      shareHandle: "ryan",
+      localDurationSeconds: null,
+      resolveThumbnail: async () => null,
+    });
+    expect(bundle.lessonSummary).toBeUndefined();
+    expect(bundle.version).toBe(1);
+    const raw = JSON.stringify(bundle);
+    const validated = validateShareBundle(raw);
+    expect(validated.ok).toBe(true);
+  });
+
   it("defaults pearls/concepts/themes to [] when no analysis was passed", async () => {
     const bundle = await buildShareBundle({
       project: localProject(),
@@ -168,6 +201,27 @@ describe("buildShareBundle / validateShareBundle round trip", () => {
     expect(bundle.pearls).toEqual([]);
     expect(bundle.concepts).toEqual([]);
     expect(bundle.themes).toEqual([]);
+  });
+});
+
+describe("validateShareBundle — V3-A lessonSummary tolerance", () => {
+  it("validates a legacy bundle JSON with no lessonSummary key at all (pre-V3-A export)", () => {
+    const legacy = {
+      version: 1,
+      createdAt: "2026-07-28T00:00:00Z",
+      shareHandle: "ryan",
+      source: { type: "local", filename: "video.mp4", durationSeconds: 100 },
+      title: "A pre-V3-A bundle",
+      notes: "",
+      bubbles: [],
+      pearls: [],
+      concepts: [],
+      themes: [],
+    };
+    const result = validateShareBundle(JSON.stringify(legacy));
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.bundle.lessonSummary).toBeUndefined();
   });
 });
 

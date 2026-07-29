@@ -4,13 +4,24 @@
 //  - attached: full concept list, anchored (grouped/sorted by anchor time, mm:ss
 //    seek chips) then unanchored, with search filter, covered checkmarks
 //    (passedConcepts), active-concept highlight, and a "covered n/m" line.
-import { useEffect, useMemo, useState } from "react";
+//
+// V3-A A4: clicking a concept chip below the player (ConceptChipStrip) sets
+// store.highlightedConceptId — this component scrolls that row into view and
+// gives it a brief highlight pulse, then clears itself after a few seconds.
+// Clicking a row's title also opens the full ConceptOverlay ("component may
+// remain for the expanded overlay reached by click" — now reached from the
+// rail rather than the old slide-over ticker).
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { activeConcepts, passedConcepts } from "../lib/selectors";
 import { formatTimestamp } from "../lib/time";
 import { Icon } from "../components/icons";
+import { ConceptOverlay } from "./ConceptOverlay";
 import type { ConceptCard } from "../lib/types";
 import styles from "./ConceptsDock.module.css";
+
+/** How long a chip-triggered highlight stays visible before fading itself out. */
+const HIGHLIGHT_DURATION_MS = 2600;
 
 interface AnchoredRow {
   card: ConceptCard;
@@ -31,10 +42,26 @@ export function ConceptsDock(): JSX.Element {
   const attachConceptDoc = useStudyLoopStore((s) => s.attachConceptDoc);
   const detachConceptDoc = useStudyLoopStore((s) => s.detachConceptDoc);
   const pushToast = useStudyLoopStore((s) => s.pushToast);
+  const highlightedConceptId = useStudyLoopStore((s) => s.highlightedConceptId);
+  const clearHighlightedConcept = useStudyLoopStore((s) => s.clearHighlightedConcept);
 
   const [query, setQuery] = useState("");
   const [customPath, setCustomPath] = useState("");
   const [attaching, setAttaching] = useState(false);
+  const [expandedCard, setExpandedCard] = useState<ConceptCard | null>(null);
+
+  const rowRefs = useRef<Record<string, HTMLLIElement | null>>({});
+
+  // V3-A A4: scroll the chip-highlighted row into view, then self-clear the
+  // highlight after a few seconds (the store never auto-clears — a chip
+  // click can fire again on the exact same card, and each fresh click should
+  // restart the pulse).
+  useEffect(() => {
+    if (!highlightedConceptId) return undefined;
+    rowRefs.current[highlightedConceptId]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = setTimeout(clearHighlightedConcept, HIGHLIGHT_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [highlightedConceptId, clearHighlightedConcept]);
 
   const attached = !!currentProject?.conceptDoc?.path;
 
@@ -174,12 +201,19 @@ export function ConceptsDock(): JSX.Element {
               {visibleAnchored.map((row, i) => (
                 <li
                   key={`${row.card.id}-${i}`}
-                  className={`${styles.item} ${activeIds.has(row.card.id) ? styles.itemActive : ""}`}
+                  ref={(el) => {
+                    rowRefs.current[row.card.id] = el;
+                  }}
+                  className={`${styles.item} ${activeIds.has(row.card.id) ? styles.itemActive : ""} ${
+                    highlightedConceptId === row.card.id ? styles.itemHighlighted : ""
+                  }`}
                 >
                   <button type="button" className={styles.timeChip} onClick={() => controller?.seek(row.t)}>
                     {formatTimestamp(row.t)}
                   </button>
-                  <span className={styles.itemTitle}>{row.card.title}</span>
+                  <button type="button" className={styles.itemTitleButton} onClick={() => setExpandedCard(row.card)}>
+                    {row.card.title}
+                  </button>
                   {coveredIds.has(row.card.id) && (
                     <span className={styles.covered} title="Covered" aria-label="Covered">
                       <Icon name="check" size={14} />
@@ -194,8 +228,18 @@ export function ConceptsDock(): JSX.Element {
               <div className={styles.sectionLabel}>Unanchored</div>
               <ul className={styles.group}>
                 {visibleUnanchored.map((card) => (
-                  <li key={card.id} className={`${styles.item} ${activeIds.has(card.id) ? styles.itemActive : ""}`}>
-                    <span className={styles.itemTitle}>{card.title}</span>
+                  <li
+                    key={card.id}
+                    ref={(el) => {
+                      rowRefs.current[card.id] = el;
+                    }}
+                    className={`${styles.item} ${activeIds.has(card.id) ? styles.itemActive : ""} ${
+                      highlightedConceptId === card.id ? styles.itemHighlighted : ""
+                    }`}
+                  >
+                    <button type="button" className={styles.itemTitleButton} onClick={() => setExpandedCard(card)}>
+                      {card.title}
+                    </button>
                     {coveredIds.has(card.id) && (
                       <span className={styles.covered} title="Covered" aria-label="Covered">
                         <Icon name="check" size={14} />
@@ -209,6 +253,7 @@ export function ConceptsDock(): JSX.Element {
           {noMatches && <p className={styles.status}>No concepts match &ldquo;{query}&rdquo;.</p>}
         </div>
       )}
+      <ConceptOverlay card={expandedCard} onClose={() => setExpandedCard(null)} />
     </div>
   );
 }

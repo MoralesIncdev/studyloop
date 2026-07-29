@@ -144,44 +144,52 @@ export function NotationModal(): JSX.Element | null {
             {!displayModal.shotLoading && !displayModal.shot && <div className={styles.noFrame}>No frame</div>}
           </div>
           <div className={styles.fields}>
-            {displayModal.conceptTitle && (
-              <div className={styles.conceptChip}>
-                <span className={styles.conceptChipText}>re: {displayModal.conceptTitle}</span>
-                <button
-                  type="button"
-                  className={styles.quoteRemove}
-                  onClick={removeNotationConcept}
-                  aria-label="Remove concept reference"
-                  title="Remove concept reference"
-                >
-                  <Icon name="close" size={12} />
-                </button>
-              </div>
-            )}
-
-            {displayModal.quote && (
-              <div className={styles.quote}>
-                <span className={styles.quoteText}>&ldquo;{displayModal.quote}&rdquo;</span>
-                <button
-                  type="button"
-                  className={styles.quoteRemove}
-                  onClick={removeNotationQuote}
-                  aria-label="Remove quoted transcript"
-                  title="Remove quote"
-                >
-                  <Icon name="close" size={12} />
-                </button>
-              </div>
-            )}
-
+            {/* V3-A A2: the learner's own words come first (PEDAGOGY §1
+                generate-first) — the ghost prompt rotates one-per-open (see
+                lib/notationPrompts.ts), never cycling while typing. */}
             <textarea
               ref={textareaRef}
               className={styles.textarea}
-              placeholder="Add a note…"
+              placeholder={displayModal.ghostPrompt}
               value={text}
               onChange={(e) => setText(e.target.value)}
               disabled={waitingForShot}
             />
+
+            {(displayModal.conceptTitle || displayModal.quote) && (
+              <div className={styles.referenceBlock}>
+                <span className={styles.referenceLabel}>Reference</span>
+                {displayModal.conceptTitle && (
+                  <div className={styles.conceptChip}>
+                    <span className={styles.conceptChipText}>re: {displayModal.conceptTitle}</span>
+                    <button
+                      type="button"
+                      className={styles.quoteRemove}
+                      onClick={removeNotationConcept}
+                      aria-label="Remove concept reference"
+                      title="Remove concept reference"
+                    >
+                      <Icon name="close" size={12} />
+                    </button>
+                  </div>
+                )}
+
+                {displayModal.quote && (
+                  <div className={styles.quote}>
+                    <span className={styles.quoteText}>&ldquo;{displayModal.quote}&rdquo;</span>
+                    <button
+                      type="button"
+                      className={styles.quoteRemove}
+                      onClick={removeNotationQuote}
+                      aria-label="Remove quoted transcript"
+                      title="Remove quote"
+                    >
+                      <Icon name="close" size={12} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

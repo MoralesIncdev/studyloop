@@ -75,6 +75,8 @@ export const ShareBundleSchema = z.object({
   shareHandle: z.string().min(1),
   source: ShareSourceRefSchema,
   title: z.string(),
+  /** V3-A: the learner's own-words synthesis, if written — optional so bundle version stays 1 and older/absent values still validate. */
+  lessonSummary: z.string().optional(),
   notes: z.string(),
   bubbles: z.array(ShareBundleBubbleSchema),
   pearls: z.array(PearlSchema),
@@ -112,6 +114,7 @@ export async function buildShareBundle(input: BuildShareBundleInput): Promise<Sh
     shareHandle: input.shareHandle,
     source: buildSourceRef(input.project, input.localDurationSeconds),
     title: input.project.title,
+    lessonSummary: input.project.lessonSummary,
     notes: input.notes,
     bubbles,
     pearls: input.pearls ?? [],

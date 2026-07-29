@@ -6,6 +6,7 @@ import { api, ApiError } from "../lib/api";
 import { parseHash, routeToHash, type Route } from "../lib/router";
 import { activeConcepts, activeSegmentIndex } from "../lib/selectors";
 import { formatTimestamp } from "../lib/time";
+import { pickPrompt, promptPoolFor } from "../lib/notationPrompts";
 import type {
   Analysis,
   AnalyzeStatus,
@@ -93,6 +94,44 @@ function clearHeatmapDebounce(): void {
   }
 }
 
+// V3-A A1 "State-aware surface purge": playbackFocus flips true after 1.5s of
+// *continuous* playback (debounced so scrubbing/quick pause-resume doesn't
+// flicker the purge on and off), and flips false the instant playback pauses.
+// Kept as a module-level timer for the same reason as the timers above — a
+// single owner regardless of which component is mounted, cleared
+// deterministically on project switch (see loadProjectSession/clearProjectSession).
+const PLAYBACK_FOCUS_DEBOUNCE_MS = 1500;
+let playbackFocusTimer: ReturnType<typeof setTimeout> | null = null;
+function clearPlaybackFocusTimer(): void {
+  if (playbackFocusTimer) {
+    clearTimeout(playbackFocusTimer);
+    playbackFocusTimer = null;
+  }
+}
+
+/** RightRail's Transcript/Concepts accordion — only one "large" section open at a time (codex P1-5), remembered per project. */
+export type RailSectionId = "transcript" | "concepts";
+
+const RAIL_SECTION_STORAGE_PREFIX = "studyloop:railSection:";
+export function loadStoredRailSection(projectId: string): RailSectionId | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(RAIL_SECTION_STORAGE_PREFIX + projectId);
+    if (raw === "transcript" || raw === "concepts") return raw;
+    return null;
+  } catch {
+    return null;
+  }
+}
+function storeRailSection(projectId: string, section: RailSectionId | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(RAIL_SECTION_STORAGE_PREFIX + projectId, section ?? "none");
+  } catch {
+    // Storage can throw in private-browsing/quota-exceeded modes — not worth surfacing.
+  }
+}
+
 /** GET/POST analyze can return either an in-flight AnalyzeStatus or (idempotent-serve, or POST-while-done) the full Analysis. */
 function isAnalysis(value: AnalyzeStatus | Analysis): value is Analysis {
   return "pearls" in value;
@@ -105,6 +144,8 @@ export interface NotationModalState {
   quote: string | null;
   /** Title of the concept active at t, if any (F7). Removable, like the quote. */
   conceptTitle: string | null;
+  /** V3-A A2: one elaboration prompt chosen per modal-open (not cycling while typing) — see lib/notationPrompts.ts. */
+  ghostPrompt: string;
   shot: string | null;
   shotLoading: boolean;
   shotFailed: boolean;
@@ -210,7 +251,9 @@ export interface StudyLoopStore {
   transcriptLoading: boolean;
   loadProjectSession: (id: string) => Promise<void>;
   clearProjectSession: () => void;
-  patchCurrentProject: (patch: Partial<Pick<Project, "title" | "lastPosition" | "watchedUpTo">>) => Promise<void>;
+  patchCurrentProject: (
+    patch: Partial<Pick<Project, "title" | "lastPosition" | "watchedUpTo" | "lessonSummary">>
+  ) => Promise<void>;
 
   // --- concepts (F7) ---------------------------------------------------------------
   concepts: ConceptCard[];
@@ -222,6 +265,18 @@ export interface StudyLoopStore {
   /** Clears the project's conceptDoc and its loaded concepts. */
   detachConceptDoc: () => Promise<void>;
 
+  // --- V3-A A4: right-rail Transcript/Concepts accordion (moved out of RightRail's
+  // local state so CCOverlay can read "is the transcript expanded" too — see the
+  // CC/transcript redundancy rule below) + concept-chip-strip highlight ------------
+  /** The user's persisted accordion choice — independent of A1's purge, which visually forces Transcript closed on top of this. */
+  railOpenSection: RailSectionId | null;
+  setRailOpenSection: (section: RailSectionId | null) => void;
+  /** Set by a concept chip click (A4) — ConceptsDock scrolls to + highlights this card, then clears itself after a few seconds. */
+  highlightedConceptId: string | null;
+  /** Opens the Concepts rail section, optionally highlighting one card (A4 "expanded + highlighted"). */
+  focusConceptInRail: (conceptId?: string) => void;
+  clearHighlightedConcept: () => void;
+
   // --- player + sync engine -------------------------------------------------------
   controller: PlayerHandle | null;
   setController: (c: PlayerHandle | null) => void;
@@ -231,10 +286,18 @@ export interface StudyLoopStore {
   playbackRate: number;
   setCurrentTime: (t: number) => void;
   setDuration: (d: number) => void;
+  /** V3-A A1: also drives the playbackFocus debounce + focusOverride reset on every pause→play transition. */
   setIsPlaying: (p: boolean) => void;
   setPlaybackRate: (r: number) => void;
   volume: number;
   setVolume: (v: number) => void;
+
+  // --- V3-A A1: state-aware surface purge -----------------------------------------
+  /** True after 1.5s of continuous playback (debounced); false immediately on pause. */
+  playbackFocus: boolean;
+  /** Set when the user manually expands a rail section or focuses the dock during playback — suspends the purge until the next pause→play transition ("the user always wins"). */
+  focusOverride: boolean;
+  setFocusOverride: () => void;
 
   // --- CC overlay (V2-A; persisted client-side only, see ccStorageKey) -----------
   ccEnabled: boolean;
@@ -560,6 +623,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     clearPendingNotesSave();
     clearAnalyzePoll();
     clearHeatmapDebounce();
+    clearPlaybackFocusTimer();
 
     set({
       sessionRequestId: requestId,
@@ -570,6 +634,10 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       currentTime: 0,
       duration: 0,
       isPlaying: false,
+      playbackFocus: false,
+      focusOverride: false,
+      railOpenSection: loadStoredRailSection(id) ?? "transcript",
+      highlightedConceptId: null,
       volume: get().volume,
       ccEnabled: false,
       loopA: null,
@@ -703,6 +771,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     clearPendingNotesSave();
     clearAnalyzePoll();
     clearHeatmapDebounce();
+    clearPlaybackFocusTimer();
     set((state) => ({
       sessionRequestId: state.sessionRequestId + 1,
       currentProject: null,
@@ -711,6 +780,10 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       currentTime: 0,
       duration: 0,
       isPlaying: false,
+      playbackFocus: false,
+      focusOverride: false,
+      railOpenSection: null,
+      highlightedConceptId: null,
       ccEnabled: false,
       loopA: null,
       loopB: null,
@@ -796,6 +869,21 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     }
   },
 
+  // --- V3-A A4: rail accordion + concept-chip-strip highlight ---------------------
+  railOpenSection: null,
+  setRailOpenSection: (section) => {
+    const projectId = get().currentProject?.id;
+    if (projectId) storeRailSection(projectId, section);
+    set({ railOpenSection: section });
+  },
+  highlightedConceptId: null,
+  focusConceptInRail: (conceptId) => {
+    const projectId = get().currentProject?.id;
+    if (projectId) storeRailSection(projectId, "concepts");
+    set({ railOpenSection: "concepts", highlightedConceptId: conceptId ?? null });
+  },
+  clearHighlightedConcept: () => set({ highlightedConceptId: null }),
+
   // --- player + sync engine -------------------------------------------------------
   controller: null,
   setController: (c) => set({ controller: c }),
@@ -805,10 +893,37 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   playbackRate: 1,
   setCurrentTime: (t) => set({ currentTime: t }),
   setDuration: (d) => set({ duration: d }),
-  setIsPlaying: (p) => set({ isPlaying: p }),
+  setIsPlaying: (p) => {
+    const wasPlaying = get().isPlaying;
+    set({ isPlaying: p });
+    if (p) {
+      if (!wasPlaying) {
+        // A fresh pause→play transition — "the user always wins" only for the
+        // stretch of playback that earned it; the next one starts clean and
+        // gets its own 1.5s grace before the purge (re-)engages.
+        clearPlaybackFocusTimer();
+        set({ focusOverride: false });
+        playbackFocusTimer = setTimeout(() => {
+          playbackFocusTimer = null;
+          if (get().isPlaying) set({ playbackFocus: true });
+        }, PLAYBACK_FOCUS_DEBOUNCE_MS);
+      }
+      // else: already playing (e.g. a redundant setIsPlaying(true)) — leave
+      // any in-flight debounce/override alone rather than restarting it, so
+      // brief scrubbing-adjacent play events don't flicker the purge.
+    } else {
+      clearPlaybackFocusTimer();
+      set({ playbackFocus: false });
+    }
+  },
   setPlaybackRate: (r) => set({ playbackRate: clampRate(r) }),
   volume: 1,
   setVolume: (v) => set({ volume: clampVolume(v) }),
+
+  // --- V3-A A1: state-aware surface purge ------------------------------------------
+  playbackFocus: false,
+  focusOverride: false,
+  setFocusOverride: () => set({ focusOverride: true }),
 
   // --- CC overlay (V2-A) ----------------------------------------------------------
   ccEnabled: false,
@@ -940,6 +1055,10 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     const activeAtT = activeConcepts(get().concepts, t);
     const conceptTitle = activeAtT.length > 0 ? activeAtT[0].card.title : null;
     const gen = get().notationGeneration + 1;
+    // V3-A A2: one elaboration prompt per modal-open — chosen here, not
+    // re-rolled on every render, so it doesn't cycle while the learner types.
+    // No domain tag on the project model yet (v3-B) — generic pool only.
+    const ghostPrompt = pickPrompt(promptPoolFor(null));
 
     // Respect the ffmpeg-missing health gate exactly like the disabled Shot
     // button: don't even attempt the capture (which would just fail on the
@@ -953,6 +1072,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
           t,
           quote,
           conceptTitle,
+          ghostPrompt,
           shot: null,
           shotLoading: false,
           shotFailed: true,
@@ -971,6 +1091,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
         t,
         quote,
         conceptTitle,
+        ghostPrompt,
         shot: null,
         shotLoading: true,
         shotFailed: false,

@@ -153,6 +153,32 @@
   gap: 10px;
 }
 
+/* V3-A A2: the auto-captured quote + concept reference are demoted below the
+   note field — reduced opacity, small uppercase label — so the learner's own
+   words read as the primary content and the transcript/concept are clearly
+   "reference", not the lesson. Full opacity on hover/focus-within so the
+   remove (X) buttons stay legible when actually interacting with them. */
+.referenceBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  opacity: 0.7;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.referenceBlock:hover,
+.referenceBlock:focus-within {
+  opacity: 1;
+}
+
+.referenceLabel {
+  font-size: var(--type-11);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
 .quote {
   display: flex;
   align-items: flex-start;

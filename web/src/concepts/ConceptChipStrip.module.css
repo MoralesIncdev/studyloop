@@ -1,0 +1,55 @@
+.strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.chip,
+.overflowChip {
+  background: var(--surface-popover);
+  border: 1px solid var(--border-hairline);
+  color: var(--text-secondary);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  font-size: var(--type-12);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: chip-fade-in var(--duration-fast) var(--ease-standard);
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
+}
+
+.chip:hover,
+.overflowChip:hover {
+  color: var(--text-primary);
+  background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), var(--surface-popover);
+}
+
+.chip:active,
+.overflowChip:active {
+  transform: scale(0.97);
+}
+
+.overflowChip {
+  max-width: none;
+  color: var(--text-tertiary);
+}
+
+@keyframes chip-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

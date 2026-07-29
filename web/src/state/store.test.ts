@@ -296,6 +296,116 @@ describe("startAnalyze (V2-C)", () => {
   });
 });
 
+describe("playbackFocus debounce + focusOverride (V3-A A1 state-aware surface purge)", () => {
+  beforeEach(() => {
+    useStudyLoopStore.setState({ isPlaying: false, playbackFocus: false, focusOverride: false });
+  });
+
+  it("does not flip playbackFocus immediately on play — only after the full 1.5s debounce", () => {
+    vi.useFakeTimers();
+    useStudyLoopStore.getState().setIsPlaying(true);
+    expect(useStudyLoopStore.getState().playbackFocus).toBe(false);
+    vi.advanceTimersByTime(1499);
+    expect(useStudyLoopStore.getState().playbackFocus).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(useStudyLoopStore.getState().playbackFocus).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("pausing mid-debounce cancels it — playbackFocus never flips even once the original 1.5s mark passes", () => {
+    vi.useFakeTimers();
+    const store = useStudyLoopStore.getState();
+    store.setIsPlaying(true);
+    vi.advanceTimersByTime(1000);
+    store.setIsPlaying(false); // pause partway through the debounce
+    expect(useStudyLoopStore.getState().playbackFocus).toBe(false);
+    vi.advanceTimersByTime(1000); // well past the original 1.5s mark
+    expect(useStudyLoopStore.getState().playbackFocus).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it("resuming after a pause restarts a fresh 1.5s debounce (scrubbing/quick pause-resume doesn't flicker the purge on)", () => {
+    vi.useFakeTimers();
+    const store = useStudyLoopStore.getState();
+    store.setIsPlaying(true);
+    vi.advanceTimersByTime(1000);
+    store.setIsPlaying(false);
+    store.setIsPlaying(true); // fresh pause→play transition — fresh debounce
+    vi.advanceTimersByTime(1000);
+    expect(useStudyLoopStore.getState().playbackFocus).toBe(false); // only 1s of the *new* debounce elapsed
+    vi.advanceTimersByTime(500);
+    expect(useStudyLoopStore.getState().playbackFocus).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("pause immediately clears playbackFocus once it has already flipped true", () => {
+    vi.useFakeTimers();
+    const store = useStudyLoopStore.getState();
+    store.setIsPlaying(true);
+    vi.advanceTimersByTime(2000);
+    expect(useStudyLoopStore.getState().playbackFocus).toBe(true);
+    store.setIsPlaying(false);
+    expect(useStudyLoopStore.getState().playbackFocus).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it("a redundant setIsPlaying(true) while already playing does not restart the debounce", () => {
+    vi.useFakeTimers();
+    const store = useStudyLoopStore.getState();
+    store.setIsPlaying(true);
+    vi.advanceTimersByTime(1000);
+    store.setIsPlaying(true); // redundant — already playing, must not reset the timer
+    vi.advanceTimersByTime(500); // total 1500ms since the *first* setIsPlaying(true)
+    expect(useStudyLoopStore.getState().playbackFocus).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("setFocusOverride suspends the purge and persists through a pause, clearing only on the next pause→play transition ('the user always wins')", () => {
+    vi.useFakeTimers();
+    const store = useStudyLoopStore.getState();
+    store.setIsPlaying(true);
+    vi.advanceTimersByTime(1500);
+    expect(useStudyLoopStore.getState().playbackFocus).toBe(true);
+
+    store.setFocusOverride();
+    expect(useStudyLoopStore.getState().focusOverride).toBe(true);
+
+    store.setIsPlaying(false); // pause alone must not clear the override
+    expect(useStudyLoopStore.getState().focusOverride).toBe(true);
+
+    store.setIsPlaying(true); // this pause→play transition clears it
+    expect(useStudyLoopStore.getState().focusOverride).toBe(false);
+    vi.useRealTimers();
+  });
+});
+
+describe("patchCurrentProject — V3-A lessonSummary round trip", () => {
+  beforeEach(() => {
+    const project = makeProject("p1", "Project 1");
+    useStudyLoopStore.setState({ currentProject: project, projects: [project], toasts: [] });
+  });
+
+  it("PATCHes { lessonSummary } and applies the server's response to currentProject/projects", async () => {
+    const updated = { ...makeProject("p1", "Project 1"), lessonSummary: "This lesson covered grip fighting." };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      expect(url).toContain("/api/projects/p1");
+      expect(init?.method).toBe("PATCH");
+      expect(JSON.parse(String(init?.body))).toEqual({ lessonSummary: "This lesson covered grip fighting." });
+      return Promise.resolve(jsonResponse(updated));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().patchCurrentProject({ lessonSummary: "This lesson covered grip fighting." });
+
+    expect(useStudyLoopStore.getState().currentProject?.lessonSummary).toBe("This lesson covered grip fighting.");
+    expect(useStudyLoopStore.getState().projects.find((p) => p.id === "p1")?.lessonSummary).toBe(
+      "This lesson covered grip fighting."
+    );
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("openOrCreateYoutubeProject (V2-B — search/up-next click target)", () => {
   beforeEach(() => {
     useStudyLoopStore.setState({ projects: [], projectsLoaded: true, toasts: [] });
