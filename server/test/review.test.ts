@@ -9,13 +9,16 @@ import {
   gradeCardState,
   introduceCardState,
   isDue,
+  masteryCount,
+  MASTERY_INTERVAL_DAYS,
   nextGoodInterval,
   REVIEW_LADDER_DAYS,
   type ReviewCard,
   type ReviewCardState,
   type ReviewState,
 } from "../src/lib/review.js";
-import type { Analysis } from "../src/lib/analysis.js";
+import type { Analysis, AnalysisUnit } from "../src/lib/analysis.js";
+import type { AttestationsFile } from "../src/lib/attestation.js";
 import type { Bubble, Project } from "../src/lib/models.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -344,5 +347,85 @@ describe("buildReviewQueue — output order is stable and matches liveCards orde
     const liveCards = [card({ id: "a", t: 3 }), card({ id: "b", t: 1 }), card({ id: "c", t: 2 })];
     const result = buildReviewQueue(liveCards, emptyReviewState(), NOW);
     expect(result.dueCards.map((c) => c.id)).toEqual(["a", "b", "c"]);
+  });
+});
+
+// --- V3-B B2/B4: deriveLiveCards unit (generation) cards -----------------------
+
+function unit(overrides: Partial<AnalysisUnit> = {}): AnalysisUnit {
+  return {
+    id: "u1",
+    type: "MECHANISM",
+    label: "Underhook mechanics",
+    summary: "Why the underhook controls the hip.",
+    body: "Longer body.",
+    anchors: [{ t: 42, quote: "get the underhook" }],
+    confidence: 0.8,
+    ...overrides,
+  };
+}
+
+function v3Analysis(overrides: Partial<Analysis> = {}): Analysis {
+  return analysis({ version: 3, domain: "physical_skill", units: [unit()], edges: [], ...overrides });
+}
+
+describe("deriveLiveCards — V3-B B4 unit generation cards", () => {
+  it("does not surface a unit with no attestation entry at all", () => {
+    const cards = deriveLiveCards(baseProject(), [], v3Analysis(), false, {});
+    expect(cards.some((c) => c.kind === "unit")).toBe(false);
+  });
+
+  it("surfaces an attested unit as a 'unit' kind card carrying label/summary/userTake", () => {
+    const attestations: AttestationsFile = { u1: { status: "attested", userTake: "my own take", at: "t" } };
+    const cards = deriveLiveCards(baseProject(), [], v3Analysis(), false, attestations);
+    const unitCard = cards.find((c) => c.kind === "unit");
+    expect(unitCard).toBeDefined();
+    if (!unitCard || unitCard.kind !== "unit") throw new Error("unreachable");
+    expect(unitCard.id).toBe("unit:11111111-1111-4111-8111-111111111111:u1");
+    expect(unitCard.label).toBe("Underhook mechanics");
+    expect(unitCard.unitType).toBe("MECHANISM");
+    expect(unitCard.userTake).toBe("my own take");
+    expect(unitCard.t).toBe(42);
+  });
+
+  it("surfaces a unit with only a userTake (never formally attested) — generation-attempt-only still feeds review", () => {
+    const attestations: AttestationsFile = { u1: { userTake: "typed something", at: "t" } };
+    const cards = deriveLiveCards(baseProject(), [], v3Analysis(), false, attestations);
+    expect(cards.some((c) => c.kind === "unit")).toBe(true);
+  });
+
+  it("never surfaces a dismissed unit", () => {
+    const attestations: AttestationsFile = { u1: { status: "dismissed", at: "t" } };
+    const cards = deriveLiveCards(baseProject(), [], v3Analysis(), false, attestations);
+    expect(cards.some((c) => c.kind === "unit")).toBe(false);
+  });
+
+  it("never surfaces unit cards for a v2 analysis (no units field)", () => {
+    const attestations: AttestationsFile = { u1: { status: "attested", at: "t" } };
+    const cards = deriveLiveCards(baseProject(), [], analysis(), false, attestations);
+    expect(cards.some((c) => c.kind === "unit")).toBe(false);
+  });
+
+  it("defaults to no unit cards when attestations is omitted", () => {
+    const cards = deriveLiveCards(baseProject(), [], v3Analysis(), false);
+    expect(cards.some((c) => c.kind === "unit")).toBe(false);
+  });
+});
+
+// --- V3-B B4: masteryCount -----------------------------------------------------
+
+describe("masteryCount", () => {
+  it("counts only cards at or past the 30-day interval", () => {
+    const cards: Record<string, ReviewCardState> = {
+      mastered: { due: "t", interval: MASTERY_INTERVAL_DAYS, lapses: 0, reps: 3, lastGrade: "good", introducedAt: "t" },
+      alsoMastered: { due: "t", interval: 60, lapses: 0, reps: 5, lastGrade: "good", introducedAt: "t" },
+      notYet: { due: "t", interval: 14, lapses: 0, reps: 2, lastGrade: "good", introducedAt: "t" },
+      brandNew: { due: "t", interval: 0, lapses: 0, reps: 0, lastGrade: null, introducedAt: "t" },
+    };
+    expect(masteryCount(cards)).toBe(2);
+  });
+
+  it("is 0 for an empty card set", () => {
+    expect(masteryCount({})).toBe(0);
   });
 });

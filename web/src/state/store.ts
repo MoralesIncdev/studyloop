@@ -10,6 +10,8 @@ import { pickPrompt, promptPoolFor } from "../lib/notationPrompts";
 import type {
   Analysis,
   AnalyzeStatus,
+  AttestationPatchBody,
+  AttestationsFile,
   Bubble,
   ConceptCard,
   HealthResponse,
@@ -109,8 +111,8 @@ function clearPlaybackFocusTimer(): void {
   }
 }
 
-/** RightRail's Transcript/Concepts accordion — only one "large" section open at a time (codex P1-5), remembered per project. */
-export type RailSectionId = "transcript" | "concepts";
+/** RightRail's Transcript/Concepts/Path accordion — only one "large" section open at a time (codex P1-5), remembered per project. V3-B B3 adds "path" (Study Path). */
+export type RailSectionId = "transcript" | "concepts" | "path";
 
 const RAIL_SECTION_STORAGE_PREFIX = "studyloop:railSection:";
 /**
@@ -126,7 +128,7 @@ export function loadStoredRailSection(projectId: string): RailSectionId | "none"
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(RAIL_SECTION_STORAGE_PREFIX + projectId);
-    if (raw === "transcript" || raw === "concepts" || raw === "none") return raw;
+    if (raw === "transcript" || raw === "concepts" || raw === "path" || raw === "none") return raw;
     return null;
   } catch {
     return null;
@@ -178,6 +180,13 @@ export interface ReviewSessionState {
   /** Fixed at session start — the progress bar's denominator. */
   total: number;
   revealed: boolean;
+  /**
+   * V3-B B4 "Lapse-to-context": how many times each card has been graded
+   * "Again" THIS session (client-owned, like the queue itself — resets every
+   * session, unlike the server's hidden lapses counter). Card kind
+   * "again"×2 → inline clip; ×3 → "Open in player" — see lib/lapseTier.ts.
+   */
+  againCounts: Record<string, number>;
 }
 
 const MIN_RATE = 0.5;
@@ -269,7 +278,7 @@ export interface StudyLoopStore {
    * can keep ignoring it via `void`.
    */
   patchCurrentProject: (
-    patch: Partial<Pick<Project, "title" | "lastPosition" | "watchedUpTo" | "lessonSummary">>
+    patch: Partial<Pick<Project, "title" | "lastPosition" | "watchedUpTo" | "lessonSummary" | "domain" | "noviceMode">>
   ) => Promise<boolean>;
 
   // --- concepts (F7) ---------------------------------------------------------------
@@ -281,6 +290,21 @@ export interface StudyLoopStore {
   attachConceptDoc: (path: string) => Promise<void>;
   /** Clears the project's conceptDoc and its loaded concepts. */
   detachConceptDoc: () => Promise<void>;
+
+  // --- V3-B B2: attestation + reveal-gating ---------------------------------------
+  attestations: AttestationsFile;
+  attestationsLoading: boolean;
+  loadAttestations: () => Promise<void>;
+  /** Attest ("I've got this") a unit — sets status: "attested". */
+  attestUnit: (unitId: string) => Promise<void>;
+  /** Saves the learner's "your take" generation attempt without formally attesting — status stays whatever it already was. */
+  saveUnitTake: (unitId: string, userTake: string) => Promise<void>;
+  /** Edit action: saves a learner-owned body override, layered over the immutable AI body. */
+  saveUnitBody: (unitId: string, userBody: string) => Promise<void>;
+  /** Dismiss — hides the unit from proposals/review/compile. */
+  dismissUnit: (unitId: string) => Promise<void>;
+  /** Undo a dismiss (or reset any other status) back to unreviewed. */
+  clearUnitAttestation: (unitId: string) => Promise<void>;
 
   // --- V3-A A4: right-rail Transcript/Concepts accordion (moved out of RightRail's
   // local state so CCOverlay can read "is the transcript expanded" too — see the
@@ -411,6 +435,8 @@ export interface StudyLoopStore {
   /** Refreshed on app mount (TopBar badge / home banner) and after every grade — never scheduling internals, just the hidden-mechanics-safe summary. */
   reviewCounts: ReviewQueueCounts | null;
   reviewStreak: ReviewStreak | null;
+  /** V3-B B4 "Mastery over streaks": cards locked in (interval ≥30d), across every project — the summary screen's headline number. */
+  masteryCount: number | null;
   reviewSession: ReviewSessionState | null;
   reviewSessionLoading: boolean;
   reviewGrading: boolean;
@@ -434,6 +460,31 @@ export interface StudyLoopStore {
    *  keyboard-focused". */
   pauseToastTimer: (id: string) => void;
   resumeToastTimer: (id: string) => void;
+}
+
+/**
+ * V3-B B2: shared optimistic-PATCH helper behind attestUnit/saveUnitTake/
+ * saveUnitBody/dismissUnit — all four are the same partial-merge shape
+ * against one unit's attestations.json entry, differing only in which
+ * field(s) they set. Defined at module scope (not inside the `create()`
+ * callback) purely to avoid four near-identical inline try/catch blocks;
+ * references `useStudyLoopStore` itself for `.setState`, which is safe here
+ * because this is only ever invoked from inside a store action (i.e. well
+ * after the module has finished initializing `useStudyLoopStore`).
+ */
+async function patchAttestationHelper(get: () => StudyLoopStore, unitId: string, patch: AttestationPatchBody): Promise<void> {
+  const project = get().currentProject;
+  if (!project) return;
+  const prev = get().attestations;
+  const optimistic = { ...(prev[unitId] ?? {}), ...patch, at: new Date().toISOString() };
+  useStudyLoopStore.setState({ attestations: { ...prev, [unitId]: optimistic } });
+  try {
+    const res = await api.patchAttestation(project.id, unitId, patch);
+    if (get().currentProject?.id === project.id) useStudyLoopStore.setState({ attestations: res });
+  } catch (err) {
+    if (get().currentProject?.id === project.id) useStudyLoopStore.setState({ attestations: prev });
+    get().pushToast(`Could not update attestation: ${errorMessage(err)}`, "error");
+  }
 }
 
 export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
@@ -686,6 +737,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       overlaysVisible: false,
       exportingAnalysis: false,
       shareResult: null,
+      attestations: {},
+      attestationsLoading: false,
     });
     let project: Project;
     try {
@@ -776,6 +829,22 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       }
     })();
 
+    // V3-B B2: attestations for every unit's reveal-gating/attest state —
+    // 404/empty is the common case (no analysis, or v2 analysis) and isn't
+    // an error, mirroring analysisPromise's own 404 handling above.
+    const attestationsPromise = (async () => {
+      set({ attestationsLoading: true });
+      try {
+        const res = await api.getAttestations(id);
+        if (!isCurrent()) return;
+        set({ attestations: res, attestationsLoading: false });
+      } catch (err) {
+        if (!isCurrent()) return;
+        set({ attestationsLoading: false });
+        get().pushToast(`Could not load attestations: ${errorMessage(err)}`, "error");
+      }
+    })();
+
     if (project.transcript.type === "file") {
       set({ transcriptLoading: true });
       try {
@@ -789,7 +858,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       }
     }
 
-    await Promise.all([bubblesPromise, notesPromise, conceptsPromise, analysisPromise, overlaysPromise]);
+    await Promise.all([bubblesPromise, notesPromise, conceptsPromise, analysisPromise, overlaysPromise, attestationsPromise]);
   },
   clearProjectSession: () => {
     clearPendingNotesSave();
@@ -830,6 +899,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       overlaysVisible: false,
       exportingAnalysis: false,
       shareResult: null,
+      attestations: {},
+      attestationsLoading: false,
     }));
   },
   patchCurrentProject: async (patch) => {
@@ -892,6 +963,52 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     } catch (err) {
       get().pushToast(`Could not detach concept doc: ${errorMessage(err)}`, "error");
       throw err;
+    }
+  },
+
+  // --- V3-B B2: attestation + reveal-gating ---------------------------------------
+  attestations: {},
+  attestationsLoading: false,
+  loadAttestations: async () => {
+    const project = get().currentProject;
+    if (!project) return;
+    const projectId = project.id;
+    set({ attestationsLoading: true });
+    try {
+      const res = await api.getAttestations(projectId);
+      if (get().currentProject?.id !== projectId) return;
+      set({ attestations: res, attestationsLoading: false });
+    } catch (err) {
+      if (get().currentProject?.id !== projectId) return;
+      set({ attestationsLoading: false });
+      get().pushToast(`Could not load attestations: ${errorMessage(err)}`, "error");
+    }
+  },
+  attestUnit: async (unitId) => {
+    await patchAttestationHelper(get, unitId, { status: "attested" });
+  },
+  saveUnitTake: async (unitId, userTake) => {
+    await patchAttestationHelper(get, unitId, { userTake });
+  },
+  saveUnitBody: async (unitId, userBody) => {
+    await patchAttestationHelper(get, unitId, { userBody });
+  },
+  dismissUnit: async (unitId) => {
+    await patchAttestationHelper(get, unitId, { status: "dismissed" });
+  },
+  clearUnitAttestation: async (unitId) => {
+    const project = get().currentProject;
+    if (!project) return;
+    const prev = get().attestations;
+    const next = { ...prev };
+    delete next[unitId];
+    set({ attestations: next });
+    try {
+      const res = await api.clearAttestation(project.id, unitId);
+      if (get().currentProject?.id === project.id) set({ attestations: res });
+    } catch (err) {
+      if (get().currentProject?.id === project.id) set({ attestations: prev });
+      get().pushToast(`Could not update attestation: ${errorMessage(err)}`, "error");
     }
   },
 
@@ -1421,13 +1538,14 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   // --- F11 review mode --------------------------------------------------------------------
   reviewCounts: null,
   reviewStreak: null,
+  masteryCount: null,
   reviewSession: null,
   reviewSessionLoading: false,
   reviewGrading: false,
   loadReviewCounts: async () => {
     try {
       const res = await api.getReviewQueue();
-      set({ reviewCounts: res.counts, reviewStreak: res.streak });
+      set({ reviewCounts: res.counts, reviewStreak: res.streak, masteryCount: res.masteryCount });
     } catch {
       // Non-critical: the badge/banner just won't show a count. No toast —
       // this can run on every app mount and shouldn't greet the user with
@@ -1442,7 +1560,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
         reviewSessionLoading: false,
         reviewCounts: res.counts,
         reviewStreak: res.streak,
-        reviewSession: { cards: res.due, clearedCount: 0, total: res.due.length, revealed: false },
+        masteryCount: res.masteryCount,
+        reviewSession: { cards: res.due, clearedCount: 0, total: res.due.length, revealed: false, againCounts: {} },
       });
     } catch (err) {
       set({ reviewSessionLoading: false });
@@ -1460,7 +1579,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       const res = await api.gradeReviewCard(current.id, grade);
       set((state) => {
         if (!state.reviewSession) {
-          return { reviewGrading: false, reviewCounts: res.counts, reviewStreak: res.streak };
+          return { reviewGrading: false, reviewCounts: res.counts, reviewStreak: res.streak, masteryCount: res.masteryCount };
         }
         const [, ...rest] = state.reviewSession.cards;
         // "Again" resurfaces the card later this same session (hidden
@@ -1469,11 +1588,19 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
         const nextCards = grade === "again" ? [...rest, current] : rest;
         const clearedCount =
           grade === "good" ? state.reviewSession.clearedCount + 1 : state.reviewSession.clearedCount;
+        // V3-B B4 "Lapse-to-context": bump this card's in-session Again
+        // count — read by ReviewView via lib/lapseTier.ts to escalate the
+        // media action on its next appearance (clip at ×2, player at ×3).
+        const againCounts =
+          grade === "again"
+            ? { ...state.reviewSession.againCounts, [current.id]: (state.reviewSession.againCounts[current.id] ?? 0) + 1 }
+            : state.reviewSession.againCounts;
         return {
           reviewGrading: false,
           reviewCounts: res.counts,
           reviewStreak: res.streak,
-          reviewSession: { ...state.reviewSession, cards: nextCards, clearedCount, revealed: false },
+          masteryCount: res.masteryCount,
+          reviewSession: { ...state.reviewSession, cards: nextCards, clearedCount, revealed: false, againCounts },
         };
       });
     } catch (err) {

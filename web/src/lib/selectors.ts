@@ -64,7 +64,7 @@ export function passedConcepts(concepts: readonly ConceptCard[], t: number): Con
  * the focusOverride case).
  */
 export function isTranscriptVisuallyOpen(
-  railOpenSection: "transcript" | "concepts" | null,
+  railOpenSection: "transcript" | "concepts" | "path" | null,
   playbackFocus: boolean,
   focusOverride: boolean
 ): boolean {

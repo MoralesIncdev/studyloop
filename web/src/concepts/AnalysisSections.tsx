@@ -9,6 +9,7 @@ import { useStudyLoopStore } from "../state/store";
 import { sortPearls, starStates, hashHueForHandle, AI_CONCEPT_ID_PREFIX } from "../lib/analysisFormat";
 import { formatTimestamp } from "../lib/time";
 import { Icon } from "../components/icons";
+import { UnitProposalCard } from "./UnitProposalCard";
 import type { Pearl } from "../lib/types";
 import styles from "./AnalysisSections.module.css";
 
@@ -152,6 +153,28 @@ export function AiBreakdownSection(): JSX.Element | null {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+/**
+ * V3-B B1/B2: v3's typed-spine replacement for AiBreakdownSection's flat
+ * concept list — each unit renders as an attestable PROPOSAL
+ * (UnitProposalCard) instead of a plain expand/collapse row. Analysis order
+ * (not topo order — that's Study Path's job, see StudyPathSection.tsx).
+ */
+export function UnitsProposalsSection(): JSX.Element | null {
+  const analysis = useStudyLoopStore((s) => s.analysis);
+  if (!analysis || analysis.version !== 3 || !analysis.units || analysis.units.length === 0) return null;
+
+  return (
+    <section className={styles.section}>
+      <h3 className={styles.sectionHeader}>Concept breakdown</h3>
+      <div className={styles.list}>
+        {analysis.units.map((unit) => (
+          <UnitProposalCard key={unit.id} unit={unit} />
+        ))}
+      </div>
     </section>
   );
 }

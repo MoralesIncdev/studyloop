@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderCompiledDocument, renderNotesTokens } from "../src/lib/compileRenderer.js";
-import type { AnalysisConcept, Pearl } from "../src/lib/analysis.js";
+import type { AnalysisConcept, AnalysisUnit, Pearl } from "../src/lib/analysis.js";
 import type { Bubble, Source } from "../src/lib/models.js";
 import type { ConceptCard } from "../src/lib/concepts.js";
 
@@ -227,5 +227,115 @@ describe("renderCompiledDocument — V2-C analysis sections", () => {
     });
     expect(markdown).not.toContain("## Pearls");
     expect(markdown).not.toContain("## Concept breakdown");
+  });
+});
+
+describe("renderCompiledDocument — V3-B B2 attested vs 'Not yet reviewed' units", () => {
+  const source: Source = { type: "youtube", videoId: "abc123", url: "https://youtu.be/abc123" };
+  const units: AnalysisUnit[] = [
+    {
+      id: "u-attested",
+      type: "MECHANISM",
+      label: "Attested Unit",
+      summary: "Summary of the attested unit.",
+      body: "Full AI body of the attested unit.",
+      anchors: [{ t: 65, quote: "q" }],
+      confidence: 0.9,
+    },
+    {
+      id: "u-untouched",
+      type: "CLAIM",
+      label: "Untouched Unit",
+      summary: "Summary the reader should never see.",
+      body: "Body the reader should never see.",
+      anchors: [{ t: 200, quote: "q2" }],
+      confidence: 0.8,
+    },
+  ];
+
+  it("renders an attested unit in full, including the learner's own take", () => {
+    const markdown = renderCompiledDocument({
+      title: "V3 compile",
+      source,
+      notes: "",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+      analysisUnits: units,
+      unitAttestations: { "u-attested": { status: "attested", userTake: "My own explanation.", at: "t" } },
+    });
+    expect(markdown).toContain("### Attested Unit ([1:05])");
+    expect(markdown).toContain("Summary of the attested unit.");
+    expect(markdown).toContain("Full AI body of the attested unit.");
+    expect(markdown).toContain("**Your take:** My own explanation.");
+  });
+
+  it("renders an unattested unit as a titles-only 'Not yet reviewed' entry — never its AI body", () => {
+    const markdown = renderCompiledDocument({
+      title: "V3 compile",
+      source,
+      notes: "",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+      analysisUnits: units,
+      unitAttestations: {},
+    });
+    expect(markdown).toContain("### Not yet reviewed");
+    expect(markdown).toContain("- Untouched Unit");
+    expect(markdown).not.toContain("Body the reader should never see.");
+    expect(markdown).not.toContain("Summary the reader should never see.");
+  });
+
+  it("a bare userTake (no explicit attest) is still enough to render a unit in full", () => {
+    const markdown = renderCompiledDocument({
+      title: "V3 compile",
+      source,
+      notes: "",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+      analysisUnits: [units[1]],
+      unitAttestations: { "u-untouched": { userTake: "typed something", at: "t" } },
+    });
+    expect(markdown).toContain("### Untouched Unit");
+    expect(markdown).toContain("Body the reader should never see.");
+    expect(markdown).not.toContain("### Not yet reviewed");
+  });
+
+  it("prefers a userBody edit over the original AI body when the unit was edited", () => {
+    const markdown = renderCompiledDocument({
+      title: "V3 compile",
+      source,
+      notes: "",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+      analysisUnits: [units[0]],
+      unitAttestations: { "u-attested": { status: "attested", userBody: "Learner-edited body.", at: "t" } },
+    });
+    expect(markdown).toContain("Learner-edited body.");
+    expect(markdown).not.toContain("Full AI body of the attested unit.");
+  });
+
+  it("analysisUnits takes priority over analysisConcepts when both are provided", () => {
+    const markdown = renderCompiledDocument({
+      title: "V3 compile",
+      source,
+      notes: "",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+      analysisUnits: [units[0]],
+      unitAttestations: { "u-attested": { status: "attested", at: "t" } },
+      analysisConcepts: [{ id: "legacy", title: "Legacy Concept", summary: "s", body: "b", anchors: [] }],
+    });
+    expect(markdown).not.toContain("Legacy Concept");
+    expect(markdown).toContain("Attested Unit");
   });
 });

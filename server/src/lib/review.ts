@@ -13,6 +13,7 @@
 import { z } from "zod";
 import type { Bubble, Project } from "./models.js";
 import type { Analysis } from "./analysis.js";
+import { isUnitFeedable, type AttestationsFile } from "./attestation.js";
 
 // --- Scheduling constants (SPEC "Scheduling (hidden SM-2-lite)") -----------
 
@@ -49,6 +50,14 @@ const StreakSchema = z.object({
 });
 export type Streak = z.infer<typeof StreakSchema>;
 
+/** V3-B B4 "Card transformation" cache entry — see lib/cardTransform.ts. */
+export const ReviewCardTransformSchema = z.object({
+  front: z.string(),
+  back: z.string(),
+  why: z.string(),
+});
+export type ReviewCardTransform = z.infer<typeof ReviewCardTransformSchema>;
+
 export const ReviewStateSchema = z.object({
   version: z.literal(1),
   cards: z.record(ReviewCardStateSchema),
@@ -56,6 +65,8 @@ export const ReviewStateSchema = z.object({
    *  a stats page (SPEC non-goal) — only surfaced as a single summary line
    *  at the end of a review session. */
   streak: StreakSchema.optional(),
+  /** V3-B B4: `{[cardId]: transformed}` — computed at most once per card, cached here so repeat sessions never re-call the LLM for the same card. */
+  transformed: z.record(ReviewCardTransformSchema).optional(),
 });
 export type ReviewState = z.infer<typeof ReviewStateSchema>;
 
@@ -151,6 +162,8 @@ export interface ReviewCardBase {
   /** YouTube sources only — lets the client build an "Open at timestamp" link. */
   sourceVideoId?: string;
   t: number;
+  /** V3-B B4: attached by routes/review.ts from review.json's transformed cache, when present — see lib/cardTransform.ts. */
+  transformed?: ReviewCardTransform;
 }
 
 export interface ReviewBubbleCard extends ReviewCardBase {
@@ -166,7 +179,22 @@ export interface ReviewPearlCard extends ReviewCardBase {
   importance: 1 | 2 | 3;
 }
 
-export type ReviewCard = ReviewBubbleCard | ReviewPearlCard;
+/**
+ * V3-B B4: "Attested units become reviewable as generation cards: front =
+ * 'your take' prompt for the unit, back = unit summary + user's own take."
+ * `userTake` is carried through so the back can render it alongside the AI
+ * summary — a card with no userTake at all (attested via the checkmark
+ * without ever typing a take) still reviews, just with an empty "your take".
+ */
+export interface ReviewUnitCard extends ReviewCardBase {
+  kind: "unit";
+  unitType: "CLAIM" | "MECHANISM" | "PROCEDURE" | "EXAMPLE" | "BOUNDARY";
+  label: string;
+  summary: string;
+  userTake: string | null;
+}
+
+export type ReviewCard = ReviewBubbleCard | ReviewPearlCard | ReviewUnitCard;
 
 /**
  * Derives the review cards currently backed by live study artifacts for one
@@ -182,7 +210,9 @@ export function deriveLiveCards(
   project: Project,
   bubbles: readonly Bubble[],
   analysis: Analysis | null,
-  stubAnalysesVisible: boolean
+  stubAnalysesVisible: boolean,
+  /** V3-B B2/B4: attestations gate which v3 units become generation cards — omitted (or empty) means "no units feed review", same as a v2/no-analysis project. */
+  attestations: AttestationsFile = {}
 ): ReviewCard[] {
   const sourceType = project.source.type;
   const sourcePath = project.source.type === "local" ? project.source.path : undefined;
@@ -223,6 +253,29 @@ export function deriveLiveCards(
         label: p.label,
         insight: p.insight,
         importance: p.importance,
+      });
+    }
+
+    // V3-B B4: "Attested units become reviewable as generation cards" — v3
+    // analyses only (units is absent/empty on v2). Gated the same way
+    // compile's "Concept sections" and Study Path's attest check are (see
+    // lib/attestation.ts's isUnitFeedable) — a dismissed or never-touched
+    // unit never reaches the review queue.
+    for (const u of analysis.units ?? []) {
+      if (!isUnitFeedable(attestations[u.id])) continue;
+      cards.push({
+        id: `unit:${project.id}:${u.id}`,
+        kind: "unit",
+        projectId: project.id,
+        projectTitle: project.title,
+        sourceType,
+        sourcePath,
+        sourceVideoId,
+        t: u.anchors[0]?.t ?? 0,
+        unitType: u.type,
+        label: u.label,
+        summary: u.summary,
+        userTake: attestations[u.id]?.userTake?.trim() || null,
       });
     }
   }
@@ -304,4 +357,14 @@ export function buildReviewQueue(
     dueCards,
     counts: { due: dueCards.length, new: newCount, total: liveCards.length },
   };
+}
+
+// --- V3-B B4 "Mastery over streaks" --------------------------------------
+
+/** A card is "locked in" once it's graduated past the 30-day rung of the ladder (SPEC: "cards with interval ≥30d"). */
+export const MASTERY_INTERVAL_DAYS = 30;
+
+/** Counts cards locked in across every tracked card in review.json (all projects — review.json is dataDir-wide, not per-project). The summary screen's headline number; the day-streak becomes footnote text alongside it. */
+export function masteryCount(cards: Readonly<Record<string, ReviewCardState>>): number {
+  return Object.values(cards).filter((c) => c.interval >= MASTERY_INTERVAL_DAYS).length;
 }
