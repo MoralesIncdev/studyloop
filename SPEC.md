@@ -531,3 +531,82 @@ reps, lastGrade, introducedAt}}}` via the existing atomic-write + a global mutex
 ## Non-goals (this build)
 No per-project decks, no stats page, no configurable ladder, no import of
 overlay/others' cards (own artifacts only).
+
+---
+
+# V3-A — Generate-First Loop (2026-07-28)
+*Implements FEATURE-REVIEW.md phase V3-A under PEDAGOGY.md's laws (§1 generate-
+first, §4 cognitive load). All four features below; design tokens per
+design/DESIGN.md; zero emojis; every new interactive element gets the full
+hover/active/focus-visible/disabled matrix.*
+
+## A1. State-aware surface purge (P0)
+- Store gains `playbackFocus: boolean` derived from player state: true after
+  1.5s of continuous playback (debounce so scrubbing doesn't flicker), false
+  immediately on pause.
+- **Playing (focus mode):** right-rail Transcript card collapses to its header
+  (animated via the existing grid-rows pattern); bottom dock (Notes/Bubbles)
+  dims to 45% opacity (still interactive; full opacity on hover/focus-within);
+  concept slide-over ticker never renders (see A4). Video + CC own the screen.
+- **Paused:** previous rail expansion state restores (respect the persisted
+  accordion state), dock returns to full opacity. Opening the notation modal
+  counts as paused (it already pauses playback) — the study moment gets the
+  full surface.
+- **User override:** manually expanding a rail section or focusing the dock
+  during playback sets `focusOverride = true` (purge suspended); cleared on
+  the next pause→play transition. The user always wins.
+- **CC/transcript redundancy rule:** the CC overlay renders only while
+  `playbackFocus` is active OR the transcript card is collapsed; when the
+  transcript is expanded on pause, CC hides. (Never two full text streams.)
+- Transitions use `--duration-panel`/`--ease-standard`; reduced-motion drops
+  the fades (instant states).
+
+## A2. Notation elaborative ghost prompts (P0)
+- The note textarea placeholder rotates through an elaboration pool, one
+  chosen per modal-open (not cycling while typing):
+  GENERIC: "Why does this matter?" · "The mechanism here is…" · "This
+  contrasts with…" · "Where would this apply?" · "What would break this?"
+  When the project has a domain tag (future v3-B) a domain pool overrides;
+  ship the hook (`promptPoolFor(domain)`) with generic pool only for now.
+- The auto-captured transcript quote + screenshot are visually demoted to a
+  "Reference" block: reduced opacity, small "Reference" label, positioned
+  BELOW the note field (the learner's words come first, hierarchy per
+  PEDAGOGY §1). Quote-removal ✕ and concept chip behavior unchanged.
+- Long-notes pane placeholder becomes "What do you want to remember — and
+  why does it matter?" (was generic).
+
+## A3. Compile synthesis checkpoint (P0)
+- Compile flow gains a FIRST step (before the caption pass): "In your own
+  words — what was this lesson about? Imagine explaining it to someone who
+  hasn't watched." Textarea (min 4 rows), buttons: "Save & continue"
+  (primary) · "Skip for now" (secondary). Never blocks.
+- `lessonSummary: string` added to the project model (zod optional, server
+  PATCH accepts; stored in project.json) and to the share-bundle schema
+  (optional field — bundle version stays 1, validator tolerates absence).
+  Modal prefills the existing summary on re-compile (editable; saving
+  PATCHes).
+- Compiled markdown: new FIRST section `## In my own words` containing the
+  summary, or the literal placeholder line
+  `*[Write your summary to complete this lesson]*` when skipped —
+  visible unfinishedness is the nudge (PEDAGOGY §3). Compile renderer golden
+  test updated. Export-analysis bundle includes `lessonSummary`.
+
+## A4. Concept ticker demotion (P1)
+- DELETE the slide-over ConceptTicker cards during playback (component may
+  remain for the expanded overlay reached by click).
+- New **concept chip strip**: a slim row directly below the player (outside
+  the video frame, above the title), showing the currently-active anchored
+  concept title(s) as chips (max 2 + "+N"); chips appear/disappear with the
+  active window (fade, `--duration-fast`). Click chip → opens the Concepts
+  rail section with that card expanded + highlighted (no seek). Empty strip
+  collapses to zero height (no dead space).
+- The existing ticker-mute toggle now controls the chip strip. Seek-bar
+  concept ticks unchanged. Covered checkmarks unchanged.
+
+## Acceptance
+- All states keyboard-reachable; purge/dim never traps focus; overrides work.
+- typecheck + full suite green; new unit tests: playbackFocus debounce +
+  override logic (fake timers), lessonSummary round trip (PATCH → compile →
+  bundle), renderer golden with/without summary, chip-strip active-window
+  selector reuse.
+- Browser-verified on the real corpus + screenshots.
