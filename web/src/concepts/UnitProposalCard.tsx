@@ -39,12 +39,21 @@ export function UnitProposalCard({ unit }: Props): JSX.Element {
   const saveUnitBody = useStudyLoopStore((s) => s.saveUnitBody);
   const dismissUnit = useStudyLoopStore((s) => s.dismissUnit);
   const clearUnitAttestation = useStudyLoopStore((s) => s.clearUnitAttestation);
+  const currentProject = useStudyLoopStore((s) => s.currentProject);
+  const patchCurrentProject = useStudyLoopStore((s) => s.patchCurrentProject);
 
   const [take, setTake] = useState(entry?.userTake ?? "");
   /** Set by an explicit Skip, or by clicking Reveal with a non-empty take — "typing anything (or explicit skip) unlocks reveal" (SPEC B2). */
   const [unlocked, setUnlocked] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState(entry?.userBody ?? unit.body);
+  // V3-C review finding #8 "rationales are neither rail-editable nor
+  // retained for editing": this IS the v3 own-concept row (analysis.concepts
+  // mirrors analysis.units 1:1 by id — see server's unitsToConceptsMirror),
+  // so the "why this grouping" affordance lives here, collapsed by default,
+  // persisted via patchCurrentProject's conceptRationales merge.
+  const [rationaleOpen, setRationaleOpen] = useState(false);
+  const [rationaleDraft, setRationaleDraft] = useState(currentProject?.conceptRationales?.[unit.id] ?? "");
 
   // Sync local draft state when the underlying entry changes out from under
   // us (e.g. a fresh project load, or clearing the attestation) — mirrors
@@ -53,6 +62,17 @@ export function UnitProposalCard({ unit }: Props): JSX.Element {
     setTake(entry?.userTake ?? "");
     setEditBody(entry?.userBody ?? unit.body);
   }, [entry?.userTake, entry?.userBody, unit.body]);
+
+  const persistedRationale = currentProject?.conceptRationales?.[unit.id] ?? "";
+  useEffect(() => {
+    // Depends on the primitive string value (not the whole conceptRationales
+    // object reference) — an unrelated project PATCH response (e.g. the
+    // periodic lastPosition/watchedUpTo save) produces a brand-new object
+    // graph on every fetch even when this unit's rationale text is
+    // unchanged; keying on the object reference would re-fire this effect
+    // on every such save and could clobber an in-progress unsaved edit.
+    setRationaleDraft(persistedRationale);
+  }, [persistedRationale, unit.id]);
 
   const t = unit.anchors[0]?.t;
   const status = entry?.status;
@@ -75,6 +95,13 @@ export function UnitProposalCard({ unit }: Props): JSX.Element {
   const handleSaveEdit = (): void => {
     void saveUnitBody(unit.id, editBody);
     setEditing(false);
+  };
+
+  const handleRationaleBlur = (): void => {
+    const trimmed = rationaleDraft.trim();
+    if (trimmed !== (currentProject?.conceptRationales?.[unit.id] ?? "").trim()) {
+      void patchCurrentProject({ conceptRationales: { [unit.id]: trimmed } });
+    }
   };
 
   const generationSlot = (
@@ -170,6 +197,28 @@ export function UnitProposalCard({ unit }: Props): JSX.Element {
           Undo dismiss
         </button>
       )}
+
+      <div className={styles.rationaleField}>
+        <button
+          type="button"
+          className={styles.rationaleToggle}
+          onClick={() => setRationaleOpen((v) => !v)}
+          aria-expanded={rationaleOpen}
+        >
+          <Icon name="chevronDown" size={11} className={rationaleOpen ? styles.rationaleChevronOpen : undefined} />
+          why this grouping
+        </button>
+        {rationaleOpen && (
+          <input
+            type="text"
+            className={styles.rationaleInput}
+            placeholder="Why this grouping…"
+            value={rationaleDraft}
+            onChange={(e) => setRationaleDraft(e.target.value)}
+            onBlur={handleRationaleBlur}
+          />
+        )}
+      </div>
     </div>
   );
 }

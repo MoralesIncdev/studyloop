@@ -6,6 +6,7 @@
 // card id (`transformed:{front,back,why}` — see lib/review.ts/routes/review.ts)
 // so it's computed at most once per card. Same injectable-adapter pattern as
 // lib/analysis.ts (fake/real client, resolve*/​__set*ForTests).
+import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { ANALYSIS_MAX_TOKENS, type AnalysisOutcome } from "./analysis.js";
@@ -148,26 +149,67 @@ export interface TransformableCard {
 }
 
 /**
- * V3-B B4: fills in a `{[cardId]: CardTransformResult}` cache for any of
+ * V3-B review fix #2 "Review transformations survive edits to their source
+ * card": a cached transform's cache key was `card.id` alone — editing a
+ * bubble's text (or, in principle, a pearl's label/insight) left the stale
+ * cloze/question front attached forever, since the id never changes.
+ * `sourceHash` hashes exactly the text the transform was generated from
+ * (the CardTransformInput's quote + note — for a bubble card, `quote` IS
+ * the bubble's own text per routes/review.ts's transformCandidates
+ * construction, so an edit changes the hash) so a mismatch is detectable
+ * without re-deriving the whole input.
+ */
+export function hashCardTransformInput(input: CardTransformInput): string {
+  return createHash("sha256").update(`${input.kind}\n${input.quote}\n${input.note}`).digest("hex").slice(0, 16);
+}
+
+/** The shape actually persisted in review.json's `transformed` map — a CardTransformResult plus the source-content hash it was generated from. `sourceHash` is optional only so a pre-migration review.json (written before this fix) still parses; fillTransformCache treats a missing hash as invalid, per the fix's "dropped on first load" migration. */
+export type CachedCardTransform = CardTransformResult & { sourceHash?: string };
+
+/**
+ * V3-B B4: fills in a `{[cardId]: CachedCardTransform}` cache for any of
  * `cards` that are eligible (present in `transformCandidates`) and not
- * already cached — bounded to the given card set (never every historical
- * card) so a session's latency cost stays proportional to what's actually
- * being reviewed. No-ops entirely (returns `cached` unchanged, same
- * reference) when no client resolves (no key, not fake mode) — SPEC
- * "fallback = current format" means an unavailable transformer is never a
- * review-blocking error — or when nothing needed fetching.
+ * already validly cached — bounded to the given card set (never every
+ * historical card) so a session's latency cost stays proportional to what's
+ * actually being reviewed.
+ *
+ * V3-B review fix #2: before fetching anything, every existing cache entry
+ * whose id is still a transform candidate this call is checked against its
+ * candidate's current `hashCardTransformInput` — a mismatch (source text
+ * edited) OR a missing `sourceHash` (pre-migration entry) invalidates it,
+ * dropping it from the cache so it's lazily retransformed below (or simply
+ * omitted if no client is available — SPEC "fallback = current format").
+ * Entries whose id ISN'T a transform candidate this call (card no longer
+ * weak, or belongs to a project with no v3 analysis this call) are left
+ * untouched — nothing to validate against.
+ *
+ * No-ops entirely (returns `cached` unchanged, same reference) when nothing
+ * was invalidated AND no client resolves / nothing needed fetching.
  */
 export async function fillTransformCache<TCard extends TransformableCard>(
-  cached: Readonly<Record<string, CardTransformResult>>,
+  cached: Readonly<Record<string, CachedCardTransform>>,
   cards: readonly TCard[],
   transformCandidates: ReadonlyMap<string, CardTransformInput>,
   client: CardTransformLLMClient | null,
   model: string
-): Promise<Record<string, CardTransformResult>> {
-  if (!client) return cached;
-
-  let next = cached;
+): Promise<Record<string, CachedCardTransform>> {
+  let next: Record<string, CachedCardTransform> = {};
   let changed = false;
+  for (const [id, entry] of Object.entries(cached)) {
+    const candidate = transformCandidates.get(id);
+    if (!candidate) {
+      next[id] = entry;
+      continue;
+    }
+    if (entry.sourceHash !== undefined && entry.sourceHash === hashCardTransformInput(candidate)) {
+      next[id] = entry;
+      continue;
+    }
+    changed = true; // dropped: missing sourceHash (pre-migration) or stale content
+  }
+
+  if (!client) return changed ? next : cached;
+
   for (const card of cards) {
     if (next[card.id]) continue;
     const candidate = transformCandidates.get(card.id);
@@ -175,18 +217,21 @@ export async function fillTransformCache<TCard extends TransformableCard>(
     // eslint-disable-next-line no-await-in-loop -- bounded to the caller's due-card set; sequential mirrors lib/analysis.ts's own per-chunk loop
     const outcome = await client.transform(candidate, model);
     if (outcome.kind === "ok") {
-      next = { ...next, [card.id]: outcome.data };
+      next[card.id] = { ...outcome.data, sourceHash: hashCardTransformInput(candidate) };
       changed = true;
     }
   }
   return changed ? next : cached;
 }
 
-/** Attaches each card's cached transform (if any) as a `transformed` field, leaving cards without one untouched. */
+/** Attaches each card's cached transform (if any) as a `transformed` field (front/back/why only — sourceHash is internal cache bookkeeping, never sent to the client), leaving cards without one untouched. */
 export function attachTransforms<TCard extends TransformableCard>(
   cards: readonly TCard[],
-  cache: Readonly<Record<string, CardTransformResult>> | undefined
+  cache: Readonly<Record<string, CachedCardTransform>> | undefined
 ): (TCard & { transformed?: CardTransformResult })[] {
   if (!cache) return [...cards];
-  return cards.map((c) => (cache[c.id] ? { ...c, transformed: cache[c.id] } : c));
+  return cards.map((c) => {
+    const entry = cache[c.id];
+    return entry ? { ...c, transformed: { front: entry.front, back: entry.back, why: entry.why } } : c;
+  });
 }

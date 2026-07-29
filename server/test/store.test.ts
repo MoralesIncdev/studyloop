@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
+  mergeConceptRationales,
   nextWatchedUpTo,
   projectDir,
   readBubbles,
@@ -51,6 +52,32 @@ describe("nextWatchedUpTo", () => {
 
   it("is idempotent at equal values", () => {
     expect(nextWatchedUpTo(100, 100)).toBe(100);
+  });
+});
+
+// --- V3-C review fix #8: conceptRationales merge, not replace ---------------
+
+describe("mergeConceptRationales", () => {
+  it("merges a single-concept patch into an existing map without erasing other concepts", () => {
+    const existing = { c1: "first reason", c2: "second reason" };
+    expect(mergeConceptRationales(existing, { c1: "updated reason" })).toEqual({
+      c1: "updated reason",
+      c2: "second reason",
+    });
+  });
+
+  it("adds a brand-new concept id to an existing map", () => {
+    const existing = { c1: "first reason" };
+    expect(mergeConceptRationales(existing, { c2: "new reason" })).toEqual({ c1: "first reason", c2: "new reason" });
+  });
+
+  it("starts a fresh map when existing is undefined", () => {
+    expect(mergeConceptRationales(undefined, { c1: "reason" })).toEqual({ c1: "reason" });
+  });
+
+  it("returns existing unchanged when the patch value is undefined (field omitted from the PATCH body)", () => {
+    const existing = { c1: "reason" };
+    expect(mergeConceptRationales(existing, undefined)).toBe(existing);
   });
 });
 

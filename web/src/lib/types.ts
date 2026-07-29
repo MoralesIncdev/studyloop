@@ -63,6 +63,10 @@ export interface Project {
   domain?: Domain;
   /** V3-B B2: per-project toggle — worked-example-first vs generate-first proposal ordering. */
   noviceMode?: boolean;
+  /** V3-C review fix #6: the real video duration, persisted once the player learns it (loadedmetadata / YT API). Preferred by the server's heatmap duration resolution over ffprobe/transcript/watchedUpTo/mark-time fallbacks. */
+  durationSeconds?: number;
+  /** V3-C review fix #8: `{[conceptId]: "why this grouping"}` — author-editable in the rail, PATCHed and merged per concept. */
+  conceptRationales?: Record<string, string>;
 }
 
 export interface CreateProjectBody {
@@ -88,6 +92,8 @@ export interface PatchProjectBody {
   lessonSummary?: string;
   domain?: Domain;
   noviceMode?: boolean;
+  durationSeconds?: number;
+  conceptRationales?: Record<string, string>;
 }
 
 export interface TranscriptSegment {
@@ -426,6 +432,13 @@ export interface AttestationPatchBody {
   status?: AttestationStatus;
   userTake?: string;
   userBody?: string;
+}
+
+// --- V3-B review fix #7: pearl "Add to review" (PEDAGOGY §5 path (b)) -----
+
+/** GET/POST `/api/projects/:id/pearls/...review-add(s)` — the set of pearl anchor timestamps (as strings — see server/src/lib/review.ts's pearlReviewKey) the learner explicitly added to their review queue. */
+export interface PearlReviewAddsResponse {
+  added: string[];
 }
 
 // --- V3-C C2: search intent toggles (SPEC/PEDAGOGY.md §6) -----------------

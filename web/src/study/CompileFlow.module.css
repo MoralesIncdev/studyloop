@@ -315,6 +315,34 @@
   color: var(--text-tertiary);
 }
 
+/* V3-B review finding #4: caption-pass partial-failure state — the failed
+   row/input get a visible danger treatment (never just silently discarded)
+   so the learner knows exactly which drafts need a retry. */
+.captionRowFailed {
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+.captionInputFailed {
+  border-color: var(--danger);
+}
+
+.captionInputFailed:hover {
+  border-color: var(--danger);
+}
+
+.captionInputFailed:focus-visible {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 25%, transparent);
+}
+
+.captionFailedTag {
+  margin-left: 6px;
+  color: var(--danger);
+  font-size: var(--type-11);
+  font-weight: var(--weight-medium);
+}
+
 .cardActions {
   display: flex;
   justify-content: flex-end;

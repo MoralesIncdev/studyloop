@@ -38,6 +38,29 @@ export function emptyAttestations(): AttestationsFile {
   return {};
 }
 
+// --- V3-B review fix #9 "Attestation mutation inputs are insufficiently bounded" ---
+
+/** SPEC B2's "your take" input is a one-line generation attempt — 2000 chars is generous headroom for a paragraph, not an unbounded blob. */
+export const MAX_USER_TAKE_CHARS = 2000;
+/** The Edit action's body override can be a full markdown rewrite of the unit's body — 20000 chars (~a few printed pages) is generous headroom while still bounding worst-case storage abuse. */
+export const MAX_USER_BODY_CHARS = 20000;
+/** A well-formed v3 analysis run extracts on the order of tens of units per video — 500 is a defense-in-depth ceiling well above any legitimate project, on top of (not instead of) the server-side unitId-exists-in-analysis check routes/attestation.ts performs before ever inserting a NEW key. */
+export const MAX_ATTESTATIONS_PER_PROJECT = 500;
+
+/** PATCH body bounds — mirrors AttestationEntrySchema's optional fields but caps string lengths (SPEC review fix: "userTake <= 2000 chars, userBody <= 20000"). */
+export const AttestationPatchBodySchema = z.object({
+  status: AttestationStatusSchema.optional(),
+  userTake: z.string().max(MAX_USER_TAKE_CHARS).optional(),
+  userBody: z.string().max(MAX_USER_BODY_CHARS).optional(),
+});
+export type AttestationPatchBody = z.infer<typeof AttestationPatchBodySchema>;
+
+/** Whether a new attestation entry can be added without exceeding MAX_ATTESTATIONS_PER_PROJECT. Updating an entry that already exists never grows the map, so it's always allowed regardless of the current size. */
+export function canAddAttestationEntry(currentSize: number, isNewUnitId: boolean): boolean {
+  if (!isNewUnitId) return true;
+  return currentSize < MAX_ATTESTATIONS_PER_PROJECT;
+}
+
 /**
  * SPEC B2: "Only attested units (or units with a userTake) feed review cards
  * + compile concept sections." A dismissed unit never feeds either surface

@@ -6,11 +6,12 @@ import {
   attachTransforms,
   fillTransformCache,
   FakeCardTransformClient,
+  hashCardTransformInput,
   isWeakBubbleText,
   resolveCardTransformClient,
+  type CachedCardTransform,
   type CardTransformInput,
   type CardTransformLLMClient,
-  type CardTransformResult,
 } from "../src/lib/cardTransform.js";
 
 describe("isWeakBubbleText", () => {
@@ -80,11 +81,35 @@ describe("resolveCardTransformClient", () => {
   });
 });
 
+describe("hashCardTransformInput", () => {
+  it("is deterministic — same input produces the same hash", () => {
+    const input: CardTransformInput = { quote: "hip angle", note: "", kind: "bubble" };
+    expect(hashCardTransformInput(input)).toBe(hashCardTransformInput({ ...input }));
+  });
+
+  it("changes when the quote text changes (e.g. a bubble edit)", () => {
+    const a = hashCardTransformInput({ quote: "hip angle", note: "", kind: "bubble" });
+    const b = hashCardTransformInput({ quote: "shoulder pressure", note: "", kind: "bubble" });
+    expect(a).not.toBe(b);
+  });
+
+  it("changes when note or kind changes, holding quote fixed", () => {
+    const base = hashCardTransformInput({ quote: "q", note: "n1", kind: "pearl" });
+    expect(hashCardTransformInput({ quote: "q", note: "n2", kind: "pearl" })).not.toBe(base);
+    expect(hashCardTransformInput({ quote: "q", note: "n1", kind: "bubble" })).not.toBe(base);
+  });
+});
+
 describe("fillTransformCache", () => {
+  const c1Input: CardTransformInput = { quote: "q1", note: "", kind: "bubble" };
+  const c2Input: CardTransformInput = { quote: "q2", note: "", kind: "pearl" };
   const candidates = new Map<string, CardTransformInput>([
-    ["c1", { quote: "q1", note: "", kind: "bubble" }],
-    ["c2", { quote: "q2", note: "", kind: "pearl" }],
+    ["c1", c1Input],
+    ["c2", c2Input],
   ]);
+  const c1Hash = hashCardTransformInput(c1Input);
+  const c2Hash = hashCardTransformInput(c2Input);
+
   let calls: string[];
   function countingClient(): CardTransformLLMClient {
     calls = [];
@@ -96,8 +121,8 @@ describe("fillTransformCache", () => {
     };
   }
 
-  it("returns the cache unchanged (same reference) when no client resolves", async () => {
-    const cache = { c1: { front: "f", back: "b", why: "w" } };
+  it("returns the cache unchanged (same reference) when no client resolves and nothing is stale", async () => {
+    const cache: Record<string, CachedCardTransform> = { c1: { front: "f", back: "b", why: "w", sourceHash: c1Hash } };
     const result = await fillTransformCache(cache, [{ id: "c2" }], candidates, null, "model");
     expect(result).toBe(cache);
   });
@@ -108,18 +133,19 @@ describe("fillTransformCache", () => {
     expect(calls).toEqual(["q1"]);
   });
 
-  it("skips a card that's already cached — never re-fetches it", async () => {
+  it("skips a card that's already validly cached (matching sourceHash) — never re-fetches it", async () => {
     const client = countingClient();
-    const cache = { c1: { front: "cached-front", back: "b", why: "w" } };
+    const cache: Record<string, CachedCardTransform> = { c1: { front: "cached-front", back: "b", why: "w", sourceHash: c1Hash } };
     const result = await fillTransformCache(cache, [{ id: "c1" }, { id: "c2" }], candidates, client, "model");
-    expect(calls).toEqual(["q2"]); // c1 skipped (already cached), only c2 fetched
+    expect(calls).toEqual(["q2"]); // c1 skipped (already validly cached), only c2 fetched
     expect(result.c1.front).toBe("cached-front"); // untouched
     expect(result.c2.front).toBe("front:q2");
+    expect(result.c2.sourceHash).toBe(c2Hash); // freshly-fetched entries carry their hash forward
   });
 
-  it("returns the same cache reference (no-op) when everything requested is already cached or not a candidate", async () => {
+  it("returns the same cache reference (no-op) when everything requested is already validly cached or not a candidate", async () => {
     const client = countingClient();
-    const cache = { c1: { front: "f", back: "b", why: "w" } };
+    const cache: Record<string, CachedCardTransform> = { c1: { front: "f", back: "b", why: "w", sourceHash: c1Hash } };
     const result = await fillTransformCache(cache, [{ id: "c1" }, { id: "unknown" }], candidates, client, "model");
     expect(calls).toEqual([]);
     expect(result).toBe(cache);
@@ -136,13 +162,49 @@ describe("fillTransformCache", () => {
     await fillTransformCache({}, [{ id: "c1" }], candidates, client, "model"); // c2 is a candidate but not requested
     expect(calls).toEqual(["q1"]);
   });
+
+  // --- V3-B review finding #2: source-content hash invalidation -----------
+
+  it("invalidates and retransforms a cached entry whose sourceHash no longer matches its candidate's current text", async () => {
+    const client = countingClient();
+    const staleCache: Record<string, CachedCardTransform> = {
+      c1: { front: "stale-front", back: "stale-back", why: "stale-why", sourceHash: "deadbeefdeadbeef" },
+    };
+    const result = await fillTransformCache(staleCache, [{ id: "c1" }], candidates, client, "model");
+    expect(calls).toEqual(["q1"]); // retransformed, not skipped
+    expect(result.c1.front).toBe("front:q1");
+    expect(result.c1.sourceHash).toBe(c1Hash);
+  });
+
+  it("drops (never reuses) a pre-migration cached entry with no sourceHash at all, even with no client available", async () => {
+    const legacyCache: Record<string, CachedCardTransform> = { c1: { front: "legacy-front", back: "b", why: "w" } };
+    const result = await fillTransformCache(legacyCache, [{ id: "c1" }], candidates, null, "model");
+    expect(result.c1).toBeUndefined();
+  });
+
+  it("retransforms a pre-migration entry with no sourceHash once a client is available", async () => {
+    const client = countingClient();
+    const legacyCache: Record<string, CachedCardTransform> = { c1: { front: "legacy-front", back: "b", why: "w" } };
+    const result = await fillTransformCache(legacyCache, [{ id: "c1" }], candidates, client, "model");
+    expect(calls).toEqual(["q1"]);
+    expect(result.c1.front).toBe("front:q1");
+    expect(result.c1.sourceHash).toBe(c1Hash);
+  });
+
+  it("leaves a cached entry alone (no hash check) when its id is no longer a transform candidate at all", async () => {
+    const client = countingClient();
+    const cache: Record<string, CachedCardTransform> = { gone: { front: "f", back: "b", why: "w" } }; // no sourceHash, and not in `candidates`
+    const result = await fillTransformCache(cache, [{ id: "gone" }], candidates, client, "model");
+    expect(calls).toEqual([]);
+    expect(result).toBe(cache);
+  });
 });
 
 describe("attachTransforms", () => {
-  it("attaches a matching cache entry as `transformed`, leaving cards without one unchanged", () => {
-    const cache: Record<string, CardTransformResult> = { c1: { front: "f", back: "b", why: "w" } };
+  it("attaches a matching cache entry as `transformed` (front/back/why only, sourceHash stripped), leaving cards without one unchanged", () => {
+    const cache: Record<string, CachedCardTransform> = { c1: { front: "f", back: "b", why: "w", sourceHash: "abc123" } };
     const result = attachTransforms([{ id: "c1" }, { id: "c2" }], cache);
-    expect(result[0].transformed).toEqual(cache.c1);
+    expect(result[0].transformed).toEqual({ front: "f", back: "b", why: "w" });
     expect(result[1].transformed).toBeUndefined();
   });
 

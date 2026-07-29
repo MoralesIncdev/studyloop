@@ -7,7 +7,7 @@
 // ever 500ing the rail.
 import path from "node:path";
 import type { LibraryItem } from "./scan.js";
-import { searchYoutube, type RelatedVideo } from "./innertube.js";
+import { searchYoutubeWithMeta, type RelatedVideo } from "./innertube.js";
 import { scoreCandidates, scoreGapFillOnly, updateTeacherScores, type Candidate, type ScoredCandidate, type Weights } from "./continuity.js";
 import { gapConceptsFromAttestations, topConceptTitles } from "./analysisAccess.js";
 import {
@@ -81,11 +81,18 @@ export async function loadOwnConceptSignals(
   };
 }
 
-async function runConceptSearches(queries: readonly string[]): Promise<{ query: string; results: Candidate[] }[]> {
+interface ConceptSearchResult {
+  query: string;
+  results: Candidate[];
+  /** True when this query's results came from innertube.ts's 15min searchCache rather than a fresh Innertube call this request. */
+  fromCache: boolean;
+}
+
+async function runConceptSearches(queries: readonly string[]): Promise<ConceptSearchResult[]> {
   const searches = await Promise.all(
     queries.map(async (query) => {
-      const results = await searchYoutube(query, CANDIDATE_POOL_LIMIT);
-      return { query, results: results.map(relatedVideoToCandidate) };
+      const { results, fromCache } = await searchYoutubeWithMeta(query, CANDIDATE_POOL_LIMIT);
+      return { query, results: results.map(relatedVideoToCandidate), fromCache };
     })
   );
   // searchYoutube never throws (degrades to [] on any Innertube failure) —
@@ -97,20 +104,26 @@ async function runConceptSearches(queries: readonly string[]): Promise<{ query: 
 /**
  * Persists teacher-validation increments for channels seen across this
  * call's concept searches (SPEC: "per-channel score cached in
- * teacherScores.json, decays never for v1"). No-ops when there were no
- * concept searches to learn from (empty topConcepts, or every search came
- * back empty) — nothing to persist.
+ * teacherScores.json, decays never for v1"). V3-C review finding #1: only
+ * FRESHLY-fetched queries (fromCache: false) ever reach updateTeacherScores —
+ * repeatedly opening/refreshing a project within innertube.ts's 15min search
+ * cache window must not re-earn the same "prior validation" bonus for
+ * results that were already counted the first time they were fetched.
+ * No-ops (returns the unchanged persisted map) when there's nothing fresh to
+ * learn from — every query was a cache hit, or every fresh query came back
+ * empty.
  */
 async function persistTeacherScoreUpdate(
   dataDir: string,
-  conceptSearches: { query: string; results: Candidate[] }[]
+  conceptSearches: readonly ConceptSearchResult[]
 ): Promise<Record<string, number>> {
-  if (conceptSearches.every((s) => s.results.length === 0)) {
+  const fresh = conceptSearches.filter((s) => !s.fromCache);
+  if (fresh.length === 0 || fresh.every((s) => s.results.length === 0)) {
     return readTeacherScores(dataDir);
   }
   return withTeacherScoresLock(async () => {
     const prev = await readTeacherScores(dataDir);
-    const next = updateTeacherScores(prev, conceptSearches);
+    const next = updateTeacherScores(prev, fresh);
     await writeTeacherScores(dataDir, next);
     return next;
   });

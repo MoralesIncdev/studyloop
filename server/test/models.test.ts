@@ -121,3 +121,60 @@ describe("PatchProjectBodySchema — V3-A lessonSummary", () => {
     expect(result.success).toBe(true);
   });
 });
+
+function fixtureProject(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "81025a1c-b04d-422c-8947-a1c302197d33",
+    title: "A video",
+    source: { type: "youtube", videoId: "abc123", url: "https://youtu.be/abc123" },
+    transcript: { type: "none" },
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+    lastPosition: 0,
+    watchedUpTo: 0,
+    ...overrides,
+  };
+}
+
+// --- V3-C review fix #6: durationSeconds ------------------------------------
+
+describe("ProjectSchema / PatchProjectBodySchema — durationSeconds", () => {
+  it("ProjectSchema accepts an optional nonnegative durationSeconds", () => {
+    const result = ProjectSchema.safeParse(fixtureProject({ durationSeconds: 3600 }));
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.durationSeconds).toBe(3600);
+  });
+
+  it("ProjectSchema rejects a negative durationSeconds", () => {
+    const result = ProjectSchema.safeParse(fixtureProject({ durationSeconds: -1 }));
+    expect(result.success).toBe(false);
+  });
+
+  it("ProjectSchema still parses a project with no durationSeconds at all (pre-fix project.json)", () => {
+    const result = ProjectSchema.safeParse(fixtureProject());
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.durationSeconds).toBeUndefined();
+  });
+
+  it("PatchProjectBodySchema accepts a durationSeconds-only patch", () => {
+    expect(PatchProjectBodySchema.safeParse({ durationSeconds: 1800 }).success).toBe(true);
+  });
+
+  it("PatchProjectBodySchema rejects a negative durationSeconds", () => {
+    expect(PatchProjectBodySchema.safeParse({ durationSeconds: -5 }).success).toBe(false);
+  });
+});
+
+// --- V3-C review fix #8: conceptRationales ----------------------------------
+
+describe("ProjectSchema / PatchProjectBodySchema — conceptRationales", () => {
+  it("ProjectSchema accepts an optional conceptRationales map", () => {
+    const result = ProjectSchema.safeParse(fixtureProject({ conceptRationales: { c1: "why this grouping" } }));
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.conceptRationales).toEqual({ c1: "why this grouping" });
+  });
+
+  it("PatchProjectBodySchema accepts a conceptRationales-only patch", () => {
+    expect(PatchProjectBodySchema.safeParse({ conceptRationales: { c1: "why" } }).success).toBe(true);
+  });
+});

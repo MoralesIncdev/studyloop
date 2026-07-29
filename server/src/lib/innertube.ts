@@ -370,22 +370,39 @@ export async function relatedFor(videoId: string, options?: { bypassCache?: bool
   return resolved.related;
 }
 
+export interface SearchYoutubeResult {
+  results: RelatedVideo[];
+  /** True when this result came straight from the 15min searchCache rather than a fresh Innertube call — see continuityService.ts's teacher-score-freshness fix (V3-C review finding #1): a cache hit must never re-earn a persisted "prior validation" bonus for results already counted the last time they were fetched. */
+  fromCache: boolean;
+}
+
 /**
- * Searches YouTube via Innertube. Never throws — a failure (or a query that
- * turns up nothing) resolves to `[]`, which GET /api/search treats as "omit
- * the youtube section" rather than an error.
+ * Searches YouTube via Innertube, with cache-freshness metadata. Never
+ * throws — a failure (or a query that turns up nothing) resolves to
+ * `{results: [], fromCache: false}`.
  */
-export async function searchYoutube(query: string, limit = 12): Promise<RelatedVideo[]> {
+export async function searchYoutubeWithMeta(query: string, limit = 12): Promise<SearchYoutubeResult> {
   const key = `${limit}:${query}`;
   const cached = freshEntry(searchCache, key);
-  if (cached) return cached;
+  if (cached) return { results: cached, fromCache: true };
   try {
     const client = await withTimeout(getClient(), CALL_TIMEOUT_MS);
     const results = await withTimeout(client.search(query), CALL_TIMEOUT_MS);
     const normalized = normalizeSearchResults(results.results, limit);
     if (normalized.length > 0) searchCache.set(key, { value: normalized, cachedAt: Date.now() });
-    return normalized;
+    return { results: normalized, fromCache: false };
   } catch {
-    return [];
+    return { results: [], fromCache: false };
   }
+}
+
+/**
+ * Searches YouTube via Innertube. Never throws — a failure (or a query that
+ * turns up nothing) resolves to `[]`, which GET /api/search treats as "omit
+ * the youtube section" rather than an error. Thin wrapper over
+ * searchYoutubeWithMeta for callers that don't care about cache freshness.
+ */
+export async function searchYoutube(query: string, limit = 12): Promise<RelatedVideo[]> {
+  const { results } = await searchYoutubeWithMeta(query, limit);
+  return results;
 }

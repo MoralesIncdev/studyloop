@@ -180,19 +180,48 @@ describe("deriveLiveCards", () => {
     expect(cards).toHaveLength(0);
   });
 
-  it("produces a pearl card per pearl for a 'model'-source analysis", () => {
+  // --- V3-B review finding #7: pearls do NOT auto-enter review -------------
+  // PEDAGOGY §5 "cards derive only from attested/learner-generated material":
+  // a pearl only becomes a review card via (a) an attested linked unit, or
+  // (b) an explicit "Add to review" (pearlReviewAdds, keyed by pearlReviewKey(t)).
+
+  it("excludes a pearl with no unitId link and not explicitly added — pearls do NOT auto-enter review", () => {
     const cards = deriveLiveCards(baseProject(), [], analysis(), false);
+    expect(cards).toHaveLength(0);
+  });
+
+  it("produces a pearl card once it's explicitly added to review", () => {
+    const cards = deriveLiveCards(baseProject(), [], analysis(), false, {}, new Set(["60"]));
     expect(cards).toHaveLength(1);
     expect(cards[0]).toMatchObject({ id: "pearl:11111111-1111-4111-8111-111111111111:60", kind: "pearl", label: "Frame early" });
   });
 
-  it("excludes a 'stub' analysis's pearls when stubAnalysesVisible is false (production)", () => {
-    const cards = deriveLiveCards(baseProject(), [], analysis({ source: "stub" }), false);
+  it("produces a pearl card once its linked unit is attested", () => {
+    const withLink = analysis({
+      pearls: [{ t: 60, label: "Frame early", insight: "Get the frame before they settle.", importance: 2, unitId: "u1" }],
+    });
+    const attestations: AttestationsFile = { u1: { status: "attested", at: "2026-01-01T00:00:00Z" } };
+    const cards = deriveLiveCards(baseProject(), [], withLink, false, attestations);
+    expect(cards).toHaveLength(1);
+    expect(cards[0].kind).toBe("pearl");
+  });
+
+  it("still excludes a pearl whose linked unit exists but is only dismissed, not attested", () => {
+    const withLink = analysis({
+      pearls: [{ t: 60, label: "Frame early", insight: "x", importance: 2, unitId: "u1" }],
+    });
+    const attestations: AttestationsFile = { u1: { status: "dismissed", at: "2026-01-01T00:00:00Z" } };
+    const cards = deriveLiveCards(baseProject(), [], withLink, false, attestations);
     expect(cards).toHaveLength(0);
   });
 
-  it("includes a 'stub' analysis's pearls when stubAnalysesVisible is true (dev)", () => {
-    const cards = deriveLiveCards(baseProject(), [], analysis({ source: "stub" }), true);
+  it("excludes a 'stub' analysis's pearls when stubAnalysesVisible is false (production), even if explicitly added", () => {
+    const cards = deriveLiveCards(baseProject(), [], analysis({ source: "stub" }), false, {}, new Set(["60"]));
+    expect(cards).toHaveLength(0);
+  });
+
+  it("includes an explicitly-added pearl from a 'stub' analysis when stubAnalysesVisible is true (dev)", () => {
+    const cards = deriveLiveCards(baseProject(), [], analysis({ source: "stub" }), true, {}, new Set(["60"]));
     expect(cards).toHaveLength(1);
   });
 
@@ -201,7 +230,9 @@ describe("deriveLiveCards", () => {
       baseProject(),
       [bubble({ id: "late", t: 500, text: "late note" })],
       analysis({ pearls: [{ t: 10, label: "early pearl", insight: "x", importance: 1 }] }),
-      false
+      false,
+      {},
+      new Set(["10"])
     );
     expect(cards.map((c) => c.t)).toEqual([10, 500]);
   });
@@ -310,6 +341,34 @@ describe("buildReviewQueue — orphan dropping", () => {
     const result = buildReviewQueue([card({ id: "bubble:p1:new" })], priorState, NOW, 1);
     // "gone" is dropped (orphan); cap of 1 is then fully available for "new".
     expect(Object.keys(result.state.cards)).toEqual(["bubble:p1:new"]);
+  });
+
+  // --- V3-B review finding #7 migration: pre-gating pearl cards -----------
+
+  it("keeps a no-longer-live pearl card's scheduling state when it has reps > 0 (never delete learner progress)", () => {
+    const reviewed = { ...introduceCardState(NOW - DAY_MS), reps: 3, interval: 30 };
+    const priorState: ReviewState = { version: 1, cards: { "pearl:p1:60": reviewed } };
+    // The pearl is no longer live at all this call (ungated pearl — no
+    // unitId attested, never explicitly added).
+    const result = buildReviewQueue([], priorState, NOW);
+    expect(result.state.cards["pearl:p1:60"]).toEqual(reviewed);
+    // But it never resurfaces (not live), so it's absent from dueCards/totals.
+    expect(result.dueCards).toEqual([]);
+    expect(result.counts.total).toBe(0);
+  });
+
+  it("drops a no-longer-live pearl card with reps === 0 (nothing to protect) like any other orphan", () => {
+    const neverReviewed = introduceCardState(NOW - DAY_MS); // reps: 0
+    const priorState: ReviewState = { version: 1, cards: { "pearl:p1:60": neverReviewed } };
+    const result = buildReviewQueue([], priorState, NOW);
+    expect(result.state.cards["pearl:p1:60"]).toBeUndefined();
+  });
+
+  it("still drops a bubble/unit card with reps > 0 as a normal orphan (the migration exception is pearl-only)", () => {
+    const reviewed = { ...introduceCardState(NOW - DAY_MS), reps: 3, interval: 30 };
+    const priorState: ReviewState = { version: 1, cards: { "bubble:p1:deleted": reviewed } };
+    const result = buildReviewQueue([], priorState, NOW);
+    expect(result.state.cards["bubble:p1:deleted"]).toBeUndefined();
   });
 });
 

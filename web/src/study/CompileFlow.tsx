@@ -52,6 +52,11 @@ export function CompileFlow(): JSX.Element | null {
   const [captionPassBubbles, setCaptionPassBubbles] = useState<string[] | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savingCaptions, setSavingCaptions] = useState(false);
+  // V3-B review finding #4: which bubble ids failed to save on the most
+  // recent attempt — non-empty means the modal must stay open with drafts
+  // intact and these rows visibly marked, offering Retry, rather than
+  // silently discarding them and proceeding to compile regardless.
+  const [failedCaptionIds, setFailedCaptionIds] = useState<Set<string>>(new Set());
 
   // codex P0-3: buffer the last non-null value so each dialog can keep
   // rendering its content for the full ModalShell exit animation instead of
@@ -79,6 +84,7 @@ export function CompileFlow(): JSX.Element | null {
     const uncaptioned = getUncaptionedBubbles(bubbles);
     if (uncaptioned.length > 0) {
       setDrafts(Object.fromEntries(uncaptioned.map((b) => [b.id, ""])));
+      setFailedCaptionIds(new Set());
       setCaptionPassBubbles(uncaptioned.map((b) => b.id));
       return;
     }
@@ -114,21 +120,43 @@ export function CompileFlow(): JSX.Element | null {
     setSynthesisOpen(false);
   };
 
+  // V3-B review finding #4: patchBubble now reports failure (boolean, like
+  // patchCurrentProject) instead of always resolving — Promise.all no longer
+  // silently swallows a failed save as if it had succeeded. Saves run
+  // sequentially (not Promise.all) and each patchBubble call already does
+  // its own PER-BUBBLE optimistic rollback on failure (never a whole-array
+  // snapshot that could clobber a different bubble's concurrent success —
+  // see state/store.ts). On any failure, the modal stays open: drafts are
+  // untouched, failed rows are marked, and the primary button becomes
+  // "Retry" — retrying only re-sends the rows that actually failed. Only an
+  // explicit Skip (or a fully successful save) proceeds to compile.
   const handleCaptionSave = async (): Promise<void> => {
     setSavingCaptions(true);
-    try {
-      const toSave = Object.entries(drafts).filter(([, text]) => text.trim().length > 0);
-      await Promise.all(toSave.map(([id, text]) => patchBubble(id, { text: text.trim() })));
-    } finally {
-      setSavingCaptions(false);
-      // runCompile fires from this dialog's onExited (below), once its exit
-      // animation has actually finished — same overlap/duplicate-invocation
-      // guard as the synthesis step.
-      setCaptionPassBubbles(null);
+    const retryOnly = failedCaptionIds.size > 0;
+    const candidateIds = retryOnly ? [...failedCaptionIds] : Object.keys(drafts);
+    const toSave = candidateIds
+      .map((id): [string, string] => [id, drafts[id] ?? ""])
+      .filter(([, text]) => text.trim().length > 0);
+    const failed = new Set<string>();
+    for (const [id, text] of toSave) {
+      // eslint-disable-next-line no-await-in-loop -- intentionally sequential: a failure must never race a concurrent success into clobbering it (see patchBubble's own per-bubble-rollback fix)
+      const ok = await patchBubble(id, { text: text.trim() });
+      if (!ok) failed.add(id);
     }
+    setSavingCaptions(false);
+    setFailedCaptionIds(failed);
+    if (failed.size > 0) return; // stay open — drafts intact, failed rows marked, Retry available
+    // Every caption saved (or had nothing to save) — runCompile fires from
+    // this dialog's onExited (below), once its exit animation has actually
+    // finished, same overlap/duplicate-invocation guard as the synthesis step.
+    setCaptionPassBubbles(null);
   };
 
   const handleCaptionSkip = (): void => {
+    // Explicit Skip is the one allowed way to proceed to compile despite any
+    // outstanding save failure (SPEC: "never proceed to compile on partial
+    // failure without explicit user Skip").
+    setFailedCaptionIds(new Set());
     setCaptionPassBubbles(null);
   };
 
@@ -250,12 +278,15 @@ export function CompileFlow(): JSX.Element | null {
           </button>
         </header>
         <p className={styles.cardSub}>
-          {captionRows.length} screenshot{captionRows.length === 1 ? "" : "s"} {captionRows.length === 1 ? "has" : "have"} no
-          caption yet. Add a quick note or skip — compile works either way.
+          {failedCaptionIds.size > 0
+            ? `${failedCaptionIds.size} caption${failedCaptionIds.size === 1 ? "" : "s"} failed to save — check the connection and retry, or skip.`
+            : `${captionRows.length} screenshot${captionRows.length === 1 ? "" : "s"} ${captionRows.length === 1 ? "has" : "have"} no caption yet. Add a quick note or skip — compile works either way.`}
         </p>
         <ul className={styles.captionList}>
-          {captionRows.map((b) => (
-            <li key={b.id} className={styles.captionRow}>
+          {captionRows.map((b) => {
+            const failed = failedCaptionIds.has(b.id);
+            return (
+            <li key={b.id} className={`${styles.captionRow} ${failed ? styles.captionRowFailed : ""}`}>
               <button
                 type="button"
                 className={styles.captionThumb}
@@ -269,17 +300,26 @@ export function CompileFlow(): JSX.Element | null {
                 )}
               </button>
               <div className={styles.captionField}>
-                <span className={styles.captionTime}>{formatTimestamp(b.t)}</span>
+                <span className={styles.captionTime}>
+                  {formatTimestamp(b.t)}
+                  {failed && (
+                    <span className={styles.captionFailedTag} role="status">
+                      Failed to save
+                    </span>
+                  )}
+                </span>
                 <input
                   type="text"
-                  className={styles.captionInput}
+                  className={`${styles.captionInput} ${failed ? styles.captionInputFailed : ""}`}
                   placeholder="Add a caption…"
                   value={drafts[b.id] ?? ""}
                   onChange={(e) => setDrafts((d) => ({ ...d, [b.id]: e.target.value }))}
+                  aria-invalid={failed}
                 />
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
         <div className={styles.cardActions}>
           <button type="button" className={styles.secondaryButton} onClick={handleCaptionSkip} disabled={savingCaptions}>
@@ -287,7 +327,7 @@ export function CompileFlow(): JSX.Element | null {
           </button>
           <button type="button" className={styles.primaryButton} onClick={() => void handleCaptionSave()} disabled={savingCaptions} aria-busy={savingCaptions}>
             {savingCaptions && <span className={styles.buttonSpinner} aria-hidden="true" />}
-            {savingCaptions ? "Saving…" : "Save & compile"}
+            {savingCaptions ? "Saving…" : failedCaptionIds.size > 0 ? "Retry" : "Save & compile"}
           </button>
         </div>
       </ModalShell>

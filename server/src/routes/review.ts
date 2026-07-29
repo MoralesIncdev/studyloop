@@ -11,6 +11,7 @@ import { AnalysisSchema, type Analysis } from "../lib/analysis.js";
 import { readAttestations } from "../lib/attestationStore.js";
 import { attachTransforms, fillTransformCache, isWeakBubbleText, resolveCardTransformClient, type CardTransformInput } from "../lib/cardTransform.js";
 import type { Project } from "../lib/models.js";
+import { readPearlReviewAdds } from "../lib/pearlReviewStore.js";
 import {
   buildReviewQueue,
   bumpStreak,
@@ -60,8 +61,10 @@ async function loadLiveCards(
     const analysis: Analysis | null = analysisParsed?.success ? analysisParsed.data : null;
     // eslint-disable-next-line no-await-in-loop
     const attestations = await readAttestations(dataDir, project.id);
+    // eslint-disable-next-line no-await-in-loop
+    const pearlReviewAdds = await readPearlReviewAdds(dataDir, project.id);
 
-    const liveCards = deriveLiveCards(project, bubbles, analysis, stubVisible, attestations);
+    const liveCards = deriveLiveCards(project, bubbles, analysis, stubVisible, attestations, pearlReviewAdds);
     cards.push(...liveCards);
 
     if (analysis?.version === 3) {

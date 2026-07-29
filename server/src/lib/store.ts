@@ -247,6 +247,21 @@ export function nextWatchedUpTo(existing: number, patchValue: number | undefined
   return patchValue !== undefined ? Math.max(existing, patchValue) : existing;
 }
 
+/**
+ * V3-C review fix #8: conceptRationales is a per-concept map, not a
+ * whole-project scalar — a PATCH from the rail (one row's "why this
+ * grouping" edit) merges into the existing map rather than replacing it
+ * outright, which is what a plain `{...existing, ...patch}` spread would do
+ * (silently erasing every other concept's already-saved rationale).
+ */
+export function mergeConceptRationales(
+  existing: Record<string, string> | undefined,
+  patchValue: Record<string, string> | undefined
+): Record<string, string> | undefined {
+  if (patchValue === undefined) return existing;
+  return { ...(existing ?? {}), ...patchValue };
+}
+
 export async function writeProject(dataDir: string, project: Project): Promise<void> {
   ProjectSchema.parse(project);
   await fs.mkdir(shotsDir(dataDir, project.id), { recursive: true });

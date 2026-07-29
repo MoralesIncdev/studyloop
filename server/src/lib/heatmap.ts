@@ -163,6 +163,51 @@ export function buildLayeredHeatmap(
   };
 }
 
+// --- V3-C review fix #6 "YouTube heatmaps positioned against the last mark,
+// not video duration" ---------------------------------------------------
+//
+// routes/heatmap.ts previously had no YouTube duration source at all and
+// fell back to `maxMarkTime * 1.05` — for a 60-minute video whose last mark
+// sits at 10 minutes, that plots the last mark near 95% of the seek bar
+// instead of ~17%, and click-to-inspect bucket mapping is correspondingly
+// wrong (PEDAGOGY §7). This orders duration sources from most to least
+// authoritative, kept pure/dependency-free (no fs) so it's directly
+// unit-testable — routes/heatmap.ts is the only place that gathers the raw
+// inputs (project.durationSeconds, an ffprobe result for local sources, the
+// project's transcript's last segment end, watchedUpTo, and the raw mark
+// times) and calls this.
+
+export interface HeatmapDurationSources {
+  /** project.durationSeconds — persisted once the player learns it (loadedmetadata / YT API), via a small PATCH from the web app. Most authoritative: it's the real video length, not a derived estimate. */
+  storedDurationSeconds?: number | null;
+  /** ffprobe result for local sources only (routes/heatmap.ts's existing resolveDuration) — also a real measurement, just not yet persisted onto the project. */
+  probedDurationSeconds?: number | null;
+  /** The project's transcript's last segment `end`, if a transcript exists — usually a close estimate of full video length since captions/transcripts typically run to the end. */
+  transcriptEndSeconds?: number | null;
+  /** project.watchedUpTo — the furthest playback position ever reached; a lower bound on duration. */
+  watchedUpToSeconds?: number;
+  /** Every own/overlay bubble/pearl timestamp — the last-resort estimate this fix demotes to (previously the ONLY estimate, times 1.05). */
+  markTimes?: readonly number[];
+}
+
+/**
+ * Resolves a bucketing-range duration in preference order: a stored/probed
+ * real measurement first, then the best available estimate
+ * (max(transcript end, watchedUpTo, latest mark)) — never the old
+ * `maxMarkTime * 1.05` heuristic alone.
+ */
+export function resolveHeatmapDuration(sources: HeatmapDurationSources): number {
+  if (sources.storedDurationSeconds != null && sources.storedDurationSeconds > 0) {
+    return sources.storedDurationSeconds;
+  }
+  if (sources.probedDurationSeconds != null && sources.probedDurationSeconds > 0) {
+    return sources.probedDurationSeconds;
+  }
+  const markMax = (sources.markTimes ?? []).reduce((max, t) => Math.max(max, t), 0);
+  const candidates = [sources.transcriptEndSeconds ?? 0, sources.watchedUpToSeconds ?? 0, markMax];
+  return Math.max(0, ...candidates);
+}
+
 function clampImportance(n: number): 1 | 2 | 3 {
   if (n >= 3) return 3;
   if (n <= 1) return 1;

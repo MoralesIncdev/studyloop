@@ -267,12 +267,29 @@ describe("updateTeacherScores", () => {
     expect(next.chan1).toBe(2);
   });
 
-  it("counts a channel at most once per query even with duplicate results", () => {
+  // V3-C review finding #1: a channel appearing in only ONE query must never
+  // earn a persisted bonus at all — this is the same ">=2 distinct queries"
+  // threshold computeTeacherScore already enforces for live scoring; before
+  // this fix, updateTeacherScores persisted a bonus for a single-query
+  // appearance, bypassing that threshold entirely.
+  it("does not persist any bonus for a channel appearing in only 1 distinct query", () => {
     const next = updateTeacherScores(
       {},
       [{ query: "q1", results: [candidate({ videoId: "a", channelId: "chan1" }), candidate({ videoId: "b", channelId: "chan1" })] }]
     );
-    expect(next.chan1).toBe(1);
+    expect(next.chan1).toBeUndefined();
+  });
+
+  it("counts a channel at most once per query even with duplicate results, once the >=2-query threshold is met", () => {
+    const next = updateTeacherScores(
+      {},
+      [
+        { query: "q1", results: [candidate({ videoId: "a", channelId: "chan1" }), candidate({ videoId: "b", channelId: "chan1" })] },
+        { query: "q2", results: [candidate({ videoId: "c", channelId: "chan1" })] },
+      ]
+    );
+    // 2 distinct queries -> +2, not +3 (q1's duplicate result only counts once).
+    expect(next.chan1).toBe(2);
   });
 
   it("caps a channel's score at 10", () => {
@@ -287,14 +304,34 @@ describe("updateTeacherScores", () => {
 
   it("does not mutate the previous scores object (returns a new one)", () => {
     const prev = { chan1: 1 };
-    const next = updateTeacherScores(prev, [{ query: "q1", results: [candidate({ channelId: "chan1" })] }]);
+    const next = updateTeacherScores(prev, [
+      { query: "q1", results: [candidate({ channelId: "chan1" })] },
+      { query: "q2", results: [candidate({ channelId: "chan1" })] },
+    ]);
     expect(prev.chan1).toBe(1);
     expect(next).not.toBe(prev);
   });
 
   it("leaves untouched channels alone", () => {
     const prev = { chanUntouched: 5 };
-    const next = updateTeacherScores(prev, [{ query: "q1", results: [candidate({ channelId: "chanOther" })] }]);
+    const next = updateTeacherScores(prev, [
+      { query: "q1", results: [candidate({ channelId: "chanOther" })] },
+      { query: "q2", results: [candidate({ channelId: "chanOther" })] },
+    ]);
     expect(next.chanUntouched).toBe(5);
+  });
+
+  it("prunes to the top MAX_TEACHER_SCORES (200) entries by score when the map would otherwise grow past the cap", () => {
+    const prev: Record<string, number> = {};
+    for (let i = 0; i < 200; i++) prev[`chan${i}`] = 1;
+    // A brand-new channel meeting the >=2-query threshold scores 2, higher
+    // than every existing entry — it must survive the prune, and the map
+    // must never silently grow past the 200 cap.
+    const next = updateTeacherScores(prev, [
+      { query: "q1", results: [candidate({ channelId: "chanNew" })] },
+      { query: "q2", results: [candidate({ channelId: "chanNew" })] },
+    ]);
+    expect(Object.keys(next)).toHaveLength(200);
+    expect(next.chanNew).toBe(2);
   });
 });

@@ -92,6 +92,55 @@
   padding-left: 8px;
 }
 
+/* V3-B review finding #7 "Add to review" (PEDAGOGY §5): pearls never
+   auto-enter review — this is the one explicit, learner-driven way in. */
+.pearlAddToReviewButton {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  font-size: var(--type-11);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard),
+    opacity var(--duration-fast) var(--ease-standard);
+}
+
+.pearlAddToReviewButton:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+  background: color-mix(in srgb, var(--accent-blue) 10%, transparent);
+}
+
+.pearlAddToReviewButton:active {
+  transform: scale(.96);
+}
+
+.pearlAddToReviewButton:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.pearlAddToReviewButton:disabled {
+  opacity: .5;
+  cursor: default;
+  pointer-events: none;
+}
+
+.pearlInReviewTag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--accent-green);
+  font-size: var(--type-11);
+}
+
 .conceptRow {
   padding: 8px;
   border-radius: var(--radius-sm);
@@ -129,6 +178,67 @@
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+/* V3-C review finding #8: own-concept "why this grouping" rationale —
+   collapsed by default, expands to a small persisted text input. */
+.rationaleField {
+  margin-top: 4px;
+}
+
+.rationaleToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: var(--type-11);
+  padding: 2px 0;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.rationaleToggle:hover {
+  color: var(--text-secondary);
+}
+
+.rationaleToggle:active {
+  color: var(--text-primary);
+}
+
+.rationaleToggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-xs);
+}
+
+.rationaleInput {
+  margin-top: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: var(--type-12);
+  font-family: inherit;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.rationaleInput:hover {
+  border-color: var(--border-strong);
+}
+
+.rationaleInput:focus-visible {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: var(--focus-ring);
+}
+
+.rationaleInput::placeholder {
+  color: var(--text-tertiary);
 }
 
 .themeRow {

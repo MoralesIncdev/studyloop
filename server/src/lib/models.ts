@@ -87,6 +87,24 @@ export const ProjectSchema = z.object({
    * expertise-reversal rule).
    */
   noviceMode: z.boolean().optional(),
+  /**
+   * V3-C review fix #6 "YouTube heatmaps positioned against the last mark,
+   * not video duration": the real video length, persisted once the player
+   * learns it (loadedmetadata for local `<video>`, the IFrame API's
+   * getDuration() for YouTube) via a small PATCH from the web app. Preferred
+   * over every other duration source (ffprobe, transcript end, watchedUpTo,
+   * mark times) by lib/heatmap.ts's resolveHeatmapDuration.
+   */
+  durationSeconds: z.number().nonnegative().optional(),
+  /**
+   * V3-C review fix #8 "C6 rationales are neither rail-editable nor retained
+   * for editing": `{[conceptId]: "why this grouping"}` — author-editable in
+   * the rail (AnalysisSections.tsx's AiBreakdownSection) on each own
+   * concept, PATCHed one concept at a time and merged (see
+   * routes/projects.ts's mergeConceptRationales) rather than replacing the
+   * whole map. ShareFlow.tsx prefills its export-step drafts from this.
+   */
+  conceptRationales: z.record(z.string()).optional(),
 });
 export type Project = z.infer<typeof ProjectSchema>;
 
@@ -128,6 +146,10 @@ export const PatchProjectBodySchema = z.object({
   domain: DomainSchema.optional(),
   /** V3-B B2: the per-project novice-mode toggle. */
   noviceMode: z.boolean().optional(),
+  /** V3-C review fix #6: the player-learned real video duration. */
+  durationSeconds: z.number().nonnegative().optional(),
+  /** V3-C review fix #8: one (or more) concept rationale(s) to merge into the existing map — see ProjectSchema.conceptRationales. */
+  conceptRationales: z.record(z.string()).optional(),
 });
 export type PatchProjectBody = z.infer<typeof PatchProjectBodySchema>;
 

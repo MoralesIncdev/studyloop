@@ -1,6 +1,16 @@
 // V3-B B2 "Attestation + reveal-gating" — pure gating logic.
 import { describe, expect, it } from "vitest";
-import { attestedCount, emptyAttestations, feedableUnitIds, isUnitFeedable } from "../src/lib/attestation.js";
+import {
+  attestedCount,
+  AttestationPatchBodySchema,
+  canAddAttestationEntry,
+  emptyAttestations,
+  feedableUnitIds,
+  isUnitFeedable,
+  MAX_ATTESTATIONS_PER_PROJECT,
+  MAX_USER_BODY_CHARS,
+  MAX_USER_TAKE_CHARS,
+} from "../src/lib/attestation.js";
 
 describe("isUnitFeedable", () => {
   it("is false for a unit with no attestation entry at all", () => {
@@ -51,5 +61,44 @@ describe("attestedCount", () => {
       u3: { status: "dismissed" as const, at: "t" },
     };
     expect(attestedCount(["u1", "u2", "u3", "u4"], attestations)).toBe(1);
+  });
+});
+
+// --- V3-B review finding #9: attestation mutation input bounds -------------
+
+describe("AttestationPatchBodySchema", () => {
+  it("accepts a userTake at exactly the max length", () => {
+    expect(AttestationPatchBodySchema.safeParse({ userTake: "x".repeat(MAX_USER_TAKE_CHARS) }).success).toBe(true);
+  });
+
+  it("rejects a userTake one character over the max length", () => {
+    expect(AttestationPatchBodySchema.safeParse({ userTake: "x".repeat(MAX_USER_TAKE_CHARS + 1) }).success).toBe(false);
+  });
+
+  it("accepts a userBody at exactly the max length", () => {
+    expect(AttestationPatchBodySchema.safeParse({ userBody: "x".repeat(MAX_USER_BODY_CHARS) }).success).toBe(true);
+  });
+
+  it("rejects a userBody one character over the max length", () => {
+    expect(AttestationPatchBodySchema.safeParse({ userBody: "x".repeat(MAX_USER_BODY_CHARS + 1) }).success).toBe(false);
+  });
+
+  it("still accepts a bare status-only body (no userTake/userBody)", () => {
+    expect(AttestationPatchBodySchema.safeParse({ status: "attested" }).success).toBe(true);
+  });
+});
+
+describe("canAddAttestationEntry", () => {
+  it("always allows updating an existing entry, even at/over the cap", () => {
+    expect(canAddAttestationEntry(MAX_ATTESTATIONS_PER_PROJECT, false)).toBe(true);
+    expect(canAddAttestationEntry(MAX_ATTESTATIONS_PER_PROJECT + 5, false)).toBe(true);
+  });
+
+  it("allows a new entry while under the cap", () => {
+    expect(canAddAttestationEntry(MAX_ATTESTATIONS_PER_PROJECT - 1, true)).toBe(true);
+  });
+
+  it("rejects a new entry once the map is already at the cap", () => {
+    expect(canAddAttestationEntry(MAX_ATTESTATIONS_PER_PROJECT, true)).toBe(false);
   });
 });

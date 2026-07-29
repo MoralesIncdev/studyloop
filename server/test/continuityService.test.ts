@@ -74,17 +74,24 @@ describe("continuityForYoutubeProject", () => {
     expect(result.map((c) => c.videoId)).toEqual(["other"]);
   });
 
-  it("runs concept-search queries from analysis.json's concepts and persists a teacherScores.json update", async () => {
+  it("runs concept-search queries from analysis.json's concepts and persists a teacherScores.json update once a channel meets the >=2-distinct-query threshold", async () => {
     const project = youtubeProject({ related: [] });
     await fs.mkdir(projectDir(dataDir, project.id), { recursive: true });
     await fs.writeFile(
       analysisJsonPath(dataDir, project.id),
-      JSON.stringify({ version: 2, concepts: [{ id: "c1", title: "closed guard" }], themes: [] })
+      JSON.stringify({
+        version: 2,
+        concepts: [{ id: "c1", title: "closed guard" }, { id: "c2", title: "kimura trap" }],
+        themes: [],
+      })
     );
 
     const search = async (query: string) => {
       if (query === "closed guard") {
         return { results: [searchVideoItem("teacherVid", "Closed Guard Basics", "Coach Teacher")] };
+      }
+      if (query === "kimura trap") {
+        return { results: [searchVideoItem("teacherVid2", "Kimura Trap Deep Dive", "Coach Teacher")] };
       }
       return { results: [] };
     };
@@ -96,6 +103,63 @@ describe("continuityForYoutubeProject", () => {
 
     const teacherScores = await readTeacherScores(dataDir);
     expect(teacherScores["Coach Teacher"]).toBeGreaterThan(0);
+  });
+
+  it("does NOT persist a teacherScores.json bonus for a channel appearing in only 1 distinct query", async () => {
+    const project = youtubeProject({ related: [] });
+    await fs.mkdir(projectDir(dataDir, project.id), { recursive: true });
+    await fs.writeFile(
+      analysisJsonPath(dataDir, project.id),
+      JSON.stringify({ version: 2, concepts: [{ id: "c1", title: "closed guard" }], themes: [] })
+    );
+    const search = async (query: string) => {
+      if (query === "closed guard") {
+        return { results: [searchVideoItem("teacherVid", "Closed Guard Basics", "Coach Teacher")] };
+      }
+      return { results: [] };
+    };
+    __setInnertubeClientForTests({ getInfo: async () => { throw new Error("unused"); }, search } as InnertubeClient);
+
+    await continuityForYoutubeProject(dataDir, project, WEIGHTS);
+    const teacherScores = await readTeacherScores(dataDir);
+    expect(teacherScores["Coach Teacher"]).toBeUndefined();
+  });
+
+  it("does not re-persist a teacherScores.json increment for a second call whose concept-search results are served from innertube.ts's 15min cache", async () => {
+    const project = youtubeProject({ related: [] });
+    await fs.mkdir(projectDir(dataDir, project.id), { recursive: true });
+    await fs.writeFile(
+      analysisJsonPath(dataDir, project.id),
+      JSON.stringify({
+        version: 2,
+        concepts: [{ id: "c1", title: "closed guard" }, { id: "c2", title: "kimura trap" }],
+        themes: [],
+      })
+    );
+    let calls = 0;
+    const search = async (query: string) => {
+      calls++;
+      if (query === "closed guard") {
+        return { results: [searchVideoItem("teacherVid", "Closed Guard Basics", "Coach Teacher")] };
+      }
+      if (query === "kimura trap") {
+        return { results: [searchVideoItem("teacherVid2", "Kimura Trap Deep Dive", "Coach Teacher")] };
+      }
+      return { results: [] };
+    };
+    __setInnertubeClientForTests({ getInfo: async () => { throw new Error("unused"); }, search } as InnertubeClient);
+
+    await continuityForYoutubeProject(dataDir, project, WEIGHTS);
+    const first = await readTeacherScores(dataDir);
+    expect(first["Coach Teacher"]).toBe(2);
+    expect(calls).toBe(2); // both queries hit the (empty) Innertube cache the first time
+
+    // Second call within the 15min window — Innertube itself never re-fires
+    // the network search (searchCache hit), so these results are stale
+    // re-reads, not a fresh signal, and must not increment the score again.
+    await continuityForYoutubeProject(dataDir, project, WEIGHTS);
+    const second = await readTeacherScores(dataDir);
+    expect(second["Coach Teacher"]).toBe(2);
   });
 
   it("never throws when Innertube search rejects — degrades to whatever related contributed", async () => {

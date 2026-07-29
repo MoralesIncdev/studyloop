@@ -46,7 +46,11 @@ export function ShareFlow(): JSX.Element | null {
       void runExportAnalysis();
       return;
     }
-    setRationaleDrafts(Object.fromEntries(ownConcepts.map((c) => [c.id, ""])));
+    // V3-C review finding #8: prefill from the persisted rail rationale
+    // (state/store.ts's conceptRationales — edited via AnalysisSections.tsx's
+    // "why this grouping" affordance) instead of always starting blank, so
+    // reopening Share to correct a rationale shows what was actually saved.
+    setRationaleDrafts(Object.fromEntries(ownConcepts.map((c) => [c.id, currentProject.conceptRationales?.[c.id] ?? ""])));
     setRationaleStepOpen(true);
   };
 

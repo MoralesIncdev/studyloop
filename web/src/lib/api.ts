@@ -15,6 +15,7 @@ import type {
   LibraryResponse,
   OverlayMeta,
   PatchProjectBody,
+  PearlReviewAddsResponse,
   Project,
   RevealResponse,
   ReviewGrade,
@@ -183,6 +184,14 @@ export const api = {
   clearAttestation: (id: string, unitId: string) =>
     request<AttestationsFile>(`/api/projects/${encodeURIComponent(id)}/attestations/${encodeURIComponent(unitId)}`, {
       method: "DELETE",
+    }),
+
+  // --- V3-B review fix #7: pearl "Add to review" -----------------------------------
+  getPearlReviewAdds: (id: string) =>
+    request<PearlReviewAddsResponse>(`/api/projects/${encodeURIComponent(id)}/pearls/review-adds`),
+  addPearlToReview: (id: string, t: number) =>
+    request<PearlReviewAddsResponse>(`/api/projects/${encodeURIComponent(id)}/pearls/${encodeURIComponent(t)}/review-add`, {
+      method: "POST",
     }),
 
   videoStreamUrl: (path: string) => `/api/video/stream?path=${encodeURIComponent(path)}`,

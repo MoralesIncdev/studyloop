@@ -381,17 +381,36 @@ export function scoreCandidates(
   return scored;
 }
 
+/** V3-C review fix #1: max distinct channels persisted in teacherScores.json — pruned to the top-scoring entries on every write so an ever-growing set of one-off channels can't grow the file unboundedly. */
+export const MAX_TEACHER_SCORES = 200;
+
+/** Keeps only the top `MAX_TEACHER_SCORES` entries by score (ties broken by channel key, for determinism) — a no-op (same reference) when already under the cap. */
+function pruneTeacherScores(scores: Record<string, number>): Record<string, number> {
+  const entries = Object.entries(scores);
+  if (entries.length <= MAX_TEACHER_SCORES) return scores;
+  entries.sort((a, b) => (b[1] !== a[1] ? b[1] - a[1] : a[0].localeCompare(b[0])));
+  return Object.fromEntries(entries.slice(0, MAX_TEACHER_SCORES));
+}
+
 /**
  * Update teacher-validation scores based on channel presence across concept
  * searches.
  *
- * For each channel, increments its score by the number of distinct queries in
- * which the channel appears in the results. Within a single call, a channel is
- * counted at most once per query, even if multiple results share the channel.
- * The returned score is capped at 10.
+ * PEDAGOGY §6 / this scorer's own `computeTeacherScore` threshold: a channel
+ * only earns a "prior validation" bonus once it recurs across >=2 DISTINCT
+ * concept-query results — a channel appearing in just one query contributes
+ * nothing to the persisted map (V3-C review finding #1: previously any
+ * single-query appearance was persisted immediately, bypassing the >=2
+ * threshold the live scorer itself enforces). Channels meeting the threshold
+ * are incremented by their distinct-query count this call; the result is
+ * capped per-channel at 10 and pruned to the top `MAX_TEACHER_SCORES` overall.
  *
  * @param prev - Existing teacher scores, expected to be in [0, 10].
- * @param conceptSearches - Concept searches with result lists.
+ * @param conceptSearches - Concept searches with result lists. Callers are
+ *   expected to have already filtered this to FRESHLY-fetched queries only
+ *   (not 15min-cache hits) — see continuityService.ts's persistTeacherScoreUpdate —
+ *   so repeatedly refreshing the same cached search results can't re-earn
+ *   the bonus on every GET.
  * @returns Updated teacher scores.
  */
 export function updateTeacherScores(
@@ -400,17 +419,23 @@ export function updateTeacherScores(
 ): Record<string, number> {
   const next: Record<string, number> = { ...prev };
 
+  const queryCountByChannel = new Map<string, number>();
   conceptSearches.forEach((search) => {
     const counted = new Set<string>();
     search.results.forEach((candidate) => {
       const channel = getChannel(candidate);
       if (counted.has(channel)) return;
       counted.add(channel);
-      next[channel] = Math.min(10, (next[channel] ?? 0) + 1);
+      queryCountByChannel.set(channel, (queryCountByChannel.get(channel) ?? 0) + 1);
     });
   });
 
-  return next;
+  for (const [channel, count] of queryCountByChannel) {
+    if (count < 2) continue;
+    next[channel] = Math.min(10, (next[channel] ?? 0) + count);
+  }
+
+  return pruneTeacherScores(next);
 }
 
 // --- V3-C integration addition (not part of the kimi-authored module above) --

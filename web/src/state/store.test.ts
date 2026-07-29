@@ -584,3 +584,361 @@ describe("openOrCreateYoutubeProject (V2-B — search/up-next click target)", ()
     vi.unstubAllGlobals();
   });
 });
+
+// --- V3-B review finding #3: attestation races ------------------------------
+
+describe("attestation mutation ordering + races (V3-B review finding #3)", () => {
+  beforeEach(() => {
+    const project = makeProject("p1", "Project 1");
+    useStudyLoopStore.setState({
+      currentProject: project,
+      attestations: {},
+      attestationMutationSeq: 0,
+      toasts: [],
+    });
+  });
+
+  it("serializes two concurrent attestation mutations against the same unit — the second PATCH is not issued until the first resolves", async () => {
+    const callOrder: string[] = [];
+    let resolveFirst!: (v: Response) => void;
+    const pendingFirst = new Promise<Response>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/attestations/u1") && init?.method === "PATCH") {
+        const body = JSON.parse(String(init.body)) as { status?: string; userTake?: string };
+        if (body.status === "attested") {
+          callOrder.push("first-issued");
+          return pendingFirst;
+        }
+        callOrder.push("second-issued");
+        return Promise.resolve(jsonResponse({ u1: { status: "attested", userTake: "second take", at: "t2" } }));
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const first = useStudyLoopStore.getState().attestUnit("u1");
+    const second = useStudyLoopStore.getState().saveUnitTake("u1", "second take");
+
+    // Give the (unserialized) second call every chance to have fired already —
+    // several microtask/macrotask turns — before the first call's fetch resolves.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(callOrder).toEqual(["first-issued"]);
+
+    resolveFirst(jsonResponse({ u1: { status: "attested", at: "t1" } }));
+    await Promise.all([first, second]);
+
+    expect(callOrder).toEqual(["first-issued", "second-issued"]);
+    vi.unstubAllGlobals();
+  });
+
+  it("a PATCH response merges only the patched unit's entry — never clobbers a different unit already in local state", async () => {
+    useStudyLoopStore.setState({ attestations: { u2: { status: "dismissed", at: "t0" } } });
+    // The server's response for u1's PATCH — note it does NOT echo u2 at all
+    // (this codebase's real server always would, but the fix must not
+    // depend on that: merging only `res[unitId]` is what makes it safe
+    // either way).
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ u1: { status: "attested", at: "t1" } })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().attestUnit("u1");
+
+    expect(useStudyLoopStore.getState().attestations.u1).toEqual({ status: "attested", at: "t1" });
+    expect(useStudyLoopStore.getState().attestations.u2).toEqual({ status: "dismissed", at: "t0" }); // untouched
+    vi.unstubAllGlobals();
+  });
+
+  it("discards a stale loadAttestations GET that resolves after a local mutation landed while it was in flight", async () => {
+    let resolveGet!: (v: Response) => void;
+    const pendingGet = new Promise<Response>((resolve) => {
+      resolveGet = resolve;
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "PATCH") return Promise.resolve(jsonResponse({ u1: { status: "attested", at: "t1" } }));
+      return pendingGet;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const getPromise = useStudyLoopStore.getState().loadAttestations();
+    // The learner attests while the initial GET is still in flight.
+    await useStudyLoopStore.getState().attestUnit("u1");
+    expect(useStudyLoopStore.getState().attestations.u1?.status).toBe("attested");
+
+    // The stale GET finally resolves with what the server had BEFORE the PATCH.
+    resolveGet(jsonResponse({}));
+    await getPromise;
+
+    // Must not have regressed — the newer local mutation wins.
+    expect(useStudyLoopStore.getState().attestations.u1?.status).toBe("attested");
+    vi.unstubAllGlobals();
+  });
+});
+
+// --- V3-B review finding #4: caption-pass integrity (patchBubble half) -----
+
+describe("patchBubble (V3-B review finding #4)", () => {
+  beforeEach(() => {
+    const project = makeProject("p1", "Project 1");
+    useStudyLoopStore.setState({
+      currentProject: project,
+      bubbles: [
+        { id: "b1", t: 10, text: "one", shot: null, createdAt: "t" },
+        { id: "b2", t: 20, text: "two", shot: null, createdAt: "t" },
+      ],
+      toasts: [],
+    });
+  });
+
+  it("returns true on success and applies the server's response", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(jsonResponse({ id: "b1", t: 10, text: "updated", shot: null, createdAt: "t" }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ok = await useStudyLoopStore.getState().patchBubble("b1", { text: "updated" });
+
+    expect(ok).toBe(true);
+    expect(useStudyLoopStore.getState().bubbles.find((b) => b.id === "b1")?.text).toBe("updated");
+    vi.unstubAllGlobals();
+  });
+
+  it("returns false (never throws) on failure, rolling back only the failed bubble — a concurrently-succeeded different bubble survives", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/bubbles/b1")) return Promise.resolve(new Response("fail", { status: 500, statusText: "Internal Server Error" }));
+      if (url.includes("/bubbles/b2")) {
+        return Promise.resolve(jsonResponse({ id: "b2", t: 20, text: "b2 succeeded", shot: null, createdAt: "t" }));
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const [okB1, okB2] = await Promise.all([
+      useStudyLoopStore.getState().patchBubble("b1", { text: "b1 attempt" }),
+      useStudyLoopStore.getState().patchBubble("b2", { text: "b2 attempt" }),
+    ]);
+
+    expect(okB1).toBe(false);
+    expect(okB2).toBe(true);
+    // b1 rolled back to its pre-patch text; the whole-array-snapshot bug this
+    // fix replaces would have let b1's rollback erase b2's success too.
+    expect(useStudyLoopStore.getState().bubbles.find((b) => b.id === "b1")?.text).toBe("one");
+    expect(useStudyLoopStore.getState().bubbles.find((b) => b.id === "b2")?.text).toBe("b2 succeeded");
+    expect(useStudyLoopStore.getState().toasts.some((t) => t.kind === "error")).toBe(true);
+    vi.unstubAllGlobals();
+  });
+});
+
+// --- V3-B review finding #5: stale-session guards on compile/export --------
+
+function stubProjectSwitchFetch(target: Project) {
+  return (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes(`/api/projects/${target.id}`)) return Promise.resolve(jsonResponse(target));
+    if (url.endsWith("/bubbles")) return Promise.resolve(jsonResponse({ bubbles: [] }));
+    if (url.endsWith("/notes")) {
+      return Promise.resolve(new Response("", { status: 200, headers: { "content-type": "text/markdown" } }));
+    }
+    if (url.includes("/pearls/review-adds")) return Promise.resolve(jsonResponse({ added: [] }));
+    if (url.includes("/continuity")) return Promise.resolve(jsonResponse({ candidates: [] }));
+    if (url.includes("/attestations")) return Promise.resolve(jsonResponse({}));
+    if (url.includes("/overlays")) return Promise.resolve(jsonResponse({ overlays: [] }));
+    return Promise.resolve(jsonResponse({}));
+  };
+}
+
+describe("runCompile / runExportAnalysis stale-session guard (V3-B review finding #5)", () => {
+  it("runCompile: a result that resolves after navigating to a different project is discarded, never shown in the new session", async () => {
+    const projectA = makeProject("stale-a", "Project A");
+    const projectB = makeProject("stale-b", "Project B");
+    useStudyLoopStore.setState({
+      currentProject: projectA,
+      sessionRequestId: 1,
+      compiling: false,
+      compileResult: null,
+      notes: "",
+      currentTime: 0,
+      toasts: [],
+    });
+
+    let resolveCompile!: (v: Response) => void;
+    const pendingCompile = new Promise<Response>((resolve) => {
+      resolveCompile = resolve;
+    });
+    const switchFetch = stubProjectSwitchFetch(projectB);
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/notes") && init?.method === "PUT") {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+      }
+      if (url.includes("/compile")) return pendingCompile;
+      return switchFetch(input);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const compilePromise = useStudyLoopStore.getState().runCompile();
+    // Navigate away before POST /compile resolves.
+    await useStudyLoopStore.getState().loadProjectSession(projectB.id);
+    expect(useStudyLoopStore.getState().currentProject?.id).toBe(projectB.id);
+
+    resolveCompile(jsonResponse({ path: "exports/stale-a.md", markdown: "# A" }));
+    await compilePromise;
+
+    expect(useStudyLoopStore.getState().compileResult).toBeNull();
+    // `compiling` must still reset (a global flag) — otherwise B's own Compile button stays stuck disabled.
+    expect(useStudyLoopStore.getState().compiling).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it("runExportAnalysis: a result that resolves after navigating to a different project is discarded", async () => {
+    const projectA = makeProject("stale-share-a", "Project A");
+    const projectB = makeProject("stale-share-b", "Project B");
+    useStudyLoopStore.setState({
+      currentProject: projectA,
+      sessionRequestId: 1,
+      exportingAnalysis: false,
+      shareResult: null,
+      toasts: [],
+    });
+
+    let resolveExport!: (v: Response) => void;
+    const pendingExport = new Promise<Response>((resolve) => {
+      resolveExport = resolve;
+    });
+    const switchFetch = stubProjectSwitchFetch(projectB);
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/export-analysis")) return pendingExport;
+      return switchFetch(input);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const exportPromise = useStudyLoopStore.getState().runExportAnalysis();
+    await useStudyLoopStore.getState().loadProjectSession(projectB.id);
+
+    resolveExport(jsonResponse({ path: "exports/stale-a.studyloop.json", bundle: { version: 1 } }));
+    await exportPromise;
+
+    expect(useStudyLoopStore.getState().shareResult).toBeNull();
+    expect(useStudyLoopStore.getState().exportingAnalysis).toBe(false);
+    vi.unstubAllGlobals();
+  });
+});
+
+// --- V3-C review finding #6: heatmap duration preference (client-learned half) --
+
+describe("reportLearnedDuration (V3-C review finding #6)", () => {
+  beforeEach(() => {
+    const project = makeProject("p1", "Project 1");
+    useStudyLoopStore.setState({ currentProject: project, projects: [project], toasts: [] });
+  });
+
+  it("PATCHes durationSeconds (rounded) when the project has none stored yet", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.method).toBe("PATCH");
+      expect(JSON.parse(String(init?.body))).toEqual({ durationSeconds: 600 });
+      return Promise.resolve(jsonResponse({ ...makeProject("p1", "Project 1"), durationSeconds: 600 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    useStudyLoopStore.getState().reportLearnedDuration(600.4);
+    await new Promise((resolve) => setTimeout(resolve, 0)); // flush the fire-and-forget PATCH
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("no-ops (no PATCH fired) when the reported duration already matches what's stored", async () => {
+    useStudyLoopStore.setState({ currentProject: { ...makeProject("p1", "Project 1"), durationSeconds: 600 } });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    useStudyLoopStore.getState().reportLearnedDuration(600);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("no-ops for a nonpositive or non-finite duration", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    useStudyLoopStore.getState().reportLearnedDuration(0);
+    useStudyLoopStore.getState().reportLearnedDuration(-5);
+    useStudyLoopStore.getState().reportLearnedDuration(NaN);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+});
+
+// --- V3-B review finding #7: pearl "Add to review" (client half) -----------
+
+describe("addPearlToReview (V3-B review finding #7)", () => {
+  beforeEach(() => {
+    const project = makeProject("p1", "Project 1");
+    useStudyLoopStore.setState({ currentProject: project, pearlReviewAdds: new Set(), toasts: [] });
+  });
+
+  it("optimistically adds the key, then applies the confirmed server set", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ added: ["60"] })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().addPearlToReview(60);
+
+    expect(useStudyLoopStore.getState().pearlReviewAdds.has("60")).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it("rolls back the optimistic add on failure and toasts an error", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response("fail", { status: 500, statusText: "Internal Server Error" })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().addPearlToReview(60);
+
+    expect(useStudyLoopStore.getState().pearlReviewAdds.has("60")).toBe(false);
+    expect(useStudyLoopStore.getState().toasts.some((t) => t.kind === "error")).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it("is a no-op (no fetch fired) when the pearl is already in the set", async () => {
+    useStudyLoopStore.setState({ pearlReviewAdds: new Set(["60"]) });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().addPearlToReview(60);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+});
+
+// --- V3-C review finding #8: rationale persistence round trip --------------
+
+describe("patchCurrentProject — conceptRationales round trip (V3-C review finding #8)", () => {
+  beforeEach(() => {
+    const project = makeProject("p1", "Project 1");
+    useStudyLoopStore.setState({ currentProject: project, projects: [project], toasts: [] });
+  });
+
+  it("PATCHes { conceptRationales } and applies the server's merged response to currentProject", async () => {
+    const updated = { ...makeProject("p1", "Project 1"), conceptRationales: { c1: "groups by joint locks" } };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.method).toBe("PATCH");
+      expect(JSON.parse(String(init?.body))).toEqual({ conceptRationales: { c1: "groups by joint locks" } });
+      return Promise.resolve(jsonResponse(updated));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ok = await useStudyLoopStore.getState().patchCurrentProject({ conceptRationales: { c1: "groups by joint locks" } });
+
+    expect(ok).toBe(true);
+    expect(useStudyLoopStore.getState().currentProject?.conceptRationales).toEqual({ c1: "groups by joint locks" });
+    vi.unstubAllGlobals();
+  });
+});

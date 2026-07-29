@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gapConceptsFromAttestations, loosePearls, topConceptTitles } from "../src/lib/analysisAccess.js";
+import { gapConceptsFromAttestations, loosePearls, topConceptTitles, v3UnitIds } from "../src/lib/analysisAccess.js";
 
 describe("topConceptTitles — v2 shape (concepts + themes)", () => {
   it("reads concept titles first, then fills remaining slots with theme titles", () => {
@@ -72,6 +72,32 @@ describe("loosePearls", () => {
   it("tolerates an unknown extra field on each pearl (e.g. v3's unitId?)", () => {
     const analysis = { pearls: [{ t: 5, label: "L", importance: 3, unitId: "abc" }] };
     expect(loosePearls(analysis)).toEqual([{ t: 5, label: "L", importance: 3 }]);
+  });
+});
+
+describe("v3UnitIds", () => {
+  it("returns the set of unit ids for a v3 analysis", () => {
+    const analysis = { version: 3, units: [{ id: "u1", label: "One" }, { id: "u2", label: "Two" }] };
+    expect(v3UnitIds(analysis)).toEqual(new Set(["u1", "u2"]));
+  });
+
+  it("returns null for a v2 analysis (concepts, not units)", () => {
+    const analysis = { version: 2, concepts: [{ id: "c1", title: "One" }] };
+    expect(v3UnitIds(analysis)).toBeNull();
+  });
+
+  it("returns null when there's no analysis at all", () => {
+    expect(v3UnitIds(null)).toBeNull();
+    expect(v3UnitIds(undefined)).toBeNull();
+  });
+
+  it("returns null for a v3-tagged analysis with no units field", () => {
+    expect(v3UnitIds({ version: 3 })).toBeNull();
+  });
+
+  it("skips a unit-like entry missing its id", () => {
+    const analysis = { version: 3, units: [{ label: "No id" }, { id: "u2", label: "Has id" }] };
+    expect(v3UnitIds(analysis)).toEqual(new Set(["u2"]));
   });
 });
 

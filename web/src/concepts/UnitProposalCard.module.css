@@ -254,3 +254,69 @@
   cursor: pointer;
   padding: 2px 0;
 }
+
+/* V3-C review finding #8: own-concept "why this grouping" rationale —
+   collapsed by default, expands to a small persisted text input. */
+.rationaleField {
+  margin-top: 2px;
+}
+
+.rationaleToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: var(--type-11);
+  padding: 2px 0;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.rationaleToggle:hover {
+  color: var(--text-secondary);
+}
+
+.rationaleToggle:active {
+  color: var(--text-primary);
+}
+
+.rationaleToggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-xs);
+}
+
+.rationaleChevronOpen {
+  transform: rotate(180deg);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.rationaleInput {
+  margin-top: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: var(--type-12);
+  font-family: inherit;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.rationaleInput:hover {
+  border-color: var(--border-strong);
+}
+
+.rationaleInput:focus-visible {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: var(--focus-ring);
+}
+
+.rationaleInput::placeholder {
+  color: var(--text-tertiary);
+}

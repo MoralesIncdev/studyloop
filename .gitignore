@@ -10,6 +10,8 @@ coverage/
 # this same repo directory as ~/studyloop. The default dataDir writes project
 # data under <dataDir>/projects — never commit runtime study data. F11's
 # review.json lands directly under dataDir (not per-project) — same reasoning.
+# V3-C C1's teacherScores.json is the same dataDir-root-level shape.
 /projects/
 /review.json
+/teacherScores.json
 .claude/

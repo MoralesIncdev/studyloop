@@ -121,6 +121,24 @@ const LooseAttestationsSchema = z.record(LooseAttestationEntrySchema);
  * Capped at 5 (kept small since these feed conceptSearch-style queries and
  * a local-library gapFill match, not a UI list).
  */
+/**
+ * V3-B review fix #9 "Attestation mutation inputs are insufficiently
+ * bounded": the set of unit ids present in a v3 analysis, for
+ * routes/attestation.ts to validate a PATCH's `:unitId` against before ever
+ * writing it to attestations.json. Returns `null` (not an empty set) when
+ * there's no analysis at all, or it isn't v3 — routes/attestation.ts treats
+ * `null` as "nothing to validate against, reject the PATCH" rather than
+ * silently accepting an arbitrary unitId against a v2/absent analysis. Kept
+ * in this loose/dependency-free accessor (not lib/attestation.ts, which is
+ * deliberately dependency-free of even analysis.ts) so attestation.ts never
+ * has to import analysis.ts's much heavier Anthropic-SDK-carrying module.
+ */
+export function v3UnitIds(analysisRaw: unknown): Set<string> | null {
+  const analysis = parseLooseAnalysis(analysisRaw);
+  if (!analysis || analysis.version !== 3 || !analysis.units) return null;
+  return new Set(analysis.units.map((u) => u.id).filter((id): id is string => typeof id === "string"));
+}
+
 export function gapConceptsFromAttestations(analysisRaw: unknown, attestationsRaw: unknown, max = 5): string[] {
   if (attestationsRaw === null || attestationsRaw === undefined) return [];
   const analysis = parseLooseAnalysis(analysisRaw);

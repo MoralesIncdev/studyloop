@@ -8,13 +8,16 @@
 // second round trip. See lib/heatmap.ts's buildLayeredHeatmap/marksNearBucket
 // for why the layers are no longer merged (PEDAGOGY §7: "render user layer
 // and overlay layer separately... crowd signal washes out expert signal").
+import fs from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
-import { getConfig, resolveDataDir } from "../config.js";
+import { getConfig, resolveDataDir, resolveRoots, type ResolvedRoots } from "../config.js";
 import { loosePearls } from "../lib/analysisAccess.js";
 import { getFfprobeDurationSeconds } from "../lib/ffprobe.js";
-import { buildLayeredHeatmap, type LayeredHeatmapInput } from "../lib/heatmap.js";
+import { buildLayeredHeatmap, resolveHeatmapDuration, type LayeredHeatmapInput } from "../lib/heatmap.js";
 import { ProjectIdParamSchema, type Project } from "../lib/models.js";
 import { ShareBundleSchema } from "../lib/shareBundle.js";
+import { resolveTranscriptPath } from "../lib/transcriptResolve.js";
+import { loadTranscriptFromText } from "../lib/transcripts.js";
 import {
   analysisJsonPath,
   listOverlayFileNames,
@@ -25,28 +28,50 @@ import {
 } from "../lib/store.js";
 
 /**
- * Best-effort duration for bucketing range. project.json carries no duration
- * field: for local sources, ffprobe the file; for youtube (or ffprobe
- * unavailable/failing), the caller falls back to the max observed point time.
+ * ffprobe result for local sources only — a real (if not yet persisted)
+ * measurement. `null` for youtube sources, or when ffprobe is unavailable/fails.
  */
-async function resolveDuration(project: Project): Promise<number | null> {
+async function probeLocalDuration(project: Project): Promise<number | null> {
   if (project.source.type === "local") return getFfprobeDurationSeconds(project.source.path);
   return null;
+}
+
+/**
+ * V3-C review fix #6: the project's transcript's last segment `end`, when a
+ * transcript exists — mirrors routes/analyze.ts's loadProjectTranscriptSegments.
+ * Degrades to `null` (never throws) on any resolution/read/parse failure,
+ * matching every other heatmap input source's "rail just shows less" policy.
+ */
+async function lastTranscriptSegmentEnd(dataDir: string, roots: ResolvedRoots, project: Project): Promise<number | null> {
+  if (project.transcript.type !== "file") return null;
+  const resolved = await resolveTranscriptPath(dataDir, roots, project.transcript.path, project.id);
+  if (!resolved.ok) return null;
+  let raw: string;
+  try {
+    raw = await fs.readFile(resolved.filePath, "utf8");
+  } catch {
+    return null;
+  }
+  try {
+    const { segments } = loadTranscriptFromText(resolved.filePath, raw);
+    if (segments.length === 0) return null;
+    return segments.reduce((max, s) => Math.max(max, s.end), 0);
+  } catch {
+    return null;
+  }
 }
 
 const BUCKET_COUNT = 200;
 
 async function gatherLayeredInput(
   dataDir: string,
-  projectId: string
+  roots: ResolvedRoots,
+  project: Project
 ): Promise<{ input: LayeredHeatmapInput; duration: number }> {
-  const project = await readProject(dataDir, projectId);
-  if (!project) throw new Error("Project not found");
-
   const [bubbles, analysisRaw, overlayFileNames] = await Promise.all([
-    readBubbles(dataDir, projectId),
-    readJsonIfExists<unknown>(analysisJsonPath(dataDir, projectId)),
-    listOverlayFileNames(dataDir, projectId),
+    readBubbles(dataDir, project.id),
+    readJsonIfExists<unknown>(analysisJsonPath(dataDir, project.id)),
+    listOverlayFileNames(dataDir, project.id),
   ]);
   // loosePearls tolerates both v2 (`AnalysisSchema`, version:2) and a future
   // v3 analysis.json shape (see analysisAccess.ts) — the strict
@@ -59,7 +84,7 @@ async function gatherLayeredInput(
   const overlayPearls: { t: number; label: string; importance: number; author: string }[] = [];
   for (const fileName of overlayFileNames) {
     // eslint-disable-next-line no-await-in-loop -- overlay count per project is small; sequential keeps this simple
-    const raw = await readJsonIfExists<unknown>(overlayFilePath(dataDir, projectId, fileName));
+    const raw = await readJsonIfExists<unknown>(overlayFilePath(dataDir, project.id, fileName));
     if (raw === null) continue;
     const parsed = ShareBundleSchema.safeParse(raw);
     if (!parsed.success) continue;
@@ -69,17 +94,30 @@ async function gatherLayeredInput(
     }
   }
 
-  let duration = await resolveDuration(project);
-  if (duration === null || duration <= 0) {
-    const allTimes = [
-      ...bubbles.map((b) => b.t),
-      ...ownPearls.map((p) => p.t),
-      ...overlayBubbles.map((b) => b.t),
-      ...overlayPearls.map((p) => p.t),
-    ];
-    const maxT = allTimes.reduce((max, t) => Math.max(max, t), 0);
-    duration = maxT > 0 ? maxT * 1.05 : 0;
-  }
+  // V3-C review fix #6: prefer known duration sources over the old
+  // "last mark * 1.05" heuristic — see lib/heatmap.ts's resolveHeatmapDuration
+  // for the preference order. probedDuration/transcriptEnd are only fetched
+  // when project.durationSeconds isn't already stored (the common case once
+  // the player has PATCHed it at least once).
+  const storedDurationSeconds = project.durationSeconds ?? null;
+  const [probedDurationSeconds, transcriptEndSeconds] =
+    storedDurationSeconds != null && storedDurationSeconds > 0
+      ? [null, null]
+      : await Promise.all([probeLocalDuration(project), lastTranscriptSegmentEnd(dataDir, roots, project)]);
+
+  const markTimes = [
+    ...bubbles.map((b) => b.t),
+    ...ownPearls.map((p) => p.t),
+    ...overlayBubbles.map((b) => b.t),
+    ...overlayPearls.map((p) => p.t),
+  ];
+  const duration = resolveHeatmapDuration({
+    storedDurationSeconds,
+    probedDurationSeconds,
+    transcriptEndSeconds,
+    watchedUpToSeconds: project.watchedUpTo,
+    markTimes,
+  });
 
   return {
     input: { ownBubbles: bubbles.map((b) => ({ t: b.t, text: b.text })), ownPearls, overlayBubbles, overlayPearls },
@@ -93,10 +131,11 @@ export async function heatmapRoutes(app: FastifyInstance): Promise<void> {
     if (!params.success) return reply.status(400).send({ error: "Invalid id" });
     const config = await getConfig();
     const dataDir = resolveDataDir(config);
+    const roots = resolveRoots(config);
     const project = await readProject(dataDir, params.data.id);
     if (!project) return reply.status(404).send({ error: "Project not found" });
 
-    const { input, duration } = await gatherLayeredInput(dataDir, params.data.id);
+    const { input, duration } = await gatherLayeredInput(dataDir, roots, project);
     const layered = buildLayeredHeatmap(input, duration, BUCKET_COUNT);
 
     return { ...layered, bucketCount: BUCKET_COUNT, duration };

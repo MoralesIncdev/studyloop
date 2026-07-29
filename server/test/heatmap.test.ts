@@ -6,6 +6,7 @@ import {
   gaussianSmooth,
   HEATMAP_BUCKET_COUNT,
   marksNearBucket,
+  resolveHeatmapDuration,
   type HeatmapMark,
   type HeatmapPoint,
   type LayeredHeatmapInput,
@@ -254,5 +255,74 @@ describe("marksNearBucket", () => {
   it("drops marks outside [0, duration]", () => {
     const marks = [mark({ t: -5 }), mark({ t: 1000 })];
     expect(marksNearBucket(marks, 0, 10, 100)).toEqual([]);
+  });
+});
+
+// --- V3-C review fix #6: YouTube heatmap duration source preference --------
+
+describe("resolveHeatmapDuration", () => {
+  it("prefers a stored (player-learned) duration over every other source", () => {
+    const duration = resolveHeatmapDuration({
+      storedDurationSeconds: 3600,
+      probedDurationSeconds: 100,
+      transcriptEndSeconds: 200,
+      watchedUpToSeconds: 300,
+      markTimes: [400],
+    });
+    expect(duration).toBe(3600);
+  });
+
+  it("falls back to a probed (ffprobe) duration when nothing is stored", () => {
+    const duration = resolveHeatmapDuration({
+      storedDurationSeconds: null,
+      probedDurationSeconds: 1800,
+      transcriptEndSeconds: 200,
+      watchedUpToSeconds: 300,
+      markTimes: [400],
+    });
+    expect(duration).toBe(1800);
+  });
+
+  it("ignores a stored/probed duration of 0 (treats it as absent, not authoritative)", () => {
+    const duration = resolveHeatmapDuration({
+      storedDurationSeconds: 0,
+      probedDurationSeconds: 0,
+      transcriptEndSeconds: 200,
+      watchedUpToSeconds: 50,
+      markTimes: [100],
+    });
+    expect(duration).toBe(200);
+  });
+
+  it("falls back to max(transcriptEnd, watchedUpTo, latest mark) when nothing is stored/probed — the YouTube case", () => {
+    // Regression case from the finding: a 60-minute video (3600s) whose last
+    // mark sits at 10 minutes (600s) — the transcript's own end time is the
+    // best available signal, not maxMarkTime * 1.05 (which would give 630).
+    const duration = resolveHeatmapDuration({
+      storedDurationSeconds: null,
+      probedDurationSeconds: null,
+      transcriptEndSeconds: 3600,
+      watchedUpToSeconds: 500,
+      markTimes: [600],
+    });
+    expect(duration).toBe(3600);
+  });
+
+  it("takes the max across transcriptEnd/watchedUpTo/markTimes when transcriptEnd underestimates", () => {
+    const duration = resolveHeatmapDuration({
+      transcriptEndSeconds: 100,
+      watchedUpToSeconds: 900,
+      markTimes: [500],
+    });
+    expect(duration).toBe(900);
+  });
+
+  it("falls back to the latest mark time alone when there's no transcript/watchedUpTo at all", () => {
+    const duration = resolveHeatmapDuration({ markTimes: [10, 250, 90] });
+    expect(duration).toBe(250);
+  });
+
+  it("returns 0 (never negative, never throws) when every source is absent/empty", () => {
+    expect(resolveHeatmapDuration({})).toBe(0);
   });
 });

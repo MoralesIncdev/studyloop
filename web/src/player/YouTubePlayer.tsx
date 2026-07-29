@@ -82,7 +82,13 @@ export function YouTubePlayer({ videoId, startAt = 0 }: Props): JSX.Element {
           // same "reassert on every chance we get" approach LocalVideoPlayer
           // uses for playbackRate.
           const d = player.getDuration();
-          if (Number.isFinite(d) && d > 0) setDuration(d);
+          if (Number.isFinite(d) && d > 0) {
+            setDuration(d);
+            // V3-C review finding #6: persist once learned — reportLearnedDuration
+            // itself no-ops once the project's stored value already matches, so
+            // calling it every sync tick stays cheap after the first PATCH lands.
+            useStudyLoopStore.getState().reportLearnedDuration(d);
+          }
         }
         rafRef.current = requestAnimationFrame(tick);
       };
@@ -156,6 +162,7 @@ export function YouTubePlayer({ videoId, startAt = 0 }: Props): JSX.Element {
               if (Number.isFinite(d) && d > 0) {
                 setDuration(d);
                 emit("durationchange", { duration: d });
+                useStudyLoopStore.getState().reportLearnedDuration(d);
               }
               if (!appliedStartRef.current && startAt > 0) {
                 appliedStartRef.current = true;

@@ -14,6 +14,7 @@ import {
   type Project,
 } from "../lib/models.js";
 import {
+  mergeConceptRationales,
   newId,
   nextWatchedUpTo,
   readBubbles,
@@ -162,6 +163,7 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
         ...existing,
         ...patch,
         watchedUpTo: nextWatchedUpTo(existing.watchedUpTo, patch.watchedUpTo),
+        conceptRationales: mergeConceptRationales(existing.conceptRationales, patch.conceptRationales),
         updatedAt: new Date().toISOString(),
       };
       await writeProject(dataDir, updated);

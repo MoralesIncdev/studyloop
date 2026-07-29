@@ -91,6 +91,11 @@ export function LocalVideoPlayer({ src, startAt = 0 }: Props): JSX.Element {
       const d = Number.isFinite(video.duration) ? video.duration : 0;
       setDuration(d);
       emit("durationchange", { duration: d });
+      // V3-C review finding #6: persist the real duration onto the project
+      // the moment the player learns it, so the server's heatmap bucket
+      // mapping (and any future consumer) prefers this over ffprobe/
+      // transcript/watchedUpTo estimates. No-ops once already stored.
+      useStudyLoopStore.getState().reportLearnedDuration(d);
       if (!appliedStartRef.current && startAt > 0) {
         appliedStartRef.current = true;
         video.currentTime = Math.min(startAt, d || startAt);

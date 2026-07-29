@@ -282,8 +282,22 @@ export interface StudyLoopStore {
    * can keep ignoring it via `void`.
    */
   patchCurrentProject: (
-    patch: Partial<Pick<Project, "title" | "lastPosition" | "watchedUpTo" | "lessonSummary" | "domain" | "noviceMode">>
+    patch: Partial<
+      Pick<
+        Project,
+        | "title"
+        | "lastPosition"
+        | "watchedUpTo"
+        | "lessonSummary"
+        | "domain"
+        | "noviceMode"
+        | "durationSeconds"
+        | "conceptRationales"
+      >
+    >
   ) => Promise<boolean>;
+  /** V3-C review fix #6: reports a player-learned duration (loadedmetadata / YT API getDuration()) — no-ops below 0 or once the project's stored durationSeconds already matches (within 1s), so repeated calls from a polling sync loop stay cheap. Fire-and-forget (never awaited by callers). */
+  reportLearnedDuration: (seconds: number) => void;
 
   // --- concepts (F7) ---------------------------------------------------------------
   concepts: ConceptCard[];
@@ -298,6 +312,16 @@ export interface StudyLoopStore {
   // --- V3-B B2: attestation + reveal-gating ---------------------------------------
   attestations: AttestationsFile;
   attestationsLoading: boolean;
+  /**
+   * V3-B review finding #3: a monotonically increasing counter bumped on
+   * every LOCAL attestation mutation (attest/edit/dismiss/clear). The
+   * initial GET (loadProjectSession/loadAttestations) captures this value
+   * before it fires and discards its own result if the counter has since
+   * moved — a delayed GET response can never overwrite a newer learner
+   * action that already landed (optimistically or confirmed) while it was
+   * in flight.
+   */
+  attestationMutationSeq: number;
   loadAttestations: () => Promise<void>;
   /** Attest ("I've got this") a unit — sets status: "attested". */
   attestUnit: (unitId: string) => Promise<void>;
@@ -309,6 +333,12 @@ export interface StudyLoopStore {
   dismissUnit: (unitId: string) => Promise<void>;
   /** Undo a dismiss (or reset any other status) back to unreviewed. */
   clearUnitAttestation: (unitId: string) => Promise<void>;
+
+  // --- V3-B review finding #7: pearl "Add to review" (PEDAGOGY §5 path (b)) -------
+  /** Pearl anchor timestamps (as strings — see server's pearlReviewKey) the learner explicitly added to review. */
+  pearlReviewAdds: Set<string>;
+  loadPearlReviewAdds: () => Promise<void>;
+  addPearlToReview: (t: number) => Promise<void>;
 
   // --- V3-A A4: right-rail Transcript/Concepts accordion (moved out of RightRail's
   // local state so CCOverlay can read "is the transcript expanded" too — see the
@@ -378,7 +408,13 @@ export interface StudyLoopStore {
   // --- bubbles (F4/F5/F6) -------------------------------------------------------------
   bubbles: Bubble[];
   bubblesLoading: boolean;
-  patchBubble: (bubbleId: string, patch: { t?: number; text?: string; shot?: string | null }) => Promise<void>;
+  /**
+   * Returns `true` on success, `false` on failure (a toast is already pushed
+   * either way) — never throws. Mirrors patchCurrentProject's boolean
+   * pattern (V3-B review finding #4) so callers that must not proceed past a
+   * failed save (CompileFlow's caption pass) can check the return value.
+   */
+  patchBubble: (bubbleId: string, patch: { t?: number; text?: string; shot?: string | null }) => Promise<boolean>;
   deleteBubble: (bubbleId: string) => Promise<void>;
   appendBubbleToNotes: (bubbleId: string) => Promise<void>;
 
@@ -491,6 +527,54 @@ export interface StudyLoopStore {
 }
 
 /**
+ * V3-B review finding #3: merges (or deletes, when `entry` is `undefined`) a
+ * single unit's entry into an attestations map — never replaces the whole
+ * map. This is what lets patchAttestationHelper/clearAttestationHelper apply
+ * a server response without clobbering a different unit's concurrently
+ * in-flight or already-confirmed change.
+ */
+function withAttestationEntry(
+  map: AttestationsFile,
+  unitId: string,
+  entry: AttestationsFile[string] | undefined
+): AttestationsFile {
+  if (entry === undefined) {
+    if (!(unitId in map)) return map;
+    const next = { ...map };
+    delete next[unitId];
+    return next;
+  }
+  return { ...map, [unitId]: entry };
+}
+
+/**
+ * V3-B review finding #3: concurrent attestation mutations (attest/edit/
+ * dismiss fired in quick succession, or a debounced "your take" save landing
+ * while a click handler's attest PATCH is still in flight) must reach the
+ * server — and apply their response to local state — in the order the
+ * learner triggered them, not in whatever order the network happens to
+ * settle them. Chained per project id (reset whenever the project changes)
+ * so mutations against a different project never queue behind a straggler
+ * from the previous one. `fn` is expected to catch its own errors (both
+ * patchAttestationHelper and clearAttestationHelper do), so the chain link
+ * never has to guard against a broken promise chain.
+ */
+let attestationChainProjectId: string | null = null;
+let attestationChain: Promise<void> = Promise.resolve();
+function enqueueAttestationMutation(projectId: string, fn: () => Promise<void>): Promise<void> {
+  if (attestationChainProjectId !== projectId) {
+    attestationChainProjectId = projectId;
+    attestationChain = Promise.resolve();
+  }
+  const run = attestationChain.then(fn, fn);
+  attestationChain = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
+/**
  * V3-B B2: shared optimistic-PATCH helper behind attestUnit/saveUnitTake/
  * saveUnitBody/dismissUnit — all four are the same partial-merge shape
  * against one unit's attestations.json entry, differing only in which
@@ -499,18 +583,60 @@ export interface StudyLoopStore {
  * references `useStudyLoopStore` itself for `.setState`, which is safe here
  * because this is only ever invoked from inside a store action (i.e. well
  * after the module has finished initializing `useStudyLoopStore`).
+ *
+ * V3-B review finding #3 fixes applied here: the optimistic update and the
+ * confirmed-response update both merge into just `unitId`'s entry (never
+ * replace the whole map — see withAttestationEntry), and every local
+ * mutation bumps `attestationMutationSeq` so a stale initial GET elsewhere
+ * knows to discard itself instead of overwriting this.
  */
 async function patchAttestationHelper(get: () => StudyLoopStore, unitId: string, patch: AttestationPatchBody): Promise<void> {
   const project = get().currentProject;
   if (!project) return;
-  const prev = get().attestations;
-  const optimistic = { ...(prev[unitId] ?? {}), ...patch, at: new Date().toISOString() };
-  useStudyLoopStore.setState({ attestations: { ...prev, [unitId]: optimistic } });
+  const prevEntry = get().attestations[unitId];
+  const optimistic = { ...(prevEntry ?? {}), ...patch, at: new Date().toISOString() };
+  useStudyLoopStore.setState((state) => ({
+    attestations: withAttestationEntry(state.attestations, unitId, optimistic),
+    attestationMutationSeq: state.attestationMutationSeq + 1,
+  }));
   try {
     const res = await api.patchAttestation(project.id, unitId, patch);
-    if (get().currentProject?.id === project.id) useStudyLoopStore.setState({ attestations: res });
+    if (get().currentProject?.id === project.id) {
+      useStudyLoopStore.setState((state) => ({
+        attestations: withAttestationEntry(state.attestations, unitId, res[unitId]),
+      }));
+    }
   } catch (err) {
-    if (get().currentProject?.id === project.id) useStudyLoopStore.setState({ attestations: prev });
+    if (get().currentProject?.id === project.id) {
+      useStudyLoopStore.setState((state) => ({
+        attestations: withAttestationEntry(state.attestations, unitId, prevEntry),
+      }));
+    }
+    get().pushToast(`Could not update attestation: ${errorMessage(err)}`, "error");
+  }
+}
+
+/** clearUnitAttestation's own optimistic-DELETE helper — same per-unit-merge + mutation-seq + queueing discipline as patchAttestationHelper above. */
+async function clearAttestationHelper(get: () => StudyLoopStore, projectId: string, unitId: string): Promise<void> {
+  if (get().currentProject?.id !== projectId) return;
+  const prevEntry = get().attestations[unitId];
+  useStudyLoopStore.setState((state) => ({
+    attestations: withAttestationEntry(state.attestations, unitId, undefined),
+    attestationMutationSeq: state.attestationMutationSeq + 1,
+  }));
+  try {
+    const res = await api.clearAttestation(projectId, unitId);
+    if (get().currentProject?.id === projectId) {
+      useStudyLoopStore.setState((state) => ({
+        attestations: withAttestationEntry(state.attestations, unitId, res[unitId]),
+      }));
+    }
+  } catch (err) {
+    if (get().currentProject?.id === projectId) {
+      useStudyLoopStore.setState((state) => ({
+        attestations: withAttestationEntry(state.attestations, unitId, prevEntry),
+      }));
+    }
     get().pushToast(`Could not update attestation: ${errorMessage(err)}`, "error");
   }
 }
@@ -772,6 +898,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       shareResult: null,
       attestations: {},
       attestationsLoading: false,
+      attestationMutationSeq: 0,
+      pearlReviewAdds: new Set(),
       continuityCandidates: [],
       continuityLoading: false,
     });
@@ -867,16 +995,43 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     // V3-B B2: attestations for every unit's reveal-gating/attest state —
     // 404/empty is the common case (no analysis, or v2 analysis) and isn't
     // an error, mirroring analysisPromise's own 404 handling above.
+    //
+    // V3-B review finding #3: captures the mutation-seq counter before
+    // firing the GET; if a local attestation mutation (attest/edit/dismiss)
+    // landed while this request was in flight, the response is now stale
+    // relative to that action and must be discarded rather than regressing
+    // reveal/progress state back to whatever the server had before the
+    // mutation's own PATCH (or its optimistic update) took effect.
     const attestationsPromise = (async () => {
       set({ attestationsLoading: true });
+      const mutationSeqAtStart = get().attestationMutationSeq;
       try {
         const res = await api.getAttestations(id);
         if (!isCurrent()) return;
+        if (get().attestationMutationSeq !== mutationSeqAtStart) {
+          set({ attestationsLoading: false });
+          return;
+        }
         set({ attestations: res, attestationsLoading: false });
       } catch (err) {
         if (!isCurrent()) return;
         set({ attestationsLoading: false });
         get().pushToast(`Could not load attestations: ${errorMessage(err)}`, "error");
+      }
+    })();
+
+    // V3-B review finding #7: which pearls the learner explicitly added to
+    // review (PEDAGOGY §5 path (b)) — loaded alongside attestations since
+    // the rail's pearl rows need both to decide whether to show "Add to
+    // review". Fails quiet, same reasoning as continuityPromise below (a
+    // presentational gating hint, not something worth toasting on failure).
+    const pearlReviewAddsPromise = (async () => {
+      try {
+        const res = await api.getPearlReviewAdds(id);
+        if (!isCurrent()) return;
+        set({ pearlReviewAdds: new Set(res.added) });
+      } catch {
+        // leave pearlReviewAdds at its reset-time empty Set()
       }
     })();
 
@@ -916,6 +1071,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       analysisPromise,
       overlaysPromise,
       attestationsPromise,
+      pearlReviewAddsPromise,
       continuityPromise,
     ]);
   },
@@ -965,6 +1121,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       shareResult: null,
       attestations: {},
       attestationsLoading: false,
+      attestationMutationSeq: 0,
+      pearlReviewAdds: new Set(),
       continuityCandidates: [],
       continuityLoading: false,
     }));
@@ -983,6 +1141,16 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       get().pushToast(`Could not save progress: ${errorMessage(err)}`, "error");
       return false;
     }
+  },
+  reportLearnedDuration: (seconds) => {
+    const project = get().currentProject;
+    if (!project || !Number.isFinite(seconds) || seconds <= 0) return;
+    const rounded = Math.round(seconds);
+    // Already stored (within a second — floating-point/rounding noise
+    // shouldn't fire a PATCH every tick of a sync loop that keeps re-reading
+    // the same known duration).
+    if (project.durationSeconds != null && Math.abs(project.durationSeconds - rounded) < 1) return;
+    void get().patchCurrentProject({ durationSeconds: rounded });
   },
 
   // --- concepts (F7) ---------------------------------------------------------------
@@ -1035,14 +1203,23 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   // --- V3-B B2: attestation + reveal-gating ---------------------------------------
   attestations: {},
   attestationsLoading: false,
+  attestationMutationSeq: 0,
   loadAttestations: async () => {
     const project = get().currentProject;
     if (!project) return;
     const projectId = project.id;
     set({ attestationsLoading: true });
+    // V3-B review finding #3: same stale-GET discard as loadProjectSession's
+    // attestationsPromise — see withAttestationEntry/enqueueAttestationMutation's
+    // doc comments above for the full race this guards against.
+    const mutationSeqAtStart = get().attestationMutationSeq;
     try {
       const res = await api.getAttestations(projectId);
       if (get().currentProject?.id !== projectId) return;
+      if (get().attestationMutationSeq !== mutationSeqAtStart) {
+        set({ attestationsLoading: false });
+        return;
+      }
       set({ attestations: res, attestationsLoading: false });
     } catch (err) {
       if (get().currentProject?.id !== projectId) return;
@@ -1051,30 +1228,59 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     }
   },
   attestUnit: async (unitId) => {
-    await patchAttestationHelper(get, unitId, { status: "attested" });
+    const project = get().currentProject;
+    if (!project) return;
+    await enqueueAttestationMutation(project.id, () => patchAttestationHelper(get, unitId, { status: "attested" }));
   },
   saveUnitTake: async (unitId, userTake) => {
-    await patchAttestationHelper(get, unitId, { userTake });
+    const project = get().currentProject;
+    if (!project) return;
+    await enqueueAttestationMutation(project.id, () => patchAttestationHelper(get, unitId, { userTake }));
   },
   saveUnitBody: async (unitId, userBody) => {
-    await patchAttestationHelper(get, unitId, { userBody });
+    const project = get().currentProject;
+    if (!project) return;
+    await enqueueAttestationMutation(project.id, () => patchAttestationHelper(get, unitId, { userBody }));
   },
   dismissUnit: async (unitId) => {
-    await patchAttestationHelper(get, unitId, { status: "dismissed" });
+    const project = get().currentProject;
+    if (!project) return;
+    await enqueueAttestationMutation(project.id, () => patchAttestationHelper(get, unitId, { status: "dismissed" }));
   },
   clearUnitAttestation: async (unitId) => {
     const project = get().currentProject;
     if (!project) return;
-    const prev = get().attestations;
-    const next = { ...prev };
-    delete next[unitId];
-    set({ attestations: next });
+    await enqueueAttestationMutation(project.id, () => clearAttestationHelper(get, project.id, unitId));
+  },
+
+  // --- V3-B review finding #7: pearl "Add to review" -------------------------------
+  pearlReviewAdds: new Set(),
+  loadPearlReviewAdds: async () => {
+    const project = get().currentProject;
+    if (!project) return;
+    const projectId = project.id;
     try {
-      const res = await api.clearAttestation(project.id, unitId);
-      if (get().currentProject?.id === project.id) set({ attestations: res });
+      const res = await api.getPearlReviewAdds(projectId);
+      if (get().currentProject?.id !== projectId) return;
+      set({ pearlReviewAdds: new Set(res.added) });
+    } catch {
+      // presentational gating hint — fail quiet, matches loadContinuity's own reasoning
+    }
+  },
+  addPearlToReview: async (t) => {
+    const project = get().currentProject;
+    if (!project) return;
+    const projectId = project.id;
+    const key = String(t);
+    const prev = get().pearlReviewAdds;
+    if (prev.has(key)) return; // already added — the rail hides the button once added, but guard anyway
+    set({ pearlReviewAdds: new Set(prev).add(key) });
+    try {
+      const res = await api.addPearlToReview(projectId, t);
+      if (get().currentProject?.id === projectId) set({ pearlReviewAdds: new Set(res.added) });
     } catch (err) {
-      if (get().currentProject?.id === project.id) set({ attestations: prev });
-      get().pushToast(`Could not update attestation: ${errorMessage(err)}`, "error");
+      if (get().currentProject?.id === projectId) set({ pearlReviewAdds: prev });
+      get().pushToast(`Could not add to review: ${errorMessage(err)}`, "error");
     }
   },
 
@@ -1207,15 +1413,25 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   bubblesLoading: false,
   patchBubble: async (bubbleId, patch) => {
     const project = get().currentProject;
-    if (!project) return;
-    const prev = get().bubbles;
-    set({ bubbles: sortBubbles(prev.map((b) => (b.id === bubbleId ? { ...b, ...patch } : b))) });
+    if (!project) return false;
+    // V3-B review finding #4: snapshot only THIS bubble's prior state, not
+    // the whole array — a whole-array snapshot rollback races a concurrent
+    // patchBubble call against a DIFFERENT bubble: if that other call's
+    // optimistic update (or confirmed response) landed on `bubbles` between
+    // this snapshot and this call's own failure, restoring the whole
+    // snapshot on failure would silently erase the other bubble's
+    // already-succeeded change. Per-bubble rollback below can't do that.
+    const prevBubble = get().bubbles.find((b) => b.id === bubbleId);
+    if (!prevBubble) return false;
+    set((state) => ({ bubbles: sortBubbles(state.bubbles.map((b) => (b.id === bubbleId ? { ...b, ...patch } : b))) }));
     try {
       const updated = await api.patchBubble(project.id, bubbleId, patch);
       set((state) => ({ bubbles: sortBubbles(state.bubbles.map((b) => (b.id === bubbleId ? updated : b))) }));
+      return true;
     } catch (err) {
-      set({ bubbles: prev });
+      set((state) => ({ bubbles: sortBubbles(state.bubbles.map((b) => (b.id === bubbleId ? prevBubble : b))) }));
       get().pushToast(`Could not update capture: ${errorMessage(err)}`, "error");
+      return false;
     }
   },
   deleteBubble: async (bubbleId) => {
@@ -1396,6 +1612,15 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     // a modal's onClose during CompileFlow's synthesis→caption→compile
     // handoff) must no-op rather than issuing a second POST /compile.
     if (!project || get().compiling) return;
+    // V3-B review finding #5: tag this call with the session it started in —
+    // if the learner navigates to a different project (or back to the
+    // library and into a third one) before POST /compile resolves, the
+    // sessionRequestId counter (bumped by loadProjectSession/
+    // clearProjectSession on every navigation) will have moved on, and this
+    // stale result must never surface project A's compiled doc inside
+    // project B's Study view.
+    const requestId = get().sessionRequestId;
+    const isCurrent = () => get().sessionRequestId === requestId;
     set({ compiling: true });
     try {
       // The compiled doc must reflect the very latest notes edit and
@@ -1408,10 +1633,17 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
         await get().patchCurrentProject({ lastPosition: t, watchedUpTo });
       }
       const result = await api.compile(project.id);
-      set({ compiling: false, compileResult: result });
+      // `compiling` is reset unconditionally (it's a global in-flight flag,
+      // not scoped per session — leaving it stuck at `true` would permanently
+      // block the NEW session's own Compile button behind the top-of-function
+      // guard above); only the result/toast are skipped when stale.
+      set({ compiling: false });
+      if (!isCurrent()) return;
+      set({ compileResult: result });
       get().pushToast("Compiled study document", "success");
     } catch (err) {
       set({ compiling: false });
+      if (!isCurrent()) return;
       get().pushToast(`Could not compile: ${errorMessage(err)}`, "error");
     }
   },
@@ -1611,13 +1843,21 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   runExportAnalysis: async (conceptRationales) => {
     const project = get().currentProject;
     if (!project) return;
+    // V3-B review finding #5: same stale-session guard as runCompile — a
+    // Share started in project A must never surface its result modal after
+    // the learner has navigated into project B.
+    const requestId = get().sessionRequestId;
+    const isCurrent = () => get().sessionRequestId === requestId;
     set({ exportingAnalysis: true });
     try {
       const result = await api.exportAnalysis(project.id, conceptRationales);
-      set({ exportingAnalysis: false, shareResult: result });
+      set({ exportingAnalysis: false });
+      if (!isCurrent()) return;
+      set({ shareResult: result });
       get().pushToast("Exported analysis bundle", "success");
     } catch (err) {
       set({ exportingAnalysis: false });
+      if (!isCurrent()) return;
       get().pushToast(`Could not export analysis: ${errorMessage(err)}`, "error");
     }
   },
