@@ -185,3 +185,65 @@
   color: var(--text-secondary);
   margin: 0;
 }
+
+/* V3-C C6 "Bundle narrative fields": collapsible lessonSummary intro card. */
+.introCard {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.introCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: var(--type-12);
+  font-weight: var(--weight-medium);
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.introCardHeader:hover {
+  background: var(--hover-overlay);
+}
+
+.introCardHeader:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: -2px;
+}
+
+.introCardChevronOpen {
+  transform: rotate(180deg);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.introCardBody {
+  font-size: var(--type-12);
+  color: var(--text-primary);
+  line-height: 1.5;
+  padding: 0 10px 10px;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.rationaleRow {
+  padding: 6px 8px;
+  border-left: 2px solid var(--accent-blue);
+  margin-bottom: 4px;
+}
+
+.rationaleText {
+  font-size: var(--type-12);
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin: 0;
+  font-style: italic;
+}

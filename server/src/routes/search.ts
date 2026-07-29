@@ -17,6 +17,6 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
     const config = await getConfig();
     const roots = resolveRoots(config);
     const { items } = await getLibrary({ libraryRoots: roots.libraryRoots, transcriptRoots: roots.transcriptRoots });
-    return performSearch(items, parsed.data.q);
+    return performSearch(items, parsed.data.q, parsed.data.intent);
   });
 }

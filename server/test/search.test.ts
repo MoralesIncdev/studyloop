@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { performSearch, searchLibraryItems, SearchQuerySchema } from "../src/lib/search.js";
+import { performSearch, reshapeQueryForIntent, searchLibraryItems, SearchQuerySchema } from "../src/lib/search.js";
 import { __setInnertubeClientForTests, type InnertubeClient } from "../src/lib/innertube.js";
 import type { LibraryItem } from "../src/lib/scan.js";
 
@@ -27,6 +27,50 @@ describe("SearchQuerySchema", () => {
 
   it("rejects a non-string q", () => {
     expect(SearchQuerySchema.safeParse({ q: 5 }).success).toBe(false);
+  });
+
+  it("accepts an omitted intent", () => {
+    expect(SearchQuerySchema.safeParse({ q: "bjj" }).success).toBe(true);
+  });
+
+  it("accepts each valid intent value", () => {
+    expect(SearchQuerySchema.safeParse({ q: "bjj", intent: "overview" }).success).toBe(true);
+    expect(SearchQuerySchema.safeParse({ q: "bjj", intent: "deep_dive" }).success).toBe(true);
+    expect(SearchQuerySchema.safeParse({ q: "bjj", intent: "troubleshooting" }).success).toBe(true);
+  });
+
+  it("rejects an invalid intent value", () => {
+    expect(SearchQuerySchema.safeParse({ q: "bjj", intent: "casual" }).success).toBe(false);
+  });
+});
+
+describe("reshapeQueryForIntent — C2 search intent toggles", () => {
+  it("returns q unchanged when intent is null/undefined", () => {
+    expect(reshapeQueryForIntent("closed guard", null)).toBe("closed guard");
+    expect(reshapeQueryForIntent("closed guard", undefined)).toBe("closed guard");
+  });
+
+  it("appends the overview suffix", () => {
+    expect(reshapeQueryForIntent("closed guard", "overview")).toBe("closed guard introduction explained");
+  });
+
+  it("appends the deep_dive suffix", () => {
+    expect(reshapeQueryForIntent("closed guard", "deep_dive")).toBe("closed guard in depth lecture masterclass");
+  });
+
+  it("appends the troubleshooting suffix", () => {
+    expect(reshapeQueryForIntent("closed guard", "troubleshooting")).toBe("closed guard mistakes common problems fixing");
+  });
+
+  it("produces a different query per intent for the same base query", () => {
+    const base = "leg locks";
+    const results = new Set([
+      reshapeQueryForIntent(base, "overview"),
+      reshapeQueryForIntent(base, "deep_dive"),
+      reshapeQueryForIntent(base, "troubleshooting"),
+      base,
+    ]);
+    expect(results.size).toBe(4);
   });
 });
 
@@ -90,5 +134,26 @@ describe("performSearch", () => {
     const result = await performSearch(items, "some");
     expect(result.library).toHaveLength(1);
     expect(result.youtube).toEqual([]);
+  });
+
+  it("reshapes the youtube query per intent, but leaves the library query untouched", async () => {
+    const items: LibraryItem[] = [item({ videoPath: "/a.mp4", title: "closed guard fundamentals" })];
+    const search = vi.fn().mockResolvedValue({ results: [] });
+    __setInnertubeClientForTests({ getInfo: vi.fn(), search });
+
+    await performSearch(items, "closed guard", "deep_dive");
+    expect(search).toHaveBeenCalledWith("closed guard in depth lecture masterclass");
+    // Library matching still ran against the raw (unreshaped) query.
+    const result = await performSearch(items, "closed guard", "deep_dive");
+    expect(result.library).toHaveLength(1);
+  });
+
+  it("does not reshape the youtube query when intent is omitted", async () => {
+    const items: LibraryItem[] = [];
+    const search = vi.fn().mockResolvedValue({ results: [] });
+    __setInnertubeClientForTests({ getInfo: vi.fn(), search });
+
+    await performSearch(items, "closed guard");
+    expect(search).toHaveBeenCalledWith("closed guard");
   });
 });

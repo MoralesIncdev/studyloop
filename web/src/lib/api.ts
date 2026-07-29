@@ -8,6 +8,7 @@ import type {
   Bubble,
   ConceptCard,
   ConceptProfile,
+  ContinuityResponse,
   CreateProjectBody,
   HealthResponse,
   HeatmapResponse,
@@ -18,6 +19,7 @@ import type {
   RevealResponse,
   ReviewGrade,
   ReviewQueueResponse,
+  SearchIntent,
   SearchResponse,
   ShareBundle,
   StudyLoopConfig,
@@ -129,7 +131,12 @@ export const api = {
   refreshRelated: (projectId: string, videoId: string) =>
     request<Project>("/api/youtube/related", { method: "POST", body: JSON.stringify({ projectId, videoId }) }),
 
-  search: (q: string) => request<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}`),
+  // V3-C C2: optional `intent` reshapes the youtube half of the query server-side.
+  search: (q: string, intent?: SearchIntent | null) =>
+    request<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}${intent ? `&intent=${encodeURIComponent(intent)}` : ""}`),
+
+  // --- V3-C C1: Concept Continuity rail --------------------------------------------
+  getContinuity: (id: string) => request<ContinuityResponse>(`/api/projects/${encodeURIComponent(id)}/continuity`),
 
   // --- V2-C: analysis engine ---------------------------------------------------
   analyze: (id: string, force?: boolean) =>
@@ -144,9 +151,11 @@ export const api = {
   getHeatmap: (id: string) => request<HeatmapResponse>(`/api/projects/${encodeURIComponent(id)}/heatmap`),
 
   // --- V2-C: share bundles / overlays ---------------------------------------------
-  exportAnalysis: (id: string) =>
+  // V3-C C6: optional per-concept "why this grouping" text, entered right before export.
+  exportAnalysis: (id: string, conceptRationales?: Record<string, string>) =>
     request<{ path: string; bundle: ShareBundle }>(`/api/projects/${encodeURIComponent(id)}/export-analysis`, {
       method: "POST",
+      body: conceptRationales && Object.keys(conceptRationales).length > 0 ? JSON.stringify({ conceptRationales }) : undefined,
     }),
   importAnalysisByPath: (id: string, path: string) =>
     request<{ fileName: string; bundle: ShareBundle; sourceMismatch: string | null }>(

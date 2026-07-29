@@ -7,14 +7,17 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getConfig, resolveDataDir } from "../config.js";
 import { AnalysisSchema, shortHash } from "../lib/analysis.js";
+import { loosePearls } from "../lib/analysisAccess.js";
 import { getFfprobeDurationSeconds } from "../lib/ffprobe.js";
 import { scaleImageToBase64 } from "../lib/frames.js";
-import { ProjectIdParamSchema, type Project } from "../lib/models.js";
+import { ProjectIdParamSchema, type Bubble, type Project } from "../lib/models.js";
+import { diffMarks, type Mark } from "../lib/overlayDiff.js";
 import {
   buildShareBundle,
   detectSourceMismatch,
   overlayFileName,
   ShareBundleSchema,
+  type ShareBundle,
   validateShareBundle,
 } from "../lib/shareBundle.js";
 import {
@@ -40,12 +43,51 @@ async function resolveProjectDuration(project: Project): Promise<number | null> 
   return null;
 }
 
+/**
+ * V3-C C4 "Overlay diff-on-import" (SPEC): the project's own bubbles + pearls
+ * as `Mark[]`, the "own" side of lib/overlayDiff.ts's `diffMarks()`. Reads
+ * analysis.json through the loose accessor (loosePearls), not the
+ * version-locked `AnalysisSchema`, so this keeps working once V3-B ships a
+ * v3 analysis.json.
+ */
+async function ownMarksFor(dataDir: string, projectId: string, bubbles: readonly Bubble[]): Promise<Mark[]> {
+  const analysisRaw = await readJsonIfExists<unknown>(analysisJsonPath(dataDir, projectId));
+  const pearls = loosePearls(analysisRaw);
+  return [
+    ...bubbles.map((b): Mark => ({ t: b.t, kind: "bubble", text: b.text, author: "you" })),
+    ...pearls.map((p): Mark => ({ t: p.t, kind: "pearl", importance: p.importance as 1 | 2 | 3, text: p.label, author: "you" })),
+  ];
+}
+
+/** The overlay bundle's own marks, tagged with its shareHandle as author. */
+function importedMarksFor(bundle: ShareBundle): Mark[] {
+  return [
+    ...bundle.bubbles.map((b): Mark => ({ t: b.t, kind: "bubble", text: b.text, author: bundle.shareHandle })),
+    ...bundle.pearls.map((p): Mark => ({ t: p.t, kind: "pearl", importance: p.importance, text: p.label, author: bundle.shareHandle })),
+  ];
+}
+
+/** SPEC: "±15s tolerance window". */
+const OVERLAY_DIFF_TOLERANCE_SECONDS = 15;
+
+// V3-C C6: optional per-concept "why this grouping" text, entered in the
+// rail's export step (ShareFlow.tsx) right before calling this route —
+// see ShareBundleSchema.conceptRationales for why it isn't persisted
+// anywhere before export.
+const ExportAnalysisBodySchema = z.object({ conceptRationales: z.record(z.string()).optional() }).optional();
+
 export async function shareRoutes(app: FastifyInstance): Promise<void> {
   // --- export ------------------------------------------------------------------
 
   app.post("/api/projects/:id/export-analysis", async (request, reply) => {
     const params = IdParamSchema.safeParse(request.params);
     if (!params.success) return reply.status(400).send({ error: "Invalid id" });
+    const rawBody =
+      request.body && typeof request.body === "object" && Object.keys(request.body as object).length > 0
+        ? request.body
+        : undefined;
+    const bodyParsed = ExportAnalysisBodySchema.safeParse(rawBody);
+    if (!bodyParsed.success) return reply.status(400).send({ error: "Invalid body" });
 
     const config = await getConfig();
     const dataDir = resolveDataDir(config);
@@ -68,6 +110,7 @@ export async function shareRoutes(app: FastifyInstance): Promise<void> {
       bubbles,
       shareHandle: config.shareHandle,
       localDurationSeconds: duration,
+      conceptRationales: bodyParsed.data?.conceptRationales,
       pearls: analysis?.pearls,
       concepts: analysis?.concepts,
       themes: analysis?.themes,
@@ -144,13 +187,22 @@ export async function shareRoutes(app: FastifyInstance): Promise<void> {
     if (!project) return reply.status(404).send({ error: "Project not found" });
 
     const fileNames = await listOverlayFileNames(dataDir, params.data.id);
-    const overlays = [];
+    // V3-C C4: computed once per request against the project's CURRENT
+    // bubbles/pearls (not cached at import time) — the diff is "what they
+    // marked that you still haven't", which shrinks as the learner adds
+    // their own bubbles, so it must always reflect the live state.
+    const ownBubbles = await readBubbles(dataDir, params.data.id);
+    const ownMarks = await ownMarksFor(dataDir, params.data.id, ownBubbles);
+
+    const overlays: { fileName: string; bundle: ShareBundle; diff: Mark[] }[] = [];
     for (const fileName of fileNames) {
       // eslint-disable-next-line no-await-in-loop -- overlay count per project is small
       const raw = await readJsonIfExists<unknown>(overlayFilePath(dataDir, params.data.id, fileName));
       if (raw === null) continue;
       const parsed = ShareBundleSchema.safeParse(raw);
-      if (parsed.success) overlays.push({ fileName, bundle: parsed.data });
+      if (!parsed.success) continue;
+      const diff = diffMarks(importedMarksFor(parsed.data), ownMarks, OVERLAY_DIFF_TOLERANCE_SECONDS);
+      overlays.push({ fileName, bundle: parsed.data, diff });
     }
     return { overlays };
   });

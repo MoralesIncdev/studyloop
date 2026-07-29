@@ -120,6 +120,14 @@ export interface Bubble {
   createdAt: string;
 }
 
+/** V3-C C1 "Concept Continuity rail" scorer weights (server/src/lib/continuity.ts). */
+export interface ContinuityWeights {
+  related: number;
+  conceptSearch: number;
+  teacherValidation: number;
+  gapFill: number;
+}
+
 /** GET/PUT /api/config response shape — the server never echoes the actual key back. */
 export interface StudyLoopConfig {
   dataDir: string;
@@ -131,6 +139,8 @@ export interface StudyLoopConfig {
   analysisModel: string | null;
   /** V2-C: author handle embedded in exported .studyloop.json bundles. */
   shareHandle: string;
+  /** V3-C C1: Concept Continuity scorer weights (hot-reloadable via PUT /api/config). */
+  continuityWeights: ContinuityWeights;
 }
 
 /** Body accepted by PUT /api/config — this is the only place the plaintext key travels. */
@@ -142,6 +152,7 @@ export interface StudyLoopConfigPatch {
   anthropicApiKey?: string | null;
   analysisModel?: string | null;
   shareHandle?: string;
+  continuityWeights?: ContinuityWeights;
 }
 
 // --- V2-C: Analysis engine (SPEC "Analysis engine ('pearls & concept breakdown')") ---
@@ -223,10 +234,31 @@ export type AnalyzeStatus =
   | { state: "done" }
   | { state: "error"; message: string };
 
-// --- V2-C: Heatmap + shareable analysis (SPEC) ---
+// --- V2-C / V3-C C5: Heatmap + shareable analysis (SPEC) ---
 
+/** V3-C C5 "Attention heatmap": one mark composing a bucket, for the click-to-inspect popover. */
+export interface HeatmapMark {
+  t: number;
+  kind: "bubble" | "pearl";
+  importance?: 1 | 2 | 3;
+  text: string;
+  /** "You" for the learner's own marks; the overlay's shareHandle otherwise. */
+  author: string;
+}
+
+/**
+ * V3-C C5 "Attention heatmap" (PEDAGOGY.md §7): own and overlay marks are
+ * bucketed/normalized as two INDEPENDENT layers, never merged — "render user
+ * layer and overlay layer separately (smooth within, never across)".
+ * `bucketCount`/`duration` are echoed back so the client can resolve
+ * "which marks does bucket N correspond to" locally (see lib/attentionHeatmap.ts).
+ */
 export interface HeatmapResponse {
-  buckets: number[];
+  own: number[];
+  overlays: number[];
+  marks: { own: HeatmapMark[]; overlays: HeatmapMark[] };
+  bucketCount: number;
+  duration: number;
 }
 
 export type ShareSourceRef =
@@ -253,11 +285,24 @@ export interface ShareBundle {
   pearls: Pearl[];
   concepts: AnalysisConcept[];
   themes: AnalysisTheme[];
+  /** V3-C C6: author-entered "why this grouping" text per own concept id. */
+  conceptRationales?: Record<string, string>;
+}
+
+/** V3-C C4 "Overlay diff-on-import": one imported mark the learner hasn't marked themselves (±15s). */
+export interface OverlayDiffMark {
+  t: number;
+  kind: "bubble" | "pearl";
+  importance?: 1 | 2 | 3;
+  text: string;
+  author: string;
 }
 
 export interface OverlayMeta {
   fileName: string;
   bundle: ShareBundle;
+  /** V3-C C4: moments this overlay marked that the learner's own bubbles/pearls don't cover yet. */
+  diff: OverlayDiffMark[];
 }
 
 export interface YoutubeResolveResponse {
@@ -381,4 +426,32 @@ export interface AttestationPatchBody {
   status?: AttestationStatus;
   userTake?: string;
   userBody?: string;
+}
+
+// --- V3-C C2: search intent toggles (SPEC/PEDAGOGY.md §6) -----------------
+
+export type SearchIntent = "overview" | "deep_dive" | "troubleshooting";
+
+// --- V3-C C1: Concept Continuity rail (SPEC/PEDAGOGY.md §6) ---------------
+
+export type ContinuityCandidateKind = "youtube" | "local";
+
+export interface ContinuityCandidate {
+  kind: ContinuityCandidateKind;
+  /** youtube: the real videoId. local: the library item's videoPath (also mirrored in `videoPath`). */
+  videoId: string;
+  title: string;
+  author: string;
+  durationSeconds?: number;
+  thumbnailUrl?: string;
+  /** Local-library suggestions only — lets the client open the project the same way search/library rows do. */
+  videoPath?: string;
+  transcriptPath?: string;
+  score: number;
+  /** Human-readable "why" chips, e.g. "teaches closed guard", "channel ranks for 3 of your topics". */
+  reasons: string[];
+}
+
+export interface ContinuityResponse {
+  candidates: ContinuityCandidate[];
 }

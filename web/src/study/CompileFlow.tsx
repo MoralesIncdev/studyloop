@@ -14,7 +14,11 @@ import { formatTimestamp } from "../lib/time";
 import { Icon } from "../components/icons";
 import { ModalShell } from "../components/ModalShell";
 import { MarkdownPreview } from "./MarkdownPreview";
+import type { ContinuityCandidate } from "../lib/types";
 import styles from "./CompileFlow.module.css";
+
+/** V3-C C3: top-N continuity candidates shown in the post-compile "What's next" section. */
+const WHATS_NEXT_COUNT = 3;
 
 /** Matches --duration-modal (280ms), the card's own CSS exit-animation length. */
 const EXIT_DURATION_MS = 280;
@@ -31,6 +35,14 @@ export function CompileFlow(): JSX.Element | null {
   const clearCompileResult = useStudyLoopStore((s) => s.clearCompileResult);
   const revealExport = useStudyLoopStore((s) => s.revealExport);
   const pushToast = useStudyLoopStore((s) => s.pushToast);
+  // V3-C C3 "Post-compile 'What's next'" (SPEC): same continuity candidates
+  // the rail already loaded (see state/store.ts loadProjectSession) — no
+  // second fetch, just the moment-of-peak-momentum surface for them.
+  const continuityCandidates = useStudyLoopStore((s) => s.continuityCandidates);
+  const openOrCreateYoutubeProject = useStudyLoopStore((s) => s.openOrCreateYoutubeProject);
+  const openOrCreateLocalProject = useStudyLoopStore((s) => s.openOrCreateLocalProject);
+  const navigate = useStudyLoopStore((s) => s.navigate);
+  const [openingWhatsNextId, setOpeningWhatsNextId] = useState<string | null>(null);
 
   const [synthesisOpen, setSynthesisOpen] = useState(false);
   const [synthesisText, setSynthesisText] = useState("");
@@ -129,6 +141,32 @@ export function CompileFlow(): JSX.Element | null {
       pushToast("Could not copy to clipboard — your browser may be blocking clipboard access", "error");
     }
   };
+
+  // V3-C C3: "click → create/open project" — same open flow ContinuityCard
+  // (RightRail.tsx) uses, duplicated here rather than shared since the two
+  // components have no other overlap and this keeps each self-contained.
+  const handleOpenWhatsNext = async (candidate: ContinuityCandidate): Promise<void> => {
+    setOpeningWhatsNextId(candidate.videoId);
+    try {
+      const project =
+        candidate.kind === "youtube"
+          ? await openOrCreateYoutubeProject(candidate.videoId)
+          : await openOrCreateLocalProject({
+              videoPath: candidate.videoPath ?? candidate.videoId,
+              title: candidate.title,
+              transcriptPath: candidate.transcriptPath,
+              durationSeconds: candidate.durationSeconds,
+            });
+      clearCompileResult();
+      navigate({ view: "study", projectId: project.id });
+    } catch {
+      // store already toasted the error
+    } finally {
+      setOpeningWhatsNextId(null);
+    }
+  };
+
+  const whatsNextCandidates = continuityCandidates.slice(0, WHATS_NEXT_COUNT);
 
   const captionRows = displayCaptionBubbles
     ? displayCaptionBubbles
@@ -283,6 +321,50 @@ export function CompileFlow(): JSX.Element | null {
                 onSeek={(t) => controller?.seek(t)}
               />
             </div>
+            {/* V3-C C3 "Post-compile 'What's next'" (SPEC): "top-3 continuity
+                candidates (same endpoint) with reason chips; click →
+                create/open project" — the moment of peak momentum right
+                after finishing the lesson. Hidden entirely when there's
+                nothing to suggest (matches every other rail section's
+                "hide, don't show dead space" convention). */}
+            {whatsNextCandidates.length > 0 && (
+              <div className={styles.whatsNext}>
+                <h3 className={styles.whatsNextTitle}>What&rsquo;s next</h3>
+                <ul className={styles.whatsNextList}>
+                  {whatsNextCandidates.map((candidate) => (
+                    <li key={`${candidate.kind}-${candidate.videoId}`}>
+                      <button
+                        type="button"
+                        className={styles.whatsNextItem}
+                        onClick={() => void handleOpenWhatsNext(candidate)}
+                        disabled={openingWhatsNextId === candidate.videoId}
+                      >
+                        <span className={styles.whatsNextThumb}>
+                          {candidate.thumbnailUrl ? (
+                            <img src={candidate.thumbnailUrl} alt="" className={styles.whatsNextThumbImg} loading="lazy" />
+                          ) : (
+                            <Icon name="play" size={16} />
+                          )}
+                        </span>
+                        <span className={styles.whatsNextBody}>
+                          <span className={styles.whatsNextItemTitle}>{candidate.title}</span>
+                          <span className={styles.whatsNextAuthor}>{candidate.author}</span>
+                          {candidate.reasons.length > 0 && (
+                            <span className={styles.whatsNextReasons}>
+                              {candidate.reasons.slice(0, 2).map((reason, i) => (
+                                <span key={i} className={styles.whatsNextReasonChip}>
+                                  {reason}
+                                </span>
+                              ))}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className={styles.cardActions}>
               <button type="button" className={styles.secondaryButton} onClick={() => void revealExport(displayCompileResult.path)}>
                 Reveal in Finder

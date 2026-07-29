@@ -11,12 +11,47 @@
   opacity: 0.86;
 }
 
+/* V3-C C5: click-to-inspect (SPEC) — the strip becomes its own hit target,
+   distinct from SeekBar's track underneath (which still owns plain seeking). */
+.strip.interactive {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.strip.interactive:hover {
+  opacity: 1;
+}
+
+.strip.interactive:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
 .area {
-  fill: url("#heatmapFill");
+  fill: url("#heatmapFillOwn");
 }
 
 .line {
   stroke: rgb(255 255 255 / 58%);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
+}
+
+/* V3-C C5 "Attention heatmap" (PEDAGOGY §7): overlays render translucent and
+   in a distinct hue (accent-blue) from own (white/currentColor) — "own
+   solid, overlays translucent", never blended into one curve. */
+.overlayArea {
+  fill: url("#heatmapFillOverlays");
+}
+
+.overlayLine {
+  stroke: color-mix(in srgb, var(--accent-blue) 70%, transparent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.ownLayer,
+.overlayLayer {
+  pointer-events: none;
 }

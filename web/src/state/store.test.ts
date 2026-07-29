@@ -190,6 +190,7 @@ function baseConfig(overrides: Partial<{ anthropicApiKeySet: boolean; analysisMo
     anthropicApiKeySet: false,
     analysisModel: null,
     shareHandle: "anonymous",
+    continuityWeights: { related: 0.15, conceptSearch: 0.3, teacherValidation: 0.3, gapFill: 0.25 },
     ...overrides,
   };
 }

@@ -3,6 +3,21 @@ import path from "node:path";
 import { z } from "zod";
 import { pathExists, readJsonIfExists, writeJsonAtomic } from "./lib/store.js";
 
+/**
+ * V3-C C1 "Concept Continuity rail" (PEDAGOGY.md §6): hand-tuned default
+ * weights for lib/continuity.ts's scorer — hot-reloadable via PUT
+ * /api/config, read fresh from getConfig() on every GET
+ * /api/projects/:id/continuity call (no module-level caching of the weights
+ * themselves).
+ */
+export const ContinuityWeightsSchema = z.object({
+  related: z.number().default(0.15),
+  conceptSearch: z.number().default(0.3),
+  teacherValidation: z.number().default(0.3),
+  gapFill: z.number().default(0.25),
+});
+export type ContinuityWeights = z.infer<typeof ContinuityWeightsSchema>;
+
 export const ConfigSchema = z.object({
   dataDir: z.string().default("~/StudyLoopData"),
   libraryRoots: z.array(z.string()).default([]),
@@ -13,6 +28,8 @@ export const ConfigSchema = z.object({
   analysisModel: z.string().nullable().default(null),
   /** V2-C share bundles: author handle embedded in exported .studyloop.json files (SPEC default "anonymous"). */
   shareHandle: z.string().min(1).default("anonymous"),
+  /** V3-C C1: Concept Continuity scorer weights (SPEC "weights in config continuityWeights, hot-reloadable"). */
+  continuityWeights: ContinuityWeightsSchema.default({}),
 });
 
 export type StudyLoopConfig = z.infer<typeof ConfigSchema>;
@@ -39,6 +56,7 @@ const DEFAULT_CONFIG: StudyLoopConfig = {
   anthropicApiKey: null,
   analysisModel: null,
   shareHandle: "anonymous",
+  continuityWeights: { related: 0.15, conceptSearch: 0.3, teacherValidation: 0.3, gapFill: 0.25 },
 };
 
 export async function loadConfig(): Promise<StudyLoopConfig> {

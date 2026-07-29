@@ -82,6 +82,17 @@ export const ShareBundleSchema = z.object({
   pearls: z.array(PearlSchema),
   concepts: z.array(AnalysisConceptSchema),
   themes: z.array(AnalysisThemeSchema),
+  /**
+   * V3-C C6 "Bundle narrative fields": author-editable "why this grouping"
+   * text per own concept, entered in the rail right before export (SPEC:
+   * "author-editable in the rail before export via small 'why this
+   * grouping' input on own concepts") — keyed by `AnalysisConcept.id`.
+   * Optional, and NOT part of the immutable `AnalysisConcept` shape itself
+   * (that schema is V3-B's) — a concept with no rationale entry simply has
+   * none, and bundle version stays 1 (matches lessonSummary's precedent
+   * above: an additive optional field, old/absent bundles still validate).
+   */
+  conceptRationales: z.record(z.string()).optional(),
 });
 export type ShareBundle = z.infer<typeof ShareBundleSchema>;
 
@@ -94,6 +105,8 @@ export interface BuildShareBundleInput {
   pearls?: import("./analysis.js").Pearl[];
   concepts?: import("./analysis.js").AnalysisConcept[];
   themes?: import("./analysis.js").AnalysisTheme[];
+  /** V3-C C6: author-entered "why this grouping" text per own concept id — see ShareBundleSchema.conceptRationales. */
+  conceptRationales?: Record<string, string>;
   /** Resolves a bubble's shot (project-relative path, e.g. "shots/shot-1200.jpg") to a base64 thumbnail, or null. */
   resolveThumbnail: (shotRelPath: string) => Promise<string | null>;
 }
@@ -108,6 +121,15 @@ export async function buildShareBundle(input: BuildShareBundleInput): Promise<Sh
       thumbnailBase64: b.shot ? await input.resolveThumbnail(b.shot) : null,
     }))
   );
+  // Only keep non-blank rationale strings, and only for concepts that
+  // actually exist in this bundle — a stale/mistargeted id from the client
+  // (e.g. left over after a re-analyze changed concept ids) shouldn't ship
+  // an orphaned rationale entry nobody can ever render against a concept.
+  const conceptIds = new Set((input.concepts ?? []).map((c) => c.id));
+  const trimmedRationales = Object.fromEntries(
+    Object.entries(input.conceptRationales ?? {}).filter(([id, text]) => conceptIds.has(id) && text.trim().length > 0)
+  );
+
   return {
     version: 1,
     createdAt: new Date().toISOString(),
@@ -120,6 +142,7 @@ export async function buildShareBundle(input: BuildShareBundleInput): Promise<Sh
     pearls: input.pearls ?? [],
     concepts: input.concepts ?? [],
     themes: input.themes ?? [],
+    conceptRationales: Object.keys(trimmedRationales).length > 0 ? trimmedRationales : undefined,
   };
 }
 

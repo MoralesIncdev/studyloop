@@ -14,7 +14,9 @@ import type {
   AttestationsFile,
   Bubble,
   ConceptCard,
+  ContinuityCandidate,
   HealthResponse,
+  HeatmapMark,
   LibraryItem,
   OverlayMeta,
   Project,
@@ -22,11 +24,13 @@ import type {
   ReviewGrade,
   ReviewQueueCounts,
   ReviewStreak,
+  SearchIntent,
   ShareBundle,
   StudyLoopConfig,
   StudyLoopConfigPatch,
   TranscriptSegment,
 } from "../lib/types";
+import { hasSeenAttentionLegend, markAttentionLegendSeen } from "../lib/attentionHeatmap";
 import type { PlayerHandle } from "../player/types";
 
 // "concepts" moved out of the bottom dock into the V2 right-rail Concepts
@@ -410,10 +414,20 @@ export interface StudyLoopStore {
   /** Internal: begins (or restarts) the 1s poll loop against /analyze/status for `projectId`. */
   pollAnalyzeStatus: (projectId: string) => void;
 
-  // --- V2-C heatmap -----------------------------------------------------------------------
-  heatmapBuckets: number[];
+  // --- V2-C / V3-C C5 "Attention heatmap" ----------------------------------------------------
+  /** Own-marks layer, bucket density in [0,1] (independently normalized — see PEDAGOGY §7). */
+  heatmapOwn: number[];
+  /** Overlays layer (all imported bundles combined), independently normalized. */
+  heatmapOverlays: number[];
+  /** Raw marks behind both layers, for click-to-inspect (see lib/attentionHeatmap.ts). */
+  heatmapMarks: { own: HeatmapMark[]; overlays: HeatmapMark[] };
+  heatmapDuration: number;
+  heatmapBucketCount: number;
   /** Debounced GET /api/projects/:id/heatmap — call after analyze completes or bubbles change. */
   loadHeatmap: () => void;
+  /** SPEC C5 "Legend line one-time": shown once ever (localStorage-backed, not per-project). */
+  attentionLegendSeen: boolean;
+  dismissAttentionLegend: () => void;
 
   // --- V2-C share bundles / overlays --------------------------------------------------------
   overlays: OverlayMeta[];
@@ -424,12 +438,26 @@ export interface StudyLoopStore {
   /** {path} import (SPEC: "multipart or {path}" — the web app only drives the path form). */
   importOverlayByPath: (path: string) => Promise<void>;
   deleteOverlayFile: (fileName: string) => Promise<void>;
+  /** V3-C C4 "Overlay diff-on-import": per-row dismissal, keyed `${fileName}:${kind}:${t}` — session-only, not persisted. */
+  dismissedOverlayDiffKeys: Set<string>;
+  dismissOverlayDiffRow: (fileName: string, mark: { kind: "bubble" | "pearl"; t: number }) => void;
 
   exportingAnalysis: boolean;
   /** Set once POST /api/projects/:id/export-analysis succeeds; drives the Share preview/modal. */
   shareResult: { path: string; bundle: ShareBundle } | null;
-  runExportAnalysis: () => Promise<void>;
+  /** V3-C C6: optional per-concept "why this grouping" text, entered right before export. */
+  runExportAnalysis: (conceptRationales?: Record<string, string>) => Promise<void>;
   clearShareResult: () => void;
+
+  // --- V3-C C1 "Concept Continuity rail" -----------------------------------------------------
+  continuityCandidates: ContinuityCandidate[];
+  continuityLoading: boolean;
+  loadContinuity: () => Promise<void>;
+
+  // --- V3-C C2 "Search intent toggles" -------------------------------------------------------
+  /** Sticky per session (in-memory only — not persisted across reloads). */
+  searchIntent: SearchIntent | null;
+  setSearchIntent: (intent: SearchIntent | null) => void;
 
   // --- F11 review mode --------------------------------------------------------------------
   /** Refreshed on app mount (TopBar badge / home banner) and after every grade — never scheduling internals, just the hidden-mechanics-safe summary. */
@@ -731,14 +759,21 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       compileResult: null,
       analysis: null,
       analyzeStatus: { state: "idle" },
-      heatmapBuckets: [],
+      heatmapOwn: [],
+      heatmapOverlays: [],
+      heatmapMarks: { own: [], overlays: [] },
+      heatmapDuration: 0,
+      heatmapBucketCount: 0,
       overlays: [],
       overlaysLoading: false,
       overlaysVisible: false,
+      dismissedOverlayDiffKeys: new Set(),
       exportingAnalysis: false,
       shareResult: null,
       attestations: {},
       attestationsLoading: false,
+      continuityCandidates: [],
+      continuityLoading: false,
     });
     let project: Project;
     try {
@@ -845,6 +880,22 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       }
     })();
 
+    // V3-C C1: fetched eagerly alongside the rest of the session (not lazily
+    // on rail mount) so the Continuity cabinet has data the moment the Study
+    // view renders, same as Up-next's `project.related` used to before this
+    // rail replaced it. Fails quiet — see loadContinuity's own catch.
+    const continuityPromise = (async () => {
+      set({ continuityLoading: true });
+      try {
+        const res = await api.getContinuity(id);
+        if (!isCurrent()) return;
+        set({ continuityCandidates: res.candidates, continuityLoading: false });
+      } catch {
+        if (!isCurrent()) return;
+        set({ continuityLoading: false });
+      }
+    })();
+
     if (project.transcript.type === "file") {
       set({ transcriptLoading: true });
       try {
@@ -858,7 +909,15 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       }
     }
 
-    await Promise.all([bubblesPromise, notesPromise, conceptsPromise, analysisPromise, overlaysPromise, attestationsPromise]);
+    await Promise.all([
+      bubblesPromise,
+      notesPromise,
+      conceptsPromise,
+      analysisPromise,
+      overlaysPromise,
+      attestationsPromise,
+      continuityPromise,
+    ]);
   },
   clearProjectSession: () => {
     clearPendingNotesSave();
@@ -893,14 +952,21 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       compileResult: null,
       analysis: null,
       analyzeStatus: { state: "idle" },
-      heatmapBuckets: [],
+      heatmapOwn: [],
+      heatmapOverlays: [],
+      heatmapMarks: { own: [], overlays: [] },
+      heatmapDuration: 0,
+      heatmapBucketCount: 0,
       overlays: [],
       overlaysLoading: false,
       overlaysVisible: false,
+      dismissedOverlayDiffKeys: new Set(),
       exportingAnalysis: false,
       shareResult: null,
       attestations: {},
       attestationsLoading: false,
+      continuityCandidates: [],
+      continuityLoading: false,
     }));
   },
   patchCurrentProject: async (patch) => {
@@ -1445,8 +1511,12 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     }, ANALYZE_POLL_INTERVAL_MS);
   },
 
-  // --- V2-C heatmap -----------------------------------------------------------------------
-  heatmapBuckets: [],
+  // --- V2-C / V3-C C5 "Attention heatmap" ----------------------------------------------------
+  heatmapOwn: [],
+  heatmapOverlays: [],
+  heatmapMarks: { own: [], overlays: [] },
+  heatmapDuration: 0,
+  heatmapBucketCount: 0,
   loadHeatmap: () => {
     const project = get().currentProject;
     if (!project) return;
@@ -1458,12 +1528,23 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
         .getHeatmap(projectId)
         .then((res) => {
           if (get().currentProject?.id !== projectId) return;
-          set({ heatmapBuckets: res.buckets });
+          set({
+            heatmapOwn: res.own,
+            heatmapOverlays: res.overlays,
+            heatmapMarks: res.marks,
+            heatmapDuration: res.duration,
+            heatmapBucketCount: res.bucketCount,
+          });
         })
         .catch(() => {
           // Heatmap is presentational only — fail quiet rather than toast on every change.
         });
     }, HEATMAP_DEBOUNCE_MS);
+  },
+  attentionLegendSeen: hasSeenAttentionLegend(),
+  dismissAttentionLegend: () => {
+    markAttentionLegendSeen();
+    set({ attentionLegendSeen: true });
   },
 
   // --- V2-C share bundles / overlays --------------------------------------------------------
@@ -1471,6 +1552,13 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   overlaysLoading: false,
   overlaysVisible: false,
   toggleOverlaysVisible: () => set((state) => ({ overlaysVisible: !state.overlaysVisible })),
+  dismissedOverlayDiffKeys: new Set(),
+  dismissOverlayDiffRow: (fileName, mark) =>
+    set((state) => {
+      const next = new Set(state.dismissedOverlayDiffKeys);
+      next.add(`${fileName}:${mark.kind}:${mark.t}`);
+      return { dismissedOverlayDiffKeys: next };
+    }),
   loadOverlays: async () => {
     const project = get().currentProject;
     if (!project) return;
@@ -1520,12 +1608,12 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
 
   exportingAnalysis: false,
   shareResult: null,
-  runExportAnalysis: async () => {
+  runExportAnalysis: async (conceptRationales) => {
     const project = get().currentProject;
     if (!project) return;
     set({ exportingAnalysis: true });
     try {
-      const result = await api.exportAnalysis(project.id);
+      const result = await api.exportAnalysis(project.id, conceptRationales);
       set({ exportingAnalysis: false, shareResult: result });
       get().pushToast("Exported analysis bundle", "success");
     } catch (err) {
@@ -1618,6 +1706,30 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     }
     get().navigate({ view: "study", projectId: card.projectId });
   },
+
+  // --- V3-C C1 "Concept Continuity rail" -----------------------------------------------------
+  continuityCandidates: [],
+  continuityLoading: false,
+  loadContinuity: async () => {
+    const project = get().currentProject;
+    if (!project) return;
+    const projectId = project.id;
+    set({ continuityLoading: true });
+    try {
+      const res = await api.getContinuity(projectId);
+      if (get().currentProject?.id !== projectId) return; // navigated away mid-request
+      set({ continuityCandidates: res.candidates, continuityLoading: false });
+    } catch {
+      // Presentational rail data — fail quiet (matches loadHeatmap/loadOverlays'
+      // reasoning) rather than toast on every Study-view load.
+      if (get().currentProject?.id !== projectId) return;
+      set({ continuityLoading: false });
+    }
+  },
+
+  // --- V3-C C2 "Search intent toggles" -------------------------------------------------------
+  searchIntent: null,
+  setSearchIntent: (intent) => set({ searchIntent: intent }),
 
   // --- toasts -----------------------------------------------------------------------
   toasts: [],

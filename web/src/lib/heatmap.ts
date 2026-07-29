@@ -1,8 +1,9 @@
-// SUPERSEDED (V2-C): PlayerChrome now sources the heatmap from the real
-// `GET /api/projects/:id/heatmap` (server-side Gaussian smoothing — see
-// server/src/lib/heatmap.ts) via the store's `heatmapBuckets`/`loadHeatmap`,
-// not this client-side stand-in. Kept only for its unit test coverage of the
-// bucketing math this module pioneered; not imported by any component anymore.
+// SUPERSEDED (V2-C, then V3-C C5): PlayerChrome now sources the heatmap from
+// the real `GET /api/projects/:id/heatmap` (server-side Gaussian smoothing —
+// see server/src/lib/heatmap.ts) via the store's `heatmapOwn`/`heatmapOverlays`/
+// `loadHeatmap`, not this client-side stand-in. Kept only for its unit test
+// coverage of the bucketing math this module pioneered; not imported by any
+// component anymore.
 import type { Bubble } from "./types";
 
 export const HEATMAP_BUCKET_COUNT = 100;
