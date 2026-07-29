@@ -456,3 +456,55 @@ identically for local files.*
   "add key in Settings" hint).
 - Local-video projects: identical UI minus YouTube-only sections (no dead space —
   rail sections collapse).
+
+---
+
+# F11 — Review Mode (spaced resurfacing) (2026-07-28)
+*Council mandate: active recall + spaced repetition are the strongest-evidence
+features; SRS mechanics must be HIDDEN (no decks, ease factors, or scheduling UI —
+Anki-style exposed mechanics kill adoption). Frame as a memory aid.*
+
+## Cards
+A review card is derived (never duplicated) from study artifacts across ALL projects:
+- **Bubble card** (bubble with text): front = shot image (or timestamp chip + project
+  title when no shot) + prompt "What was your note here?"; back = the note text +
+  transcript quote if the note carries one.
+- **Pearl card** (analysis pearls): front = pearl label + project title; back = the
+  insight. Only from `source: "model"` analyses (stubs excluded outside dev).
+Cards are identified by stable ids: `bubble:<projectId>:<bubbleId>`,
+`pearl:<projectId>:<t>`. Deleted artifacts drop their cards silently.
+
+## Scheduling (hidden SM-2-lite)
+`<dataDir>/review.json` — `{version:1, cards:{[cardId]:{due, interval, lapses,
+reps, lastGrade, introducedAt}}}` via the existing atomic-write + a global mutex.
+- New cards: due immediately, capped at 20 new/day (introducedAt stamps).
+- Grades: **Again** → interval 0 (repeat this session, +lapse), **Got it** →
+  next interval in ladder [1, 3, 7, 14, 30, 60] days (advance one step; Again
+  resets to step 0). No other knobs, nothing exposed in UI.
+- `GET /api/review/queue` → {due: Card[], counts:{due,new,total}} — server joins
+  scheduling state with live artifacts (drops orphans, hydrates card content).
+- `POST /api/review/grade` {cardId, grade:"again"|"good"} → updates state,
+  returns next queue slice. Zod everywhere; review.json corruption → rebuild empty.
+
+## UI (YouTube-native)
+- **Entry points:** TopBar gains a Review icon-button with a due-count badge
+  (YouTube notification-bell placement/look); home page shows a slim "Review —
+  N cards due" banner card when N>0 (hidden at 0).
+- **Review view** (`#/review`): centered single card on `--surface-bg`, card on
+  `--surface-raised` with `--shadow-2`, max-width 720px. Front → "Show answer"
+  (Space) → back reveals with a fast flip/fade (`--duration-standard`), then two
+  pills: "Again" (danger-outline) / "Got it" (filled accent) — hotkeys 1/2 or
+  A/G. Progress: thin top bar (cards done / session total). Session ends →
+  summary state ("All caught up" + streak line) with "Back to StudyLoop".
+- **Clip loop:** bubble cards with a local-video source get a "Play 10s clip"
+  button on the BACK: inline muted-by-default mini player (existing /api/video/stream
+  + range) looping [t−5, t+5] with the existing A-B loop logic; YouTube-source
+  cards fall back to a "Open at timestamp" link into the watch view. Clip is
+  lazy — no video element until pressed.
+- Reduced-motion honored; skeleton while queue loads; empty state when no cards
+  exist yet ("Take notes while studying — they come back here for review").
+- Keyboard-first: Space reveal, 1/A again, 2/G got-it, Esc exit.
+
+## Non-goals (this build)
+No per-project decks, no stats page, no configurable ladder, no import of
+overlay/others' cards (own artifacts only).
