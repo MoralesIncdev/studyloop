@@ -726,3 +726,56 @@ through existing loaders (tolerate both v2 and v3 shapes via a thin accessor).*
   attestation gating, card transformation cache, router domain gate).
 - No emojis; DESIGN.md matrix on all new interactive elements; reduced-motion.
 - Browser-verified on real corpus; screenshots committed.
+
+---
+
+# V3-D — Depth (2026-07-29)
+*Implements FEATURE-REVIEW V3-D P1 set. The P2 tier (library-wide prerequisite
+graph, multi-video lesson composer, home-grid Threads) is deliberately deferred
+to V3-E pending v3 extraction accuracy in real use.*
+
+## D1. Domain overlay fields + domain slot types
+- Analysis v3 units gain optional `overlay` object per domain (biology:
+  levelOfOrganization/mechanismType/entities; history: sourceType/causationType/
+  actors/perspectiveFlag; music: schema/notation/keyContext; physical_skill:
+  triggers/failureModes/drillPairing). Extraction prompt modules request them;
+  zod optional everywhere; renderer shows overlay in an "Advanced" fold on the
+  unit card (collapsed by default, dimmed label).
+- Generation slots become domain-aware: slot prompt style per domain
+  (history → source-question "who claims this and why?"; music → notation-map;
+  physical_skill → execute-step "you're in X, opponent does Y — next?";
+  biology → mechanism-why). Pool lives in the existing promptPoolFor(domain)
+  hook (V3-A) — extend it; Study Path + notation modal both consume it.
+
+## D2. Threshold-concept tagging
+- Extraction flags `threshold: true` units (transformative/integrative/
+  troublesome). UI: subtle key-icon badge + one-line banner on the card
+  ("This idea unlocks later material"); Study Path inserts a REINFORCE step
+  (repeat slot) 2 positions after a threshold unit; review scheduler seeds
+  threshold-unit cards at higher initial priority (due first among new).
+
+## D3. Concept merge queue (cross-video identity)
+- `<dataDir>/conceptRegistry.json`: canonical units {id, label, aliases,
+  domain, fingerprint, projectRefs:[{projectId, unitId}]}. After each analyze,
+  fingerprint (lowercased lemma-ish label + first summary sentence + domain)
+  match per KGA design: exact → auto-merge (alias + ref); similarity ≥0.85
+  (token Jaccard, no embeddings) → candidate queue; never auto-merge BOUNDARY
+  or threshold units.
+- `GET /api/registry/merge-candidates`, `POST .../resolve {action: merge|link|
+  ignore}`. UI: badge on the Concepts rail header ("Review merges · N");
+  panel shows side-by-side label+summary with Merge / Keep separate buttons.
+  Merged units display a subtle "also in ⟨other project⟩" chip linking there.
+
+## D4. Domain-aware review question generation
+- Card transformation (V3-B) becomes domain-routed: the transformation prompt
+  uses the project domain to shape question style (mechanistic why / sourcing
+  / scenario application / notation). Cached as today; regeneration only on
+  explicit "improve this card" action added to the review card back (small
+  text button, requires API key).
+
+## Acceptance
+- typecheck + full suite green (baseline 686); new tests: overlay zod
+  tolerance, threshold path insertion, fingerprint match tiers + never-merge
+  guards, registry resolve actions, domain question routing (fake client).
+- No emojis; DESIGN.md matrix; browser-verified; screenshots
+  design/v3d-merge-queue.png + v3d-overlay.png committed.
