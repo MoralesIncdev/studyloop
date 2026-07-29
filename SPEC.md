@@ -610,3 +610,119 @@ hover/active/focus-visible/disabled matrix.*
   bundle), renderer golden with/without summary, chip-strip active-window
   selector reuse.
 - Browser-verified on the real corpus + screenshots.
+
+---
+
+# V3-B — Typed Analysis + Attestation + Study Path (2026-07-28)
+*Implements FEATURE-REVIEW V3-B under PEDAGOGY.md. Everything here is engine +
+review-loop; do NOT touch search/share/heatmap/up-next (V3-C owns those).*
+
+## B1. Analysis v3 (typed extraction)
+- `analysis.json` version:3. One ROUTER call per analyze run classifies domain
+  → `domain: "biology"|"history"|"music"|"physical_skill"|"generic"` stored on
+  the project (editable chip near the channel row; PATCH `domain`).
+- Per-chunk extraction emits typed units on the universal spine:
+  `{id, type: CLAIM|MECHANISM|PROCEDURE|EXAMPLE|BOUNDARY, label, summary,
+  body, anchors:[{t,quote}], confidence}` + edges
+  `{source, target, type: REQUIRES|PART_OF|EXAMPLE_OF|PROCEDURE_STEP,
+  quote, confidence}`. Merge pass dedups by label-fingerprint, averages
+  confidence, keeps all anchors. Pearls/themes remain as today (pearls get
+  `unitId?` linking them to a unit when applicable).
+- Domain routes prompt MODULES (one extraction call per chunk, same call count
+  as v2): module tweaks the unit emphasis + adds domain slot-question style.
+  `FakeAnalysisClient` upgraded to emit v3 shapes.
+- v2 analysis.json files remain readable (version gate; render as before,
+  no attestation for legacy).
+
+## B2. Attestation + reveal-gating
+- AI units render as PROPOSALS: rail cards show label + type badge, body
+  COLLAPSED behind "Reveal" — but reveal is gated by generation: a one-line
+  "your take" input ("Define it / predict it in your own words — or skip")
+  sits above the reveal control; typing anything (or explicit skip) unlocks
+  reveal. Per-project `novice mode` toggle (Settings row on project header
+  menu) flips order: body shown first, then "restate it" input.
+- Card actions: **Attest** (check — "I've got this"), **Edit** (opens body
+  editor; user layer stored separately as `userBody`, original immutable),
+  **Dismiss** (hides unit). State in `<project>/attestations.json`:
+  `{[unitId]: {status: attested|dismissed, userTake?, userBody?, at}}`.
+- Only attested units (or units with a userTake) feed review cards + compile
+  concept sections. Unattested render in compile under "Not yet reviewed"
+  as titles only.
+
+## B3. Study Path rail tab
+- New rail section "Path": topological order over REQUIRES/PROCEDURE_STEP
+  edges (fallback: anchor time order). Each step: unit label + type badge +
+  mm:ss chip (seek) + its generation slot (one-line input per B2) + attest
+  check. Progress line "n/m attested". No graph visualization.
+- Low-confidence (<0.6) edges do not affect ordering (time order wins).
+
+## B4. Review-loop upgrades
+- **Card transformation:** when analysis v3 + API key present, bubble cards
+  with weak text (<40 chars or no '?' etc. heuristic) get an LLM-generated
+  cloze/question front (quote = source, user note = hint) cached in
+  review.json per card (`transformed:{front,back,why}`); fallback = current
+  format. Pearl cards become question-form fronts with corrective backs
+  (answer + one-line why + clip link already exists).
+- **Lapse-to-context:** Again ×2 in-session → inline auto-playing 10s clip
+  (local) or timestamp link (YT); ×3 → "Open in player" button (seeds
+  lastPosition, navigates, pauses queue).
+- **Mastery over streaks:** summary screen headline = "Concepts locked in: N"
+  (cards with interval ≥30d); streak becomes small footnote text.
+- Attested units become reviewable as generation cards: front = "your take"
+  prompt for the unit, back = unit summary + user's own take.
+
+# V3-C — Discovery & Apprenticeship (2026-07-28)
+*Implements FEATURE-REVIEW V3-C under PEDAGOGY.md §6-7. Do NOT touch analysis
+internals/review scheduling (V3-B owns those). Reads analysis output only
+through existing loaders (tolerate both v2 and v3 shapes via a thin accessor).*
+
+## C1. Concept Continuity rail (replaces raw Up-next)
+- Server `lib/continuity.ts`: score candidates =
+  `0.15*related + 0.30*conceptSearch + 0.30*teacherValidation + 0.25*gapFill`
+  (weights in config `continuityWeights`, hot-reloadable).
+  - related: candidate ∈ youtube related list (normalized rank score)
+  - conceptSearch: Innertube searches for the project's top concepts/themes
+    (max 3 queries, cached 15min); candidate rank across queries
+  - teacherValidation: channel recurrence across those independent query
+    results (≥2 distinct queries → bonus; per-channel score cached in
+    `<dataDir>/teacherScores.json`, decays never for v1)
+  - gapFill: 0 for v1 unless analysis provides units the user marked
+    dismissed/unattested — read-only hook, degrade to 0 without analysis
+- `GET /api/projects/:id/continuity` → ranked candidates with `reasons:[]`
+  ("teaches ⟨concept⟩", "channel ranks for N of your topics", "related").
+  Up-next cabinet renders these with reason chips; local-video projects:
+  section shows library-based suggestions only (same scorer, library items
+  matched by concept-title overlap; hide when empty).
+## C2. Search intent toggles
+- TopBar search dropdown gains three toggle chips: Overview / Deep dive /
+  Troubleshooting → server search route accepts `intent` param reshaping the
+  YouTube query ("<q> introduction|explained" / "<q> in depth|lecture|masterclass" /
+  "<q> mistakes|common problems|fixing"). Off by default; sticky per session.
+## C3. Post-compile "What's next"
+- Compile result modal gains a bottom section: top-3 continuity candidates
+  (same endpoint) with reason chips; click → create/open project.
+## C4. Overlay diff-on-import ("what they marked that you didn't")
+- Server `lib/overlayDiff.ts`: pure set-difference (imported marks minus own,
+  ±15s tolerance window), sorted by importance (pearl importance > bubble).
+- On import (and on overlay toggle-on), rail section "From ⟨handle⟩ — N
+  moments you haven't marked": clickable seek rows (t−5s), dismissible
+  per-row. Read-only.
+## C5. Attention heatmap
+- Rename UI label to "Attention". Server heatmap returns per-layer arrays
+  `{own, overlays}` (smooth within layer); SeekBar renders two hues (own
+  solid, overlays translucent). Click on strip → popover listing marks within
+  that bucket (±1 bucket): author handle, type, text snippet; click row →
+  seek. Legend line one-time: "Attention = where marks concentrate, not
+  importance."
+## C6. Bundle narrative fields
+- Bundle schema: optional `lessonSummary` (exists post-V3-A) + per-concept
+  `rationale` (author-editable in the rail before export via small "why this
+  grouping" input on own concepts). On import, author's lessonSummary renders
+  as collapsible intro card atop the overlay rail section.
+
+## Shared acceptance (both phases)
+- typecheck + full suite green; unit tests for every pure lib (scorer with
+  fake fixtures, overlayDiff tolerance/edges, topo sort + cycle fallback,
+  attestation gating, card transformation cache, router domain gate).
+- No emojis; DESIGN.md matrix on all new interactive elements; reduced-motion.
+- Browser-verified on real corpus; screenshots committed.
