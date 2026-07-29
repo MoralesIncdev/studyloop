@@ -12,6 +12,7 @@ function baseConfig(overrides: Partial<StudyLoopConfig> = {}): StudyLoopConfig {
     anthropicApiKey: null,
     analysisModel: null,
     shareHandle: "anonymous",
+    continuityWeights: { related: 0.15, conceptSearch: 0.3, teacherValidation: 0.3, gapFill: 0.25 },
     ...overrides,
   };
 }

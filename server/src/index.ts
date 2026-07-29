@@ -22,6 +22,7 @@ import { analyzeRoutes } from "./routes/analyze.js";
 import { heatmapRoutes } from "./routes/heatmap.js";
 import { shareRoutes } from "./routes/share.js";
 import { reviewRoutes } from "./routes/review.js";
+import { continuityRoutes } from "./routes/continuity.js";
 import { getHealth } from "./lib/health.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -77,6 +78,7 @@ async function main(): Promise<void> {
   await app.register(heatmapRoutes);
   await app.register(shareRoutes);
   await app.register(reviewRoutes);
+  await app.register(continuityRoutes);
 
   // Out-of-box polish: lets the web app disable screenshot controls with a
   // clear tooltip instead of a failed request when ffmpeg/yt-dlp aren't on

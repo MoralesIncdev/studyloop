@@ -271,3 +271,45 @@ export async function readBubbles(dataDir: string, id: string): Promise<Bubble[]
 export async function writeBubbles(dataDir: string, id: string, bubbles: Bubble[]): Promise<void> {
   await writeJsonAtomic(bubblesPath(dataDir, id), bubbles);
 }
+
+// ---------------------------------------------------------------------------
+// V3-C C1 "Concept Continuity rail" (SPEC): `<dataDir>/teacherScores.json` —
+// a single, dataDir-scoped (not per-project) cache of per-channel
+// teacher-validation scores, read/written by lib/continuityService.ts. Reuses
+// the same "promise-chain mutex" shape as withProjectLock above, but keyed by
+// a fixed constant instead of a project id (there's exactly one file, not one
+// per project) so two concurrent GET /api/projects/:id/continuity calls can't
+// race a read-modify-write of the same JSON file.
+// ---------------------------------------------------------------------------
+
+let teacherScoresLock: Promise<unknown> = Promise.resolve();
+
+export function withTeacherScoresLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = teacherScoresLock.then(fn, fn);
+  teacherScoresLock = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
+export function teacherScoresPath(dataDir: string): string {
+  return path.join(dataDir, "teacherScores.json");
+}
+
+/** Defensive read: drops non-numeric entries, clamps to [0, 10] (updateTeacherScores' own invariant) — a corrupted/hand-edited file degrades to a partial (never crashing) score map rather than 500ing every continuity request. */
+export async function readTeacherScores(dataDir: string): Promise<Record<string, number>> {
+  const raw = await readJsonIfExists<Record<string, unknown>>(teacherScoresPath(dataDir));
+  if (raw === null || typeof raw !== "object") return {};
+  const out: Record<string, number> = {};
+  for (const [channel, value] of Object.entries(raw)) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      out[channel] = Math.min(10, Math.max(0, value));
+    }
+  }
+  return out;
+}
+
+export async function writeTeacherScores(dataDir: string, scores: Record<string, number>): Promise<void> {
+  await writeJsonAtomic(teacherScoresPath(dataDir), scores);
+}
