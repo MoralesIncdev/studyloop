@@ -6,10 +6,18 @@
 // lib/review.ts (fully unit-tested there) — this file only does I/O and
 // wires it together, matching this codebase's "routes stay thin" convention.
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { getConfig, resolveDataDir } from "../config.js";
 import { AnalysisSchema, type Analysis } from "../lib/analysis.js";
 import { readAttestations } from "../lib/attestationStore.js";
-import { attachTransforms, fillTransformCache, isWeakBubbleText, resolveCardTransformClient, type CardTransformInput } from "../lib/cardTransform.js";
+import {
+  attachTransforms,
+  fillTransformCache,
+  isWeakBubbleText,
+  resolveCardTransformClient,
+  withTransformResult,
+  type CardTransformInput,
+} from "../lib/cardTransform.js";
 import type { Project } from "../lib/models.js";
 import {
   buildReviewQueue,
@@ -65,11 +73,16 @@ async function loadLiveCards(
     cards.push(...liveCards);
 
     if (analysis?.version === 3) {
+      // V3-D D4: routes the transformation prompt's question style by the
+      // owning project's domain (see lib/cardTransform.ts's
+      // CARD_TRANSFORM_DOMAIN_MODULES) — undefined domain (a v3 analysis
+      // whose router call was skipped) falls back to the generic style.
+      const domain = analysis.domain;
       for (const c of liveCards) {
         if (c.kind === "bubble" && isWeakBubbleText(c.text)) {
-          transformCandidates.set(c.id, { quote: c.text, note: "", kind: "bubble" });
+          transformCandidates.set(c.id, { quote: c.text, note: "", kind: "bubble", domain });
         } else if (c.kind === "pearl") {
-          transformCandidates.set(c.id, { quote: c.insight, note: c.label, kind: "pearl" });
+          transformCandidates.set(c.id, { quote: c.insight, note: c.label, kind: "pearl", domain });
         }
       }
     }
@@ -146,5 +159,49 @@ export async function reviewRoutes(app: FastifyInstance): Promise<void> {
       streak: result.nextState.streak ?? null,
       masteryCount: masteryCount(result.nextState.cards),
     };
+  });
+
+  // V3-D D4 "improve this card": explicit regeneration, bypassing
+  // fillTransformCache's "skip if already cached" policy — requires an API
+  // key (or fake mode; resolveCardTransformClient's own priority order)
+  // since this is a deliberate user action, not the passive cache-fill GET
+  // /grade already do. Scoped to bubble/pearl cards only (the only kinds
+  // with a transformCandidates entry at all — unit cards' fronts are
+  // client-composed "your take" prompts, nothing to regenerate here).
+  const ImproveParamsSchema = z.object({ cardId: z.string().min(1) });
+  app.post("/api/review/cards/:cardId/improve", async (request, reply) => {
+    const params = ImproveParamsSchema.safeParse(request.params);
+    if (!params.success) return reply.status(400).send({ error: "Invalid cardId" });
+
+    const config = await getConfig();
+    const dataDir = resolveDataDir(config);
+    const model = config.analysisModel ?? "claude-opus-5";
+    const client = resolveCardTransformClient(config.anthropicApiKey);
+    if (!client) {
+      return reply.status(400).send({ error: "No Anthropic API key configured — add one in Settings", code: "no_api_key" });
+    }
+
+    const { cards: liveCards, transformCandidates } = await loadLiveCards(dataDir);
+    if (!liveCards.some((c) => c.id === params.data.cardId)) {
+      return reply.status(404).send({ error: "Unknown review card" });
+    }
+    const candidate = transformCandidates.get(params.data.cardId);
+    if (!candidate) {
+      return reply.status(400).send({ error: "This card can't be regenerated", code: "not_transformable" });
+    }
+
+    const outcome = await client.transform(candidate, model);
+    if (outcome.kind !== "ok") {
+      return reply.status(502).send({ error: `Could not regenerate this card: ${outcome.detail}`, code: outcome.reason });
+    }
+
+    const nextState = await withReviewLock(async () => {
+      const state = await readReviewState(dataDir);
+      const updated = { ...state, transformed: withTransformResult(state.transformed ?? {}, params.data.cardId, outcome.data) };
+      await writeReviewState(dataDir, updated);
+      return updated;
+    });
+
+    return { transformed: nextState.transformed?.[params.data.cardId] ?? null };
   });
 }

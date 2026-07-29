@@ -1,5 +1,6 @@
 // V3-B B4 "Card transformation" — weak-text heuristic + client resolution
-// + cache-fill orchestration.
+// + cache-fill orchestration. V3-D D4 "domain-routed" tests live at the
+// bottom of this file.
 import { afterEach, describe, expect, it } from "vitest";
 import {
   __setCardTransformClientForTests,
@@ -8,6 +9,7 @@ import {
   FakeCardTransformClient,
   isWeakBubbleText,
   resolveCardTransformClient,
+  withTransformResult,
   type CardTransformInput,
   type CardTransformLLMClient,
   type CardTransformResult,
@@ -149,5 +151,97 @@ describe("attachTransforms", () => {
   it("returns a plain copy (no transformed field added) when cache is undefined", () => {
     const result = attachTransforms([{ id: "c1" }], undefined);
     expect(result).toEqual([{ id: "c1" }]);
+  });
+});
+
+describe("withTransformResult", () => {
+  it("adds a new cache entry without disturbing existing ones", () => {
+    const cache = { c1: { front: "f1", back: "b1", why: "w1" } };
+    const next = withTransformResult(cache, "c2", { front: "f2", back: "b2", why: "w2" });
+    expect(next.c1).toEqual(cache.c1);
+    expect(next.c2).toEqual({ front: "f2", back: "b2", why: "w2" });
+  });
+
+  it("unconditionally overwrites an existing entry (V3-D D4 'improve this card' regeneration)", () => {
+    const cache = { c1: { front: "old", back: "old", why: "old" } };
+    const next = withTransformResult(cache, "c1", { front: "new", back: "new", why: "new" });
+    expect(next.c1).toEqual({ front: "new", back: "new", why: "new" });
+  });
+
+  it("never mutates the input cache", () => {
+    const cache = { c1: { front: "f", back: "b", why: "w" } };
+    withTransformResult(cache, "c1", { front: "new", back: "b", why: "w" });
+    expect(cache.c1.front).toBe("f");
+  });
+});
+
+// --- V3-D D4 "Card transformation becomes domain-routed" -------------------
+
+describe("FakeCardTransformClient — V3-D D4 domain-routed question style", () => {
+  it("routes a pearl card's front to a mechanistic-why style for biology", async () => {
+    const result = await new FakeCardTransformClient().transform(
+      { quote: "The feedback loop stabilizes temperature.", note: "", kind: "pearl", domain: "biology" },
+      "claude-opus-5"
+    );
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("unreachable");
+    expect(result.data.front).toMatch(/why does this happen/i);
+  });
+
+  it("routes a pearl card's front to a sourcing style for history", async () => {
+    const result = await new FakeCardTransformClient().transform(
+      { quote: "The treaty was signed in 1918.", note: "", kind: "pearl", domain: "history" },
+      "claude-opus-5"
+    );
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("unreachable");
+    expect(result.data.front).toMatch(/who claims this/i);
+  });
+
+  it("routes a pearl card's front to a notation style for music", async () => {
+    const result = await new FakeCardTransformClient().transform(
+      { quote: "This is a ii-V-I progression.", note: "", kind: "pearl", domain: "music" },
+      "claude-opus-5"
+    );
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("unreachable");
+    expect(result.data.front).toMatch(/notate/i);
+  });
+
+  it("routes a pearl card's front to a scenario-application style for physical_skill", async () => {
+    const result = await new FakeCardTransformClient().transform(
+      { quote: "Underhook and switch the hip.", note: "", kind: "pearl", domain: "physical_skill" },
+      "claude-opus-5"
+    );
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("unreachable");
+    expect(result.data.front).toMatch(/what's next/i);
+  });
+
+  it("falls back to the generic style when domain is undefined (unchanged from pre-D4 behavior)", async () => {
+    const result = await new FakeCardTransformClient().transform({ quote: "q", note: "", kind: "pearl" }, "claude-opus-5");
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("unreachable");
+    expect(result.data.front).toMatch(/why does this matter/i);
+  });
+
+  it("also flavors bubble (cloze) cards by domain, distinctly per domain", async () => {
+    const domains = ["biology", "history", "music", "physical_skill"] as const;
+    const fronts = await Promise.all(
+      domains.map(async (domain) => {
+        const result = await new FakeCardTransformClient().transform({ quote: "q", note: "", kind: "bubble", domain }, "claude-opus-5");
+        if (result.kind !== "ok") throw new Error("unreachable");
+        return result.data.front;
+      })
+    );
+    expect(new Set(fronts).size).toBe(domains.length); // all distinct
+    for (const front of fronts) expect(front).toMatch(/___$/); // still cloze-shaped
+  });
+
+  it("is deterministic per domain — no randomness", async () => {
+    const input: CardTransformInput = { quote: "q", note: "", kind: "pearl", domain: "biology" };
+    const a = await new FakeCardTransformClient().transform(input, "model");
+    const b = await new FakeCardTransformClient().transform(input, "model");
+    expect(a).toEqual(b);
   });
 });
