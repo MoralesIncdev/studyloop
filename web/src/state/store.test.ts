@@ -251,6 +251,7 @@ describe("startAnalyze (V2-C)", () => {
       generatedAt: "2026-07-28T00:00:00Z",
       model: "claude-opus-5",
       version: 2 as const,
+      source: "model" as const,
       pearls: [{ t: 10, label: "L", insight: "I", importance: 3 as const }],
       concepts: [],
       themes: [],

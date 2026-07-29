@@ -17,6 +17,9 @@ interface AnchoredRow {
   t: number;
 }
 
+/** Varying widths so the loading skeleton doesn't look like a uniform, obviously-fake grid. */
+const SKELETON_ROW_WIDTHS = [72, 50, 84, 60, 45];
+
 export function ConceptsDock(): JSX.Element {
   const currentProject = useStudyLoopStore((s) => s.currentProject);
   const concepts = useStudyLoopStore((s) => s.concepts);
@@ -151,7 +154,18 @@ export function ConceptsDock(): JSX.Element {
           Covered {coveredIds.size} / {concepts.length}
         </div>
       )}
-      {conceptsLoading && <p className={styles.status}>Loading concepts…</p>}
+      {conceptsLoading && (
+        // codex P1-3: geometry-matched skeleton rows instead of a plain
+        // "Loading…" line — same .item row shape the real list renders.
+        <div className={styles.skeletonList} aria-hidden="true">
+          {SKELETON_ROW_WIDTHS.map((width, i) => (
+            <div key={i} className={styles.skeletonItem}>
+              <span className={`${styles.skeletonChip} skeleton`} />
+              <span className={`${styles.skeletonTitle} skeleton`} style={{ width: `${width}%` }} />
+            </div>
+          ))}
+        </div>
+      )}
       {!conceptsLoading && concepts.length === 0 && <p className={styles.status}>No concepts found in this doc.</p>}
       {!conceptsLoading && concepts.length > 0 && (
         <div className={styles.list}>

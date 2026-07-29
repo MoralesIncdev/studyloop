@@ -10,6 +10,10 @@
   animation: backdrop-in var(--duration-standard) var(--ease-enter) both;
 }
 
+.overlay[data-state="closing"] {
+  animation: backdrop-out var(--duration-standard) var(--ease-exit) both;
+}
+
 .card {
   background: var(--surface-overlay);
   border: 1px solid var(--border-hairline);
@@ -23,14 +27,28 @@
   animation: modal-in var(--duration-modal) var(--ease-enter) both;
 }
 
+.card[data-state="closing"] {
+  animation: modal-out var(--duration-modal) var(--ease-exit) both;
+}
+
 @keyframes backdrop-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
+@keyframes backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 @keyframes modal-in {
   from { opacity: 0; transform: translateY(12px) scale(.98); }
   to { opacity: 1; transform: none; }
+}
+
+@keyframes modal-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(8px) scale(.98); }
 }
 
 .header {
@@ -71,7 +89,7 @@
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   color: var(--text-secondary);
   cursor: pointer;
   transition:
@@ -120,7 +138,7 @@
 .spinner {
   width: 22px;
   height: 22px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   border: 2px solid var(--border-default);
   border-top-color: var(--accent-blue);
   animation: spin 800ms linear infinite;
@@ -253,14 +271,15 @@
 }
 
 .primaryButton:disabled {
-  opacity: 0.6;
+  background: var(--surface-overlay);
+  color: var(--text-disabled);
   cursor: default;
 }
 
 .buttonSpinner {
   width: 12px;
   height: 12px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   border: 2px solid color-mix(in srgb, var(--surface-bg) 40%, transparent);
   border-top-color: var(--surface-bg);
   animation: spin 700ms linear infinite;

@@ -12,6 +12,8 @@ import styles from "./TranscriptPane.module.css";
 const ROW_HEIGHT = 56;
 const OVERSCAN = 6;
 const SCROLL_HOLD_OFF_MS = 5000;
+/** Varying widths so the loading skeleton doesn't look like a uniform, obviously-fake grid. */
+const SKELETON_ROW_WIDTHS = [78, 55, 88, 62, 70, 45, 82, 60, 74, 50];
 
 interface Props {
   segments: TranscriptSegment[];
@@ -132,7 +134,19 @@ export function TranscriptPane({ segments, loading }: Props): JSX.Element {
         )}
       </div>
       <div ref={containerRef} className={styles.scroller} onScroll={handleScroll}>
-        {loading && <div className={styles.status}>Loading transcript…</div>}
+        {loading && (
+          // codex P1-3: geometry-matched skeleton (same ROW_HEIGHT as the
+          // real rows) instead of a plain "Loading…" line, so the list
+          // doesn't jump when segments resolve.
+          <div className={styles.skeletonList} aria-hidden="true">
+            {SKELETON_ROW_WIDTHS.map((width, i) => (
+              <div key={i} className={styles.skeletonRow} style={{ height: ROW_HEIGHT }}>
+                <span className={`${styles.skeletonTime} skeleton`} />
+                <span className={`${styles.skeletonText} skeleton`} style={{ width: `${width}%` }} />
+              </div>
+            ))}
+          </div>
+        )}
         {!loading && segments.length === 0 && <div className={styles.status}>No transcript for this video.</div>}
         {!loading && segments.length > 0 && (
           <div style={{ height: rowCount * ROW_HEIGHT }}>

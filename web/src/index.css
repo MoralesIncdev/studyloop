@@ -1,18 +1,27 @@
 :root {
   color-scheme: dark;
 
-  /* Surfaces (SPEC V2 "Player chrome" / codex §1 — finer 5-step stack) */
+  /* Surfaces (SPEC V2 "Player chrome" / codex §1 — finer 5-step stack, kept
+     per DESIGN.md adjudication — kimi's "collapse to 3 stops" critique (#20)
+     was rejected). --surface-player is deliberately pure black, not part of
+     the elevation ladder: it's the video letterbox, which must read as
+     absolute black regardless of the surrounding chrome's dark-gray stack. */
   --surface-bg: #0f0f0f;
   --surface-player: #000;
   --surface-raised: #181818;
   --surface-overlay: #212121;
   --surface-popover: #282828;
-  --surface-hover: #3f3f3f;
-  --surface-pressed: #4a4a4a;
   --surface-scrim: rgb(0 0 0 / 72%);
   --surface-input: #121212;
 
-  /* State overlays (kimi) — compositing tint applied over any surface */
+  /* State overlays (kimi) — compositing tint applied over any surface. This
+     is the ONLY hover/pressed model — kimi P0 #2 (accepted): the old solid
+     --surface-hover/--surface-pressed swatches corrupted this by being a
+     hardcoded color swap instead of a translucent tint composited over
+     whatever surface sits underneath. Every hover/active rule in the app
+     should layer one of these over its own background, e.g.:
+       background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), var(--surface-popover);
+     rather than switching to a different solid surface color. */
   --hover-overlay: rgb(255 255 255 / 8%);
   --active-overlay: rgb(255 255 255 / 16%);
   --pressed-overlay: rgb(255 255 255 / 24%);
@@ -48,6 +57,19 @@
     0 2px 8px rgb(0 0 0 / 32%);
   --shadow-player:
     0 8px 28px rgb(0 0 0 / 42%);
+  /* codex/kimi P0-1 (modified by adjudication): white player-control glyphs
+     over video are correct YouTube-native behavior, kept as-is — but
+     tokenized instead of hardcoded #fff/text-shadow, and named
+     --player-control-color rather than reusing --text-primary since it's
+     conceptually "whatever reads on top of arbitrary video content", not
+     the app's body text color (the two happen to share a value today). */
+  --player-control-color: #fff;
+  --shadow-text: 0 1px 2px rgb(0 0 0 / 60%);
+
+  /* SeekBar track (kimi P1 #14 — was raw rgb()/hex/box-shadow literals). */
+  --track-bg: rgb(255 255 255 / 20%);
+  --track-marker: var(--player-control-color);
+  --marker-ring: 0 0 0 1px rgb(0 0 0 / 30%);
 
   /* Geometry */
   --radius-xs: 4px;
@@ -62,6 +84,7 @@
   --duration-standard: 180ms;
   --duration-panel: 240ms;
   --duration-modal: 280ms;
+  --duration-skeleton: 1.4s;
 
   --ease-standard: cubic-bezier(.2, 0, 0, 1);
   --ease-enter: cubic-bezier(0, 0, .2, 1);
@@ -72,6 +95,10 @@
   --focus-ring:
     0 0 0 2px var(--surface-bg),
     0 0 0 4px var(--accent-blue);
+
+  /* Scrollbars (kimi P1 #10 — was raw hex) */
+  --scrollbar-thumb: #606060;
+  --scrollbar-thumb-hover: #8a8a8a;
 
   /* Typography */
   --font-sans: "Roboto", "Arial", -apple-system, BlinkMacSystemFont,
@@ -91,22 +118,6 @@
   --weight-bold: 700;
 
   --topbar-height: 56px;
-
-  /* Temporary compatibility aliases during token migration — do not add new
-     usages, prefer the canonical names above. */
-  --bg: var(--surface-bg);
-  --bg-elevated: var(--surface-overlay);
-  --bg-chip: var(--surface-popover);
-  --bg-hover: var(--surface-hover);
-  --border: var(--border-default);
-  --text: var(--text-primary);
-  --text-dim: var(--text-secondary);
-  --accent: var(--accent-blue);
-  --accent-contrast: var(--surface-bg);
-  --success: var(--accent-green);
-  --warn: var(--accent-amber);
-  --red: var(--accent-red);
-  --radius-card: var(--radius-md);
 }
 
 * {
@@ -149,8 +160,11 @@ time,
 }
 
 /* Global focus-visible ring (kimi §1 — global + simpler; per-component focus
-   notes elsewhere still add specificity where needed). */
+   notes elsewhere still add specificity where needed). codex P0-6: expanded
+   past buttons/inputs/a few roles to cover links and the full set of common
+   ARIA interactive roles. */
 :where(
+  a,
   button,
   input,
   textarea,
@@ -158,14 +172,28 @@ time,
   [role="button"],
   [role="slider"],
   [role="tab"],
+  [role="checkbox"],
+  [role="radio"],
+  [role="switch"],
+  [role="menuitem"],
+  [role="option"],
+  [role="listbox"],
+  [role="combobox"],
+  [contenteditable],
   [tabindex]
 ):focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
 }
 
-:where(button, [role="button"]):disabled {
+/* codex P0-4 "interaction matrix": one normalized disabled treatment
+   (38% text-disabled, no opacity overrides) for every disableable control —
+   not just <button>/[role=button], and not the per-component .4/.5/.6
+   opacity values that had crept into individual stylesheets. */
+:where(button, input, textarea, select, [role="button"], [aria-disabled="true"]):disabled,
+:where([aria-disabled="true"]) {
   color: var(--text-disabled);
+  opacity: 1;
   cursor: default;
 }
 
@@ -176,7 +204,7 @@ time,
 /* Custom scrollbars — codex §5, 8px auto-hiding variant */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #606060 transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -191,13 +219,13 @@ time,
 ::-webkit-scrollbar-thumb {
   min-height: 32px;
   border: 2px solid transparent;
-  border-radius: 999px;
-  background: #606060;
+  border-radius: var(--radius-pill);
+  background: var(--scrollbar-thumb);
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #8a8a8a;
+  background: var(--scrollbar-thumb-hover);
   background-clip: padding-box;
 }
 
@@ -233,8 +261,8 @@ button[data-ripple]::after {
   opacity: 0;
   transform: scale(.25);
   transition:
-    transform 260ms var(--ease-enter),
-    opacity 180ms var(--ease-exit);
+    transform var(--duration-panel) var(--ease-enter),
+    opacity var(--duration-standard) var(--ease-exit);
 }
 
 button[data-ripple]:active::after {
@@ -253,7 +281,7 @@ button[data-ripple]:active::after {
     rgb(255 255 255 / 5%) 56%
   );
   background-size: 220% 100%;
-  animation: skeleton-shimmer 1.4s linear infinite;
+  animation: skeleton-shimmer var(--duration-skeleton) linear infinite;
 }
 
 @keyframes skeleton-shimmer {
@@ -284,5 +312,11 @@ button[data-ripple]:active::after {
   .skeleton {
     animation: none;
     background: rgb(255 255 255 / 7%);
+  }
+
+  /* kimi P1 #13: the ripple is purely decorative motion — suppress it
+     entirely rather than let it play at a 1ms-clamped duration. */
+  button[data-ripple]::after {
+    display: none;
   }
 }

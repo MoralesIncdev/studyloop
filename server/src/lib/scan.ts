@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "./store.js";
+import { humanizeVideoTitle } from "./titleHumanize.js";
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mkv", ".mov", ".webm", ".m4v", ".avi"]);
 const TRANSCRIPT_EXTENSIONS = new Set([".json"]);
@@ -158,9 +159,13 @@ export async function scanLibrary(config: ScanConfig): Promise<ScanResult> {
     const resolved = path.resolve(videoPath);
     const transcript = transcriptBySourceVideo.get(resolved);
     const { instructor, series } = deriveInstructorSeries(videoPath, libraryRoot);
+    // codex P1-2: humanize the raw filename-derived title (see
+    // lib/titleHumanize.ts) — strips a redundant series-name prefix too,
+    // when the series folder's own name is just repeated verbatim in every
+    // video's filename plus a volume index.
     const item: LibraryItem = {
       videoPath,
-      title: titleFromFilename(videoPath),
+      title: humanizeVideoTitle(titleFromFilename(videoPath), series),
       instructor,
       series,
     };

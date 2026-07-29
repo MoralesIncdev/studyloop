@@ -8,6 +8,7 @@ import { useStudyLoopStore } from "../state/store";
 import { clampRate } from "../state/store";
 import { formatTimestamp } from "../lib/time";
 import { Icon } from "../components/icons";
+import { Tooltip } from "../components/Tooltip";
 import styles from "./PlayerControls.module.css";
 
 const RATE_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5];
@@ -138,69 +139,76 @@ export function PlayerControls({ isFullscreen, onToggleFullscreen, onMenuOpenCha
       <div className={styles.spacer} />
 
       {loopA != null && (
-        <button type="button" className={styles.loopBadge} onClick={clearLoop} title="Clear A/B loop">
-          <span>
-            Loop {formatTimestamp(loopA)}
-            {loopB != null ? `–${formatTimestamp(loopB)}` : "–…"}
-          </span>
-          <Icon name="close" size={14} />
-        </button>
+        <Tooltip label="Clear A/B loop">
+          <button type="button" className={styles.loopBadge} onClick={clearLoop}>
+            <span>
+              Loop {formatTimestamp(loopA)}
+              {loopB != null ? `–${formatTimestamp(loopB)}` : "–…"}
+            </span>
+            <Icon name="close" size={14} />
+          </button>
+        </Tooltip>
       )}
 
-      <button
-        type="button"
-        className={styles.iconButton}
-        onClick={openNotation}
-        disabled={!controller}
-        aria-label="Add notation"
-        title="Add notation (N)"
-      >
-        <Icon name="editNote" />
-      </button>
-      <button
-        type="button"
-        className={styles.iconButton}
-        onClick={() => void captureScreenshotOnly()}
-        disabled={!controller || ffmpegMissing}
-        aria-label="Screenshot"
-        title={ffmpegMissing ? "ffmpeg not found on PATH — screenshots are disabled" : "Screenshot (S)"}
-      >
-        <Icon name="camera" />
-      </button>
-      <button
-        type="button"
-        className={`${styles.iconButton} ${analyzing ? styles.iconButtonBusy : ""}`}
-        onClick={() => (analysis ? confirmReanalyze() : void startAnalyze())}
-        disabled={analyzing}
-        aria-label={analyzing ? `Analyzing, ${analyzeStatus.pct}% complete` : analysis ? "Re-analyze" : "Analyze"}
-        aria-busy={analyzing}
-        title={analyzing ? `Analyzing… ${analyzeStatus.pct}%` : analysis ? "Re-analyze" : "Analyze"}
-      >
-        <Icon name="autoAwesome" />
-      </button>
-      <button
-        type="button"
-        className={`${styles.iconButton} ${ccEnabled ? styles.iconButtonActive : ""}`}
-        onClick={toggleCcEnabled}
-        aria-label="Toggle captions"
-        title="Toggle captions (C)"
-        aria-pressed={ccEnabled}
-      >
-        <Icon name="closedCaption" />
-      </button>
-
-      <div className={styles.menuWrap} ref={menuWrapRef}>
+      <Tooltip label="Add notation (N)">
         <button
           type="button"
-          className={`${styles.iconButton} ${menuOpen ? styles.iconButtonActive : ""}`}
-          onClick={() => setMenuOpen(!menuOpen)}
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          aria-label="Playback settings"
-          title="Settings"
+          className={styles.iconButton}
+          onClick={openNotation}
+          disabled={!controller}
+          aria-label="Add notation"
         >
-          <Icon name="settings" />
+          <Icon name="editNote" />
         </button>
+      </Tooltip>
+      <Tooltip label={ffmpegMissing ? "ffmpeg not found on PATH — screenshots are disabled" : "Screenshot (S)"}>
+        <button
+          type="button"
+          className={styles.iconButton}
+          onClick={() => void captureScreenshotOnly()}
+          disabled={!controller || ffmpegMissing}
+          aria-label="Screenshot"
+        >
+          <Icon name="camera" />
+        </button>
+      </Tooltip>
+      <Tooltip label={analyzing ? `Analyzing… ${analyzeStatus.pct}%` : analysis ? "Re-analyze" : "Analyze"}>
+        <button
+          type="button"
+          className={`${styles.iconButton} ${analyzing ? styles.iconButtonBusy : ""}`}
+          onClick={() => (analysis ? confirmReanalyze() : void startAnalyze())}
+          disabled={analyzing}
+          aria-label={analyzing ? `Analyzing, ${analyzeStatus.pct}% complete` : analysis ? "Re-analyze" : "Analyze"}
+          aria-busy={analyzing}
+        >
+          <Icon name="autoAwesome" />
+        </button>
+      </Tooltip>
+      <Tooltip label="Toggle captions (C)">
+        <button
+          type="button"
+          className={`${styles.iconButton} ${ccEnabled ? styles.iconButtonActive : ""}`}
+          onClick={toggleCcEnabled}
+          aria-label="Toggle captions"
+          aria-pressed={ccEnabled}
+        >
+          <Icon name="closedCaption" />
+        </button>
+      </Tooltip>
+
+      <div className={styles.menuWrap} ref={menuWrapRef}>
+        <Tooltip label="Settings" disabled={menuOpen}>
+          <button
+            type="button"
+            className={`${styles.iconButton} ${menuOpen ? styles.iconButtonActive : ""}`}
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label="Playback settings"
+          >
+            <Icon name="settings" />
+          </button>
+        </Tooltip>
         {menuOpen && (
           <div className={styles.settingsMenu} role="menu">
             <div className={styles.menuSectionLabel}>Speed</div>
@@ -247,16 +255,17 @@ export function PlayerControls({ isFullscreen, onToggleFullscreen, onMenuOpenCha
         )}
       </div>
 
-      <button
-        type="button"
-        className={styles.iconButton}
-        onClick={onToggleFullscreen}
-        aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-        title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-        aria-pressed={isFullscreen}
-      >
-        <Icon name={isFullscreen ? "fullscreenExit" : "fullscreen"} />
-      </button>
+      <Tooltip label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
+        <button
+          type="button"
+          className={styles.iconButton}
+          onClick={onToggleFullscreen}
+          aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          aria-pressed={isFullscreen}
+        >
+          <Icon name={isFullscreen ? "fullscreenExit" : "fullscreen"} />
+        </button>
+      </Tooltip>
     </div>
   );
 }

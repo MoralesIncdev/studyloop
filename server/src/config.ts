@@ -94,6 +94,11 @@ export function configPath(): string {
   return CONFIG_PATH;
 }
 
+/** codex P1-1: cached local-video thumbnail JPEGs (see lib/thumbnails.ts), keyed by path+mtime hash. */
+export function thumbsDir(): string {
+  return path.join(CONFIG_DIR, "thumbs");
+}
+
 let cachedConfig: StudyLoopConfig | null = null;
 
 /** Returns the in-memory config, loading (and creating, if absent) it from disk on first call. */

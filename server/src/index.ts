@@ -16,6 +16,7 @@ import { youtubeRoutes } from "./routes/youtube.js";
 import { searchRoutes } from "./routes/search.js";
 import { configRoutes } from "./routes/config.js";
 import { mediaRoutes } from "./routes/media.js";
+import { thumbRoutes } from "./routes/thumb.js";
 import { revealRoutes } from "./routes/reveal.js";
 import { analyzeRoutes } from "./routes/analyze.js";
 import { heatmapRoutes } from "./routes/heatmap.js";
@@ -64,6 +65,7 @@ async function main(): Promise<void> {
   await app.register(searchRoutes);
   await app.register(configRoutes);
   await app.register(mediaRoutes);
+  await app.register(thumbRoutes);
   await app.register(revealRoutes);
   // V2-C: import-analysis accepts a multipart file upload (SPEC: "multipart
   // or {path}") — registered globally so routes/share.ts's request.file()

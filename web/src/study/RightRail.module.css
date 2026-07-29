@@ -94,10 +94,23 @@
 }
 
 .conceptsViewport {
-  max-height: 420px;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
+  /* codex P0-1: the Concepts body is the single scroll owner for everything
+     stacked inside it (Pearls / doc concepts / AI breakdown / Themes /
+     empty state) — a fixed height + overflow-y here, block children below,
+     no nested `height: 100%` panes fighting for the same space. */
+  height: 420px;
+  overflow-y: auto;
+  display: block;
+}
+
+.analysisEmptyState {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  color: var(--text-secondary);
+  font-size: var(--type-13);
+  line-height: 1.4;
 }
 
 .tickerMuteButton {
@@ -129,7 +142,7 @@
 }
 
 .tickerMuteButton:disabled {
-  opacity: 0.5;
+  color: var(--text-disabled);
   cursor: default;
 }
 
@@ -181,8 +194,13 @@
   transform: translateY(-1px);
 }
 
+/* Composite card (thumbnail + independently-colored title/author/views text) —
+   a single `color` override can't dim every child, so this is the one place
+   the disabled treatment stays a whole-subtree opacity fade rather than
+   codex's "color: var(--text-disabled)" rule; normalized to the same 0.5
+   value LibraryView's card grid uses for the same reason. */
 .upNextCard:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: default;
 }
 

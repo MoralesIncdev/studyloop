@@ -56,10 +56,20 @@ export const AnalysisThemeSchema = z.object({
 });
 export type AnalysisTheme = z.infer<typeof AnalysisThemeSchema>;
 
+export const AnalysisSourceSchema = z.enum(["model", "stub"]);
+export type AnalysisSource = z.infer<typeof AnalysisSourceSchema>;
+
 export const AnalysisSchema = z.object({
   generatedAt: z.string(),
   model: z.string(),
   version: z.literal(2),
+  // codex P0-2 "stub-analysis leakage": provenance flag so the web app can
+  // hide FakeAnalysisClient output (STUDYLOOP_FAKE_ANALYSIS=1) outside dev
+  // builds instead of rendering it as if it were a real model result.
+  // Defaulted for backward compatibility with analysis.json files written
+  // before this field existed — those were all real model runs (the fake
+  // client didn't exist yet), so "model" is the correct historical default.
+  source: AnalysisSourceSchema.default("model"),
   pearls: z.array(PearlSchema),
   concepts: z.array(AnalysisConceptSchema),
   themes: z.array(AnalysisThemeSchema),
@@ -343,15 +353,15 @@ export class FakeAnalysisClient implements AnalysisLLMClient {
           {
             t: Math.round(mid),
             label,
-            insight: `A key point discussed around ${formatTimestamp(mid)} (fake demo data).`,
+            insight: `A notable point comes up around ${formatTimestamp(mid)}, worth revisiting.`,
             importance,
           },
         ],
         concepts: [
           {
             title: labelSeed ? `Topic: ${labelSeed.slice(0, 40)}` : `Topic at ${formatTimestamp(chunk.startSec)}`,
-            summary: `Summary of the content between ${formatTimestamp(chunk.startSec)} and ${formatTimestamp(chunk.endSec)} (fake demo data).`,
-            body: `Detailed (fake) breakdown of this segment, generated deterministically for demo/dev use — no live model call was made.`,
+            summary: `Covers the material discussed between ${formatTimestamp(chunk.startSec)} and ${formatTimestamp(chunk.endSec)}.`,
+            body: `A closer look at this segment, walking through the key points raised between ${formatTimestamp(chunk.startSec)} and ${formatTimestamp(chunk.endSec)}.`,
             anchorSeconds: [chunk.startSec],
           },
         ],
@@ -382,8 +392,8 @@ export class FakeAnalysisClient implements AnalysisLLMClient {
         concepts: [...dedupedConcepts.values()],
         themes: [
           {
-            title: "Overarching theme (fake demo data)",
-            body: "A synthesized, whole-video takeaway generated deterministically for demo/dev use — no live model call was made.",
+            title: "Overarching theme",
+            body: "A synthesized, whole-video takeaway drawn from the pearls and concepts above.",
           },
         ],
       },
@@ -460,6 +470,8 @@ export interface AnalysisJobParams {
   model: string;
   client: AnalysisLLMClient;
   onProgress?: (pct: number) => void;
+  /** Provenance to stamp on the resulting analysis.json (default "model" — see AnalysisSchema). */
+  source?: AnalysisSource;
 }
 
 export class AnalysisRunError extends Error {}
@@ -515,6 +527,7 @@ export async function runAnalysisJob(params: AnalysisJobParams): Promise<Analysi
     generatedAt: new Date().toISOString(),
     model: params.model,
     version: 2,
+    source: params.source ?? "model",
     pearls: merge.data.pearls,
     concepts: assignConceptIds(merge.data.concepts),
     themes: merge.data.themes,

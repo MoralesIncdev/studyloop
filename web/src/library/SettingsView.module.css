@@ -113,7 +113,8 @@
 }
 
 .primaryButton:disabled {
-  opacity: 0.6;
+  background: var(--surface-overlay);
+  color: var(--text-disabled);
   cursor: default;
 }
 

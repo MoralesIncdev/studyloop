@@ -158,4 +158,6 @@ export const api = {
   videoStreamUrl: (path: string) => `/api/video/stream?path=${encodeURIComponent(path)}`,
   shotUrl: (projectId: string, shot: string) =>
     `/api/media/${encodeURIComponent(projectId)}/${shot.replace(/^\/+/, "")}`,
+  /** codex P1-1: lazily-generated, cached mid-video-frame thumbnail for a local library video. */
+  thumbUrl: (videoPath: string) => `/api/thumb?path=${encodeURIComponent(videoPath)}`,
 };

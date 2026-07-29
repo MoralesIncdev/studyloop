@@ -12,6 +12,19 @@ import { Icon } from "../components/icons";
 import type { Pearl } from "../lib/types";
 import styles from "./AnalysisSections.module.css";
 
+/**
+ * codex P0-2 "stub-analysis leakage": `analysis.source === "stub"` means the
+ * result came from the deterministic offline demo generator
+ * (STUDYLOOP_FAKE_ANALYSIS=1), not a real model call. Stub output is only
+ * rendered in dev builds (so the flow stays exercisable/screenshottable
+ * without an API key) — a production build always falls back to the "run
+ * analysis" empty state instead of shipping fake content as if it were real.
+ */
+export function isAnalysisVisible(analysis: { source?: "model" | "stub" } | null): boolean {
+  if (!analysis) return false;
+  return analysis.source !== "stub" || import.meta.env.DEV;
+}
+
 function StarRating({ importance }: { importance: 1 | 2 | 3 }): JSX.Element {
   return (
     <span className={styles.stars} aria-label={`Importance ${importance} of 3`}>

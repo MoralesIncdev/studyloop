@@ -35,7 +35,7 @@
 
 .moreChip:hover {
   color: var(--text-primary);
-  background: var(--surface-hover);
+  background: var(--hover-overlay);
 }
 
 .moreChip:active {

@@ -3,23 +3,23 @@
   align-items: center;
   gap: 2px;
   padding: 4px 8px 8px;
-  color: #fff;
+  color: var(--player-control-color);
   font-size: var(--type-13);
 }
 
 .iconButton {
   width: 40px;
   height: 40px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   border: none;
   background: transparent;
-  color: #fff;
+  color: var(--player-control-color);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  text-shadow: 0 1px 2px rgb(0 0 0 / 60%);
+  text-shadow: var(--shadow-text);
   transition:
     background-color var(--duration-fast) var(--ease-standard),
     color var(--duration-fast) var(--ease-standard),
@@ -27,16 +27,16 @@
 }
 
 .iconButton:hover:not(:disabled) {
-  background: var(--hover-overlay, rgb(255 255 255 / 12%));
+  background: var(--hover-overlay);
 }
 
 .iconButton:active:not(:disabled) {
   transform: scale(.94);
-  background: var(--pressed-overlay, rgb(255 255 255 / 20%));
+  background: var(--pressed-overlay);
 }
 
 .iconButton:disabled {
-  opacity: 0.4;
+  color: var(--text-disabled);
   cursor: default;
 }
 
@@ -46,7 +46,7 @@
 
 .iconButtonBusy {
   color: var(--accent-blue);
-  animation: analyzing-pulse 1.4s var(--ease-standard) infinite;
+  animation: analyzing-pulse var(--duration-skeleton) var(--ease-standard) infinite;
 }
 
 @keyframes analyzing-pulse {
@@ -62,7 +62,7 @@
 .volumeSlider {
   width: 0;
   opacity: 0;
-  accent-color: #fff;
+  accent-color: var(--player-control-color);
   cursor: pointer;
   transition:
     width var(--duration-standard) var(--ease-standard),
@@ -78,11 +78,11 @@
 
 .time {
   font-variant-numeric: tabular-nums;
-  color: #fff;
+  color: var(--player-control-color);
   font-size: var(--type-13);
   margin-left: 8px;
   white-space: nowrap;
-  text-shadow: 0 1px 2px rgb(0 0 0 / 60%);
+  text-shadow: var(--shadow-text);
 }
 
 .spacer {
@@ -94,8 +94,11 @@
   align-items: center;
   gap: 6px;
   border: 1px solid var(--border-strong);
-  background: var(--hover-overlay, rgb(255 255 255 / 10%));
-  color: #fff;
+  /* kimi P0 #3: was defaulting to a hover-overlay tint, so the chip looked
+     pre-hovered at rest — starts on a real surface token, hover/active step
+     up through the overlay stack layered on top of it. */
+  background: var(--surface-popover);
+  color: var(--player-control-color);
   border-radius: var(--radius-pill);
   padding: 4px 8px 4px 12px;
   font-size: var(--type-12);
@@ -107,10 +110,11 @@
 }
 
 .loopBadge:hover {
-  background: var(--active-overlay, rgb(255 255 255 / 16%));
+  background: linear-gradient(var(--active-overlay), var(--active-overlay)), var(--surface-popover);
 }
 
 .loopBadge:active {
+  background: linear-gradient(var(--pressed-overlay), var(--pressed-overlay)), var(--surface-popover);
   transform: scale(.98);
 }
 
@@ -169,7 +173,8 @@
   transition:
     background-color var(--duration-fast) var(--ease-standard),
     border-color var(--duration-fast) var(--ease-standard),
-    color var(--duration-fast) var(--ease-standard);
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
 }
 
 .rateOption:hover {
@@ -200,7 +205,9 @@
   font-size: var(--type-11);
   cursor: pointer;
   white-space: nowrap;
-  transition: background-color var(--duration-fast) var(--ease-standard);
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
 }
 
 .menuButton:hover:not(:disabled) {
@@ -212,6 +219,6 @@
 }
 
 .menuButton:disabled {
-  opacity: 0.4;
+  color: var(--text-disabled);
   cursor: default;
 }

@@ -109,3 +109,26 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+.skeletonList {
+  display: flex;
+  flex-direction: column;
+}
+
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+}
+
+.skeletonTime {
+  width: 32px;
+  height: 11px;
+  flex-shrink: 0;
+}
+
+.skeletonText {
+  height: 12px;
+  max-width: 320px;
+}

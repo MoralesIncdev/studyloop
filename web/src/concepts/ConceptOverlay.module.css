@@ -8,9 +8,18 @@
   animation: backdrop-in var(--duration-standard) var(--ease-enter) both;
 }
 
+.backdrop[data-state="closing"] {
+  animation: backdrop-out var(--duration-standard) var(--ease-exit) both;
+}
+
 @keyframes backdrop-in {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 .panel {
@@ -20,8 +29,12 @@
   border-left: 1px solid var(--border-hairline);
   display: flex;
   flex-direction: column;
-  animation: panel-in var(--duration-panel) var(--ease-standard);
+  animation: panel-in var(--duration-panel) var(--ease-standard) both;
   box-shadow: var(--shadow-3);
+}
+
+.panel[data-state="closing"] {
+  animation: panel-out var(--duration-panel) var(--ease-exit) both;
 }
 
 @keyframes panel-in {
@@ -30,6 +43,15 @@
   }
   to {
     transform: translateX(0);
+  }
+}
+
+@keyframes panel-out {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
   }
 }
 
@@ -59,7 +81,7 @@
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   color: var(--text-secondary);
   cursor: pointer;
   flex-shrink: 0;

@@ -1,12 +1,14 @@
 // F1 (restyled V2-A "home grid" per SPEC): fetches /api/library, groups by
 // instructor → series, and renders each video as a YouTube-home-style thumbnail
-// card (gradient placeholder + film glyph — real server-side thumbnails are out of
-// scope this chunk). Also hosts the YouTube URL paste bar (now a slim bar under
-// the global TopBar) and the first-run empty state.
+// card — a real, lazily-generated mid-video-frame thumbnail (codex P1-1, see
+// GET /api/thumb) with the film-glyph placeholder only as a load-failure
+// fallback. Also hosts the YouTube URL paste bar (now a slim bar under the
+// global TopBar) and the first-run empty state.
 import { useEffect, useMemo, useState } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { formatTimestamp } from "../lib/time";
 import { Icon } from "../components/icons";
+import { api } from "../lib/api";
 import type { LibraryItem } from "../lib/types";
 import styles from "./LibraryView.module.css";
 
@@ -14,6 +16,9 @@ interface SeriesGroup {
   series: string;
   items: LibraryItem[];
 }
+
+/** Enough skeleton cards to fill a typical first screen without looking sparse. */
+const SKELETON_CARD_COUNT_ARRAY = Array.from({ length: 8 }, (_, i) => i);
 
 interface InstructorGroup {
   instructor: string;
@@ -85,12 +90,26 @@ function YoutubeBar(): JSX.Element {
 }
 
 function VideoCard({ item, onOpen, opening }: { item: LibraryItem; onOpen: () => void; opening: boolean }): JSX.Element {
+  // codex P1-1: real thumbnails — lazily generated/cached server-side (see
+  // GET /api/thumb). Falls back to the film-glyph placeholder while missing
+  // or on any load failure (never generated, ffmpeg unavailable, etc.).
+  const [thumbFailed, setThumbFailed] = useState(false);
   return (
     <button type="button" className={styles.card} onClick={onOpen} disabled={opening}>
       <div className={styles.thumb}>
-        <span className={styles.thumbGlyph} aria-hidden="true">
-          <Icon name="video" size={32} />
-        </span>
+        {thumbFailed ? (
+          <span className={styles.thumbGlyph} aria-hidden="true">
+            <Icon name="video" size={32} />
+          </span>
+        ) : (
+          <img
+            className={styles.thumbImage}
+            src={api.thumbUrl(item.videoPath)}
+            alt=""
+            loading="lazy"
+            onError={() => setThumbFailed(true)}
+          />
+        )}
         {item.durationSeconds != null && (
           <span className={styles.durationBadge}>{formatTimestamp(item.durationSeconds)}</span>
         )}
@@ -99,11 +118,10 @@ function VideoCard({ item, onOpen, opening }: { item: LibraryItem; onOpen: () =>
       <div className={styles.cardBody}>
         <span className={styles.cardTitle}>{item.title}</span>
         <span className={styles.cardInstructor}>{item.instructor ?? "Unsorted"}</span>
-        {item.transcriptPath ? (
-          <span className={styles.badgeMatched}>Transcript</span>
-        ) : (
-          <span className={styles.badgeMissing}>No transcript</span>
-        )}
+        {/* codex P2: a "Transcript" badge on every card (the normal state)
+            read as diagnostic metadata. Only flag the exceptional case —
+            a video with no transcript to study alongside. */}
+        {!item.transcriptPath && <span className={styles.badgeMissing}>No transcript</span>}
       </div>
     </button>
   );
@@ -167,7 +185,21 @@ export function LibraryView(): JSX.Element {
         </div>
       )}
 
-      {libraryLoading && !libraryLoaded && <div className={styles.status}>Loading your library…</div>}
+      {libraryLoading && !libraryLoaded && (
+        // codex P1-3: geometry-matched skeleton grid (same card/thumb shape
+        // as VideoCard) instead of a plain "Loading…" line.
+        <div className={styles.grid} aria-hidden="true">
+          {SKELETON_CARD_COUNT_ARRAY.map((i) => (
+            <div key={i} className={styles.skeletonCard}>
+              <div className={`${styles.thumb} skeleton`} />
+              <div className={styles.cardBody}>
+                <span className={`${styles.skeletonLine} skeleton`} style={{ width: "85%" }} />
+                <span className={`${styles.skeletonLine} skeleton`} style={{ width: "45%" }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {showEmptyState && (
         <div className={styles.emptyCard}>

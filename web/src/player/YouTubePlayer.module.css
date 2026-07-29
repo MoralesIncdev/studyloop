@@ -30,7 +30,7 @@
 }
 
 .retryButton:hover {
-  background: var(--surface-hover);
+  background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), var(--surface-overlay);
 }
 
 .retryButton:active {

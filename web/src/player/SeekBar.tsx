@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatTimestamp } from "../lib/time";
 import { Icon } from "../components/icons";
+import { Tooltip } from "../components/Tooltip";
 import { HeatmapStrip } from "./HeatmapStrip";
 import styles from "./SeekBar.module.css";
 
@@ -162,19 +163,19 @@ export function SeekBar({
         )}
         <div className={styles.fill} style={{ width: pct(currentTime) }} />
         {conceptTicks.map((tick) => (
-          <button
-            key={tick.id}
-            type="button"
-            className={styles.conceptTick}
-            data-kind="concept"
-            style={{ left: pct(tick.t) }}
-            aria-label={`Concept: ${tick.title ?? "untitled"} at ${formatTimestamp(tick.t)}`}
-            title={tick.title ? `${tick.title} — ${formatTimestamp(tick.t)}` : formatTimestamp(tick.t)}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSeek(tick.t);
-            }}
-          />
+          <Tooltip key={tick.id} label={tick.title ? `${tick.title} — ${formatTimestamp(tick.t)}` : formatTimestamp(tick.t)}>
+            <button
+              type="button"
+              className={styles.conceptTick}
+              data-kind="concept"
+              style={{ left: pct(tick.t) }}
+              aria-label={`Concept: ${tick.title ?? "untitled"} at ${formatTimestamp(tick.t)}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSeek(tick.t);
+              }}
+            />
+          </Tooltip>
         ))}
         {bubbles.map((bubble) => (
           <button
@@ -217,26 +218,25 @@ export function SeekBar({
         ))}
         {/* V2-C: imported overlay markers — one colored dot per author handle. */}
         {overlayMarkers.map((marker) => (
-          <button
-            key={marker.id}
-            type="button"
-            className={marker.kind === "pearl" ? styles.overlayPearlMarker : styles.overlayBubbleMarker}
-            data-kind={`overlay-${marker.kind}`}
-            style={{ left: pct(marker.t), background: `hsl(${marker.hue}, 70%, 55%)` }}
-            aria-label={`${marker.handle} — ${formatTimestamp(marker.t)}`}
-            title={`${marker.handle} — ${formatTimestamp(marker.t)}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSeek(Math.max(0, marker.t - 5));
-            }}
-          />
+          <Tooltip key={marker.id} label={`${marker.handle} — ${formatTimestamp(marker.t)}`}>
+            <button
+              type="button"
+              className={marker.kind === "pearl" ? styles.overlayPearlMarker : styles.overlayBubbleMarker}
+              data-kind={`overlay-${marker.kind}`}
+              style={{ left: pct(marker.t), background: `hsl(${marker.hue}, 70%, 55%)` }}
+              aria-label={`${marker.handle} — ${formatTimestamp(marker.t)}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSeek(Math.max(0, marker.t - 5));
+              }}
+            />
+          </Tooltip>
         ))}
-        {loopA != null && (
-          <div className={styles.loopMarker} style={{ left: pct(loopA) }} title={`A: ${formatTimestamp(loopA)}`} />
-        )}
-        {loopB != null && (
-          <div className={styles.loopMarker} style={{ left: pct(loopB) }} title={`B: ${formatTimestamp(loopB)}`} />
-        )}
+        {/* Decorative — `.loopMarker` is `pointer-events: none` (mouse events pass
+            through to the track underneath for its own seek-preview tooltip), so
+            these were never independently hoverable; no tooltip to attach. */}
+        {loopA != null && <div className={styles.loopMarker} style={{ left: pct(loopA) }} />}
+        {loopB != null && <div className={styles.loopMarker} style={{ left: pct(loopB) }} />}
         <div className={styles.playhead} style={{ left: pct(currentTime) }} />
         {hoverPearl && (
           <div className={styles.bubbleTooltip} style={{ left: `clamp(28px, ${pct(hoverPearl.t)}, calc(100% - 28px))` }}>

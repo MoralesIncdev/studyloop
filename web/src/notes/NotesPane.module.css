@@ -33,7 +33,7 @@
 }
 
 .toolButton:disabled {
-  opacity: 0.5;
+  color: var(--text-disabled);
   cursor: default;
 }
 

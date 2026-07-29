@@ -2,11 +2,17 @@
 // card, per YouTube's own "Show transcript" affordance), Concepts (existing
 // ConceptsDock content restyled as rail cards), and the Up-next cabinet
 // (V2-B: real `project.related` data, see SPEC "Fast YouTube layer").
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { TranscriptPane } from "../transcript/TranscriptPane";
 import { ConceptsDock } from "../concepts/ConceptsDock";
-import { PearlsSection, AiBreakdownSection, ThemesSection, OthersAnalysisSection } from "../concepts/AnalysisSections";
+import {
+  PearlsSection,
+  AiBreakdownSection,
+  ThemesSection,
+  OthersAnalysisSection,
+  isAnalysisVisible,
+} from "../concepts/AnalysisSections";
 import { formatTimestamp } from "../lib/time";
 import { Icon } from "../components/icons";
 import type { RelatedVideo, TranscriptSegment } from "../lib/types";
@@ -17,27 +23,62 @@ interface Props {
   transcriptLoading: boolean;
 }
 
+/** codex P1-5 "rail composure": persists which single large section (Transcript
+ * or Concepts) is open, per project, so re-opening a video restores the same
+ * layout instead of always defaulting back. */
+const RAIL_SECTION_STORAGE_PREFIX = "studyloop:railSection:";
+
+export type RailSectionId = "transcript" | "concepts";
+
+export function loadStoredRailSection(projectId: string): RailSectionId | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(RAIL_SECTION_STORAGE_PREFIX + projectId);
+    if (raw === "transcript" || raw === "concepts") return raw;
+    if (raw === "none") return null;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function storeRailSection(projectId: string, section: RailSectionId | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(RAIL_SECTION_STORAGE_PREFIX + projectId, section ?? "none");
+  } catch {
+    // Storage can throw in private-browsing/quota-exceeded modes — not worth surfacing.
+  }
+}
+
 function RailCard({
   id,
   title,
   defaultExpanded,
+  expanded: controlledExpanded,
+  onToggle,
   headerAction,
   children,
 }: {
   id?: string;
   title: string;
   defaultExpanded: boolean;
+  /** When provided (with `onToggle`), the card is controlled by the parent — used for the Transcript/Concepts accordion. */
+  expanded?: boolean;
+  onToggle?: () => void;
   headerAction?: ReactNode;
   children: ReactNode;
 }): JSX.Element {
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [uncontrolledExpanded, setUncontrolledExpanded] = useState(defaultExpanded);
+  const expanded = controlledExpanded ?? uncontrolledExpanded;
+  const toggle = onToggle ?? (() => setUncontrolledExpanded((v) => !v));
   return (
     <section id={id} className={styles.card}>
       <div className={styles.cardHeaderRow}>
         <button
           type="button"
           className={styles.cardHeader}
-          onClick={() => setExpanded((v) => !v)}
+          onClick={toggle}
           aria-expanded={expanded}
         >
           <span className={styles.cardTitle}>{title}</span>
@@ -160,10 +201,39 @@ function UpNextCabinet(): JSX.Element | null {
 export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
   const conceptTickerMuted = useStudyLoopStore((s) => s.conceptTickerMuted);
   const setConceptTickerMuted = useStudyLoopStore((s) => s.setConceptTickerMuted);
+  const analysis = useStudyLoopStore((s) => s.analysis);
+  const projectId = useStudyLoopStore((s) => s.currentProject?.id);
+
+  // codex P1-5: Transcript and Concepts are the two "large" sections — only
+  // one is open at a time (default: Transcript open, Concepts collapsed),
+  // and the choice is remembered per project.
+  const [openSection, setOpenSection] = useState<RailSectionId | null>(
+    () => loadStoredRailSection(projectId ?? "") ?? "transcript"
+  );
+
+  useEffect(() => {
+    if (!projectId) return;
+    setOpenSection(loadStoredRailSection(projectId) ?? "transcript");
+  }, [projectId]);
+
+  const selectSection = (section: RailSectionId): void => {
+    setOpenSection((current) => {
+      const next = current === section ? null : section;
+      if (projectId) storeRailSection(projectId, next);
+      return next;
+    });
+  };
+
+  const analysisVisible = isAnalysisVisible(analysis);
 
   return (
     <div className={styles.rail}>
-      <RailCard title="Transcript" defaultExpanded>
+      <RailCard
+        title="Transcript"
+        defaultExpanded
+        expanded={openSection === "transcript"}
+        onToggle={() => selectSection("transcript")}
+      >
         <div className={styles.transcriptViewport}>
           <TranscriptPane segments={segments} loading={transcriptLoading} />
         </div>
@@ -172,7 +242,9 @@ export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
       <RailCard
         id="concepts-rail"
         title="Concepts"
-        defaultExpanded
+        defaultExpanded={false}
+        expanded={openSection === "concepts"}
+        onToggle={() => selectSection("concepts")}
         headerAction={
           <button
             type="button"
@@ -190,10 +262,19 @@ export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
         }
       >
         <div className={styles.conceptsViewport}>
-          <PearlsSection />
-          <ConceptsDock />
-          <AiBreakdownSection />
-          <ThemesSection />
+          {analysisVisible ? (
+            <>
+              <PearlsSection />
+              <ConceptsDock />
+              <AiBreakdownSection />
+              <ThemesSection />
+            </>
+          ) : (
+            <>
+              <p className={styles.analysisEmptyState}>Run analysis to generate insights.</p>
+              <ConceptsDock />
+            </>
+          )}
         </div>
       </RailCard>
 

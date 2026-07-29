@@ -115,7 +115,7 @@ export function ConceptTicker({ chromeVisible = false }: Props): JSX.Element {
           )}
         </div>
       )}
-      {expanded && <ConceptOverlay card={expanded} onClose={() => setExpanded(null)} />}
+      <ConceptOverlay card={expanded} onClose={() => setExpanded(null)} />
     </>
   );
 }

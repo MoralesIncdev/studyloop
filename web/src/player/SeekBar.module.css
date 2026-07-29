@@ -7,7 +7,7 @@
   position: relative;
   height: 3px;
   border-radius: var(--radius-xs);
-  background: rgb(255 255 255 / 20%);
+  background: var(--track-bg);
   cursor: pointer;
   transition: height var(--duration-fast) var(--ease-standard);
 }
@@ -42,9 +42,9 @@
   top: 50%;
   width: 12px;
   height: 12px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   background: var(--accent-red);
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 30%);
+  box-shadow: var(--marker-ring);
   transform: translate(-50%, -50%) scale(0);
   transition: transform var(--duration-fast) var(--ease-standard);
   pointer-events: none;
@@ -76,7 +76,8 @@
   transition:
     transform var(--duration-fast) var(--ease-standard),
     filter var(--duration-fast) var(--ease-standard),
-    opacity var(--duration-fast) var(--ease-standard);
+    opacity var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
 }
 
 .bubblePin {
@@ -101,7 +102,10 @@
 .bubblePin:hover,
 .bubblePin:focus-visible {
   transform: scaleX(1.5) scaleY(1.2);
-  background: color-mix(in srgb, var(--accent-amber) 80%, white);
+  /* kimi P1 #8: overlay compositing instead of a one-off color-mix hack —
+     the marker's own accent color stays the base layer, the shared
+     hover-overlay tint sits on top. */
+  background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), var(--accent-amber);
 }
 
 .bubbleTooltip {
@@ -168,7 +172,7 @@
 .conceptTick:hover,
 .conceptTick:focus-visible {
   transform: scaleX(1.5) scaleY(1.2);
-  background: color-mix(in srgb, var(--accent-green) 80%, white);
+  background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), var(--accent-green);
 }
 
 .loopMarker {
@@ -176,7 +180,7 @@
   top: -3px;
   bottom: -3px;
   width: 2px;
-  background: #fff;
+  background: var(--track-marker);
   pointer-events: none;
 }
 
@@ -217,7 +221,7 @@
 
 .pearlMarker:hover,
 .pearlMarker:focus-visible {
-  filter: brightness(1.25);
+  background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), var(--accent-blue);
   transform: translateX(-50%) rotate(45deg) scale(1.25);
 }
 

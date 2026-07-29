@@ -9,7 +9,7 @@ import fs from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getConfig, resolveDataDir, resolveRoots } from "../config.js";
-import { AnalysisSchema, isFakeAnalysisMode, resolveAnalysisClient, runAnalysisJob, type Analysis } from "../lib/analysis.js";
+import { AnalysisSchema, isFakeAnalysisMode, resolveAnalysisClient, runAnalysisJob } from "../lib/analysis.js";
 import { AnalysisJobManager, evaluateAnalyzeGuard } from "../lib/analysisJobs.js";
 import { resolveTranscriptPath } from "../lib/transcriptResolve.js";
 import { loadTranscriptFromText, type TranscriptSegment } from "../lib/transcripts.js";
@@ -70,8 +70,13 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(409).send({ error: "Analysis is already running for this project", code: "already_running" });
     }
     if (action === "serve_existing") {
-      const existing = await readJsonIfExists<Analysis>(analysisPath);
-      return existing ?? reply.status(500).send({ error: "analysis.json exists but could not be read" });
+      const existing = await readJsonIfExists<unknown>(analysisPath);
+      if (existing === null) return reply.status(500).send({ error: "analysis.json exists but could not be read" });
+      // Parsed through AnalysisSchema (not just cast) so legacy files written
+      // before the `source` provenance field existed pick up its "model" default.
+      const parsed = AnalysisSchema.safeParse(existing);
+      if (!parsed.success) return reply.status(500).send({ error: "analysis.json is corrupt" });
+      return parsed.data;
     }
     if (action === "no_api_key") {
       return reply.status(400).send({ error: "No Anthropic API key configured — add one in Settings", code: "no_api_key" });
@@ -97,6 +102,7 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
           segments,
           model,
           client,
+          source: fakeMode ? "stub" : "model",
           onProgress: (pct) => analysisJobs.progress(projectId, pct),
         });
         await writeJsonAtomic(analysisPath, analysis);

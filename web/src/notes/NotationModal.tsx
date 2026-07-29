@@ -9,9 +9,13 @@ import { useStudyLoopStore } from "../state/store";
 import { api } from "../lib/api";
 import { formatTimestamp } from "../lib/time";
 import { Icon } from "../components/icons";
+import { ModalShell } from "../components/ModalShell";
+import type { NotationModalState } from "../state/store";
 import styles from "./NotationModal.module.css";
 
 const SHOT_WAIT_TIMEOUT_MS = 15_000;
+/** Matches --duration-modal (280ms), the card's own CSS exit-animation length. */
+const EXIT_DURATION_MS = 280;
 
 export function NotationModal(): JSX.Element | null {
   const modal = useStudyLoopStore((s) => s.notationModal);
@@ -25,8 +29,15 @@ export function NotationModal(): JSX.Element | null {
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const wasOpenRef = useRef(false);
-  const invokerRef = useRef<HTMLElement | null>(null);
-  const cardRef = useRef<HTMLFormElement | null>(null);
+
+  // codex P0-3: the store nulls `notationModal` synchronously on cancel/save,
+  // but the dialog needs its content for the whole closing animation — keep
+  // the last non-null value around and render that while ModalShell plays
+  // the exit transition.
+  const [displayModal, setDisplayModal] = useState<NotationModalState | null>(modal);
+  useEffect(() => {
+    if (modal) setDisplayModal(modal);
+  }, [modal]);
 
   // Save must not race the in-flight shot capture: while shotLoading, Save
   // waits on modal.shotPromise (bounded — after 15s it offers "Save without
@@ -47,21 +58,15 @@ export function NotationModal(): JSX.Element | null {
     setOfferSaveWithoutFrame(false);
   };
 
-  // Reset the draft + autofocus each time the modal transitions closed -> open;
-  // remember the invoking control so focus can be restored on close.
+  // Reset the draft each time the modal transitions closed -> open (autofocus
+  // is now ModalShell's job, via initialFocusRef).
   useEffect(() => {
     if (modal && !wasOpenRef.current) {
       setText("");
-      invokerRef.current = document.activeElement as HTMLElement | null;
-      const raf = requestAnimationFrame(() => textareaRef.current?.focus());
       wasOpenRef.current = true;
-      return () => cancelAnimationFrame(raf);
-    }
-    if (!modal && wasOpenRef.current) {
+    } else if (!modal && wasOpenRef.current) {
       wasOpenRef.current = false;
-      invokerRef.current?.focus?.();
     }
-    return undefined;
   }, [modal]);
 
   // A new generation (fresh N press, cancel, or a save that just completed)
@@ -71,40 +76,12 @@ export function NotationModal(): JSX.Element | null {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notationGeneration]);
 
-  useEffect(() => {
-    if (!modal) return undefined;
-    function onKeyDown(e: KeyboardEvent): void {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        cancelNotation();
-        return;
-      }
-      // Simple focus trap: keep Tab cycling within the card.
-      if (e.key === "Tab" && cardRef.current) {
-        const focusable = cardRef.current.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        );
-        if (focusable.length === 0) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [modal, cancelNotation]);
+  if (!currentProject) return null;
 
-  if (!modal || !currentProject) return null;
-
-  const busy = modal.saving || waitingForShot;
+  const busy = Boolean(modal?.saving) || waitingForShot;
 
   const handleSave = (): void => {
+    if (!modal) return;
     if (modal.shotLoading && modal.shotPromise) {
       const token = waitTokenRef.current;
       setWaitingForShot(true);
@@ -130,30 +107,28 @@ export function NotationModal(): JSX.Element | null {
     void saveNotation(text);
   };
 
-  const handleBackdropClick = (): void => {
-    if (busy) return;
-    cancelNotation();
-  };
+  if (!displayModal) return null;
 
   return (
-    <div className={styles.overlay} data-state="open" role="presentation" onMouseDown={handleBackdropClick}>
-      <form
-        className={styles.card}
-        ref={cardRef}
-        data-state="open"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Add notation"
-        onMouseDown={(e) => e.stopPropagation()}
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleSave();
-        }}
-      >
+    <ModalShell
+      open={modal != null}
+      onClose={cancelNotation}
+      closeDisabled={busy}
+      exitDurationMs={EXIT_DURATION_MS}
+      ariaLabel="Add notation"
+      overlayClassName={styles.overlay}
+      cardClassName={styles.card}
+      cardAs="form"
+      initialFocusRef={textareaRef}
+      onSubmit={(e) => {
+        e.preventDefault();
+        handleSave();
+      }}
+    >
         <header className={styles.header}>
           <div className={styles.headerText}>
             <h2 className={styles.title}>Add notation</h2>
-            <span className={styles.timestamp}>{formatTimestamp(modal.t)}</span>
+            <span className={styles.timestamp}>{formatTimestamp(displayModal.t)}</span>
           </div>
           <button type="button" className={styles.closeButton} onClick={cancelNotation} aria-label="Close">
             <Icon name="close" size={18} />
@@ -162,16 +137,16 @@ export function NotationModal(): JSX.Element | null {
 
         <div className={styles.content}>
           <div className={styles.thumb}>
-            {modal.shotLoading && <div className={styles.spinner} aria-label="Capturing frame…" />}
-            {!modal.shotLoading && modal.shot && (
-              <img className={styles.thumbImg} src={api.shotUrl(currentProject.id, modal.shot)} alt="" />
+            {displayModal.shotLoading && <div className={styles.spinner} aria-label="Capturing frame…" />}
+            {!displayModal.shotLoading && displayModal.shot && (
+              <img className={styles.thumbImg} src={api.shotUrl(currentProject.id, displayModal.shot)} alt="" />
             )}
-            {!modal.shotLoading && !modal.shot && <div className={styles.noFrame}>No frame</div>}
+            {!displayModal.shotLoading && !displayModal.shot && <div className={styles.noFrame}>No frame</div>}
           </div>
           <div className={styles.fields}>
-            {modal.conceptTitle && (
+            {displayModal.conceptTitle && (
               <div className={styles.conceptChip}>
-                <span className={styles.conceptChipText}>re: {modal.conceptTitle}</span>
+                <span className={styles.conceptChipText}>re: {displayModal.conceptTitle}</span>
                 <button
                   type="button"
                   className={styles.quoteRemove}
@@ -184,9 +159,9 @@ export function NotationModal(): JSX.Element | null {
               </div>
             )}
 
-            {modal.quote && (
+            {displayModal.quote && (
               <div className={styles.quote}>
-                <span className={styles.quoteText}>&ldquo;{modal.quote}&rdquo;</span>
+                <span className={styles.quoteText}>&ldquo;{displayModal.quote}&rdquo;</span>
                 <button
                   type="button"
                   className={styles.quoteRemove}
@@ -211,8 +186,8 @@ export function NotationModal(): JSX.Element | null {
         </div>
 
         <footer className={styles.actions}>
-          <button type="button" className={styles.secondaryButton} onClick={cancelNotation}>
-            Cancel (Esc)
+          <button type="button" className={styles.secondaryButton} onClick={cancelNotation} title="Cancel (Esc)" aria-keyshortcuts="Escape">
+            Cancel
           </button>
           {offerSaveWithoutFrame && (
             <button type="button" className={styles.secondaryButton} onClick={handleSaveWithoutFrame}>
@@ -226,10 +201,9 @@ export function NotationModal(): JSX.Element | null {
             aria-busy={busy}
           >
             {busy && <span className={styles.buttonSpinner} aria-hidden="true" />}
-            {modal.saving ? "Saving…" : waitingForShot ? "Capturing…" : "Save"}
+            {displayModal.saving ? "Saving…" : waitingForShot ? "Capturing…" : "Save"}
           </button>
         </footer>
-      </form>
-    </div>
+      </ModalShell>
   );
 }

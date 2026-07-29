@@ -39,7 +39,7 @@
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   color: var(--text-secondary);
   cursor: pointer;
   z-index: 1;
@@ -85,7 +85,7 @@
 .dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   background: var(--accent-green);
   flex-shrink: 0;
 }

@@ -1,7 +1,10 @@
 .pane {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* codex P0-1: RightRail's .conceptsViewport is now the single scroll
+     owner for the whole Concepts card body — this pane must size to its
+     own content, not claim the full (unbounded) viewport height. */
+  height: auto;
   min-height: 0;
 }
 
@@ -56,13 +59,21 @@
   transition:
     color var(--duration-fast) var(--ease-standard),
     border-color var(--duration-fast) var(--ease-standard),
-    background-color var(--duration-fast) var(--ease-standard);
+    background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
 }
 
 .detachButton:hover {
   color: var(--danger);
   border-color: var(--danger);
   background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.detachButton:active {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+  transform: scale(.98);
 }
 
 .progress {
@@ -74,9 +85,11 @@
 }
 
 .list {
-  flex: 1;
+  /* codex P0-1: no longer its own scroll region — the outer
+     RightRail .conceptsViewport owns scrolling for the whole card body. */
+  flex: none;
   min-height: 0;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .sectionLabel {
@@ -128,11 +141,18 @@
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background-color var(--duration-fast) var(--ease-standard);
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
 }
 
 .timeChip:hover {
   background: color-mix(in srgb, var(--accent-blue) 28%, transparent);
+}
+
+.timeChip:active {
+  background: color-mix(in srgb, var(--accent-blue) 38%, transparent);
+  transform: scale(.96);
 }
 
 .itemTitle {
@@ -151,11 +171,36 @@
   flex-shrink: 0;
 }
 
+.skeletonList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.skeletonItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+}
+
+.skeletonChip {
+  width: 34px;
+  height: 16px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+
+.skeletonTitle {
+  height: 13px;
+  max-width: 220px;
+}
+
 .attachPane {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  height: 100%;
+  height: auto;
   min-height: 0;
 }
 
@@ -163,7 +208,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .docButton {
@@ -182,11 +227,15 @@
 }
 
 .docButton:hover:not(:disabled) {
-  background: var(--surface-hover);
+  background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), var(--surface-popover);
+}
+
+.docButton:active:not(:disabled) {
+  background: linear-gradient(var(--active-overlay), var(--active-overlay)), var(--surface-popover);
 }
 
 .docButton:disabled {
-  opacity: 0.5;
+  color: var(--text-disabled);
   cursor: default;
 }
 
@@ -240,6 +289,7 @@
 }
 
 .primaryButton:disabled {
-  opacity: 0.5;
+  background: var(--surface-overlay);
+  color: var(--text-disabled);
   cursor: default;
 }

@@ -162,6 +162,9 @@ export interface Analysis {
   generatedAt: string;
   model: string;
   version: 2;
+  /** codex P0-2: provenance — "stub" is the offline deterministic demo
+   * generator (STUDYLOOP_FAKE_ANALYSIS=1), never rendered outside dev. */
+  source: "model" | "stub";
   pearls: Pearl[];
   concepts: AnalysisConcept[];
   themes: AnalysisTheme[];

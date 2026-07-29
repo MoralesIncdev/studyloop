@@ -22,11 +22,18 @@
   padding: 6px 4px;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
-  transition: background-color var(--duration-fast) var(--ease-standard);
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-press) var(--ease-standard);
 }
 
 .wordmark:hover {
   background: var(--hover-overlay);
+}
+
+.wordmark:active {
+  background: var(--active-overlay);
+  transform: scale(.98);
 }
 
 .logoMark {
@@ -103,7 +110,7 @@
 }
 
 .searchButton:hover {
-  background: var(--surface-hover);
+  background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), var(--surface-popover);
 }
 
 .searchButton:active {
@@ -171,8 +178,12 @@
   background: var(--hover-overlay);
 }
 
+.dropdownItem:active:not(:disabled) {
+  background: var(--active-overlay);
+}
+
 .dropdownItem:disabled {
-  opacity: 0.5;
+  color: var(--text-disabled);
   cursor: default;
 }
 
@@ -222,7 +233,7 @@
 .avatarButton {
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   background: var(--surface-popover);
   border: 1px solid var(--border-hairline);
   color: var(--text-primary);
@@ -236,7 +247,7 @@
 }
 
 .avatarButton:hover {
-  background: var(--surface-hover);
+  background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), var(--surface-popover);
 }
 
 .avatarButton:active {
@@ -276,4 +287,8 @@
 
 .menuItem:hover {
   background: var(--hover-overlay);
+}
+
+.menuItem:active {
+  background: var(--active-overlay);
 }

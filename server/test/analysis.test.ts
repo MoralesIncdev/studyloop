@@ -289,4 +289,60 @@ describe("runAnalysisJob (fake client end-to-end — no live API calls)", () => 
   it("throws for a transcript with no content", async () => {
     await expect(runAnalysisJob({ segments: [], model: "claude-opus-5", client: new FakeAnalysisClient() })).rejects.toThrow();
   });
+
+  it("defaults source to 'model' when not specified", async () => {
+    const segments = [segment(0, 10)];
+    const analysis = await runAnalysisJob({ segments, model: "claude-opus-5", client: new FakeAnalysisClient() });
+    expect(analysis.source).toBe("model");
+  });
+
+  it("stamps source: 'stub' through to the result when passed (codex P0-2 provenance)", async () => {
+    const segments = [segment(0, 10)];
+    const analysis = await runAnalysisJob({
+      segments,
+      model: "claude-opus-5",
+      client: new FakeAnalysisClient(),
+      source: "stub",
+    });
+    expect(analysis.source).toBe("stub");
+  });
+
+  it("fake generator output no longer contains the literal '(fake demo data)' marker", async () => {
+    const segments: TranscriptSegment[] = [];
+    for (let t = 0; t < 1000; t += 5) segments.push(segment(t, t + 5, `text at ${t}`));
+    const analysis = await runAnalysisJob({ segments, model: "claude-opus-5", client: new FakeAnalysisClient(), source: "stub" });
+    const serialized = JSON.stringify(analysis);
+    expect(serialized).not.toContain("fake demo data");
+    expect(serialized.toLowerCase()).not.toContain("(fake)");
+  });
+});
+
+describe("AnalysisSchema source field", () => {
+  it("defaults source to 'model' for legacy analysis.json without the field", async () => {
+    const { AnalysisSchema } = await import("../src/lib/analysis.js");
+    const legacy = {
+      generatedAt: "2026-01-01T00:00:00Z",
+      model: "claude-opus-5",
+      version: 2,
+      pearls: [],
+      concepts: [],
+      themes: [],
+    };
+    const parsed = AnalysisSchema.parse(legacy);
+    expect(parsed.source).toBe("model");
+  });
+
+  it("round-trips an explicit source: 'stub'", async () => {
+    const { AnalysisSchema } = await import("../src/lib/analysis.js");
+    const parsed = AnalysisSchema.parse({
+      generatedAt: "2026-01-01T00:00:00Z",
+      model: "claude-opus-5",
+      version: 2,
+      source: "stub",
+      pearls: [],
+      concepts: [],
+      themes: [],
+    });
+    expect(parsed.source).toBe("stub");
+  });
 });

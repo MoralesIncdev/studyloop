@@ -68,7 +68,8 @@
 }
 
 .youtubeSubmit:disabled {
-  opacity: 0.5;
+  background: var(--surface-overlay);
+  color: var(--text-disabled);
   cursor: default;
 }
 
@@ -96,7 +97,7 @@
 }
 
 .secondaryButton:hover:not(:disabled) {
-  background: var(--surface-hover);
+  background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), var(--surface-popover);
 }
 
 .secondaryButton:active:not(:disabled) {
@@ -104,7 +105,7 @@
 }
 
 .secondaryButton:disabled {
-  opacity: 0.6;
+  color: var(--text-disabled);
   cursor: default;
 }
 
@@ -204,13 +205,13 @@
   margin-bottom: 24px;
 }
 
+/* codex P2: uppercase + letterspaced series names ("GETTING SWOLE…") read as
+   admin-panel taxonomy labels, not a first-party video app section header. */
 .seriesTitle {
-  font-size: var(--type-13);
+  font-size: var(--type-14);
   font-weight: var(--weight-medium);
   color: var(--text-secondary);
   margin: 0 0 12px;
-  text-transform: uppercase;
-  letter-spacing: .06em;
 }
 
 .grid {
@@ -231,8 +232,11 @@
   color: var(--text-primary);
 }
 
+/* Composite card (thumbnail + independently-colored title/meta text) — see
+   RightRail's .upNextCard for why this stays an opacity fade, normalized to
+   the same 0.5 value. */
 .card:disabled {
-  opacity: 0.7;
+  opacity: 0.5;
   cursor: default;
 }
 
@@ -260,6 +264,13 @@
 .thumbGlyph {
   display: inline-flex;
   color: var(--text-tertiary);
+}
+
+.thumbImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .durationBadge {
@@ -293,6 +304,20 @@
   padding: 10px 2px 0;
 }
 
+.skeletonCard {
+  display: flex;
+  flex-direction: column;
+}
+
+.skeletonLine {
+  height: 12px;
+  margin-top: 4px;
+}
+
+/* codex P2: YouTube titles are primary at rest — gray-until-hover read as an
+   unfinished/disabled state. The thumbnail already brightens on hover (see
+   the .card:hover .thumb rule above), so hover no longer needs to touch the
+   title's color at all. */
 .cardTitle {
   font-size: var(--type-14);
   font-weight: var(--weight-medium);
@@ -301,25 +326,12 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  color: var(--text-secondary);
-  transition: color var(--duration-fast) var(--ease-standard);
-}
-
-.card:hover:not(:disabled) .cardTitle,
-.card:focus-visible .cardTitle {
   color: var(--text-primary);
 }
 
 .cardInstructor {
   font-size: var(--type-12);
   color: var(--text-secondary);
-}
-
-.badgeMatched {
-  align-self: flex-start;
-  font-size: var(--type-11);
-  color: var(--accent-green);
-  margin-top: 2px;
 }
 
 .badgeMissing {

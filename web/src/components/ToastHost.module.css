@@ -24,9 +24,11 @@
   box-shadow: var(--shadow-3);
   opacity: 0;
   transform: translateY(8px);
+  /* kimi P1 #11: toast entry uses the spring overshoot, per DESIGN.md's
+     "concept-ticker slide-in and toast entrance only" carve-out. */
   transition:
-    opacity var(--duration-standard) var(--ease-enter),
-    transform var(--duration-standard) var(--ease-enter);
+    opacity var(--duration-standard) var(--ease-spring),
+    transform var(--duration-standard) var(--ease-spring);
 }
 
 .toast[data-state="idle"] {
@@ -84,7 +86,7 @@
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   color: var(--text-secondary);
   cursor: pointer;
   transition:
