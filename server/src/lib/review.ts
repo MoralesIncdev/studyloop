@@ -192,6 +192,8 @@ export interface ReviewUnitCard extends ReviewCardBase {
   label: string;
   summary: string;
   userTake: string | null;
+  /** V3-D D2 "Threshold-concept tagging": carried from analysis.units[].threshold — see buildReviewQueue's introduction/ordering priority below. */
+  threshold: boolean;
 }
 
 export type ReviewCard = ReviewBubbleCard | ReviewPearlCard | ReviewUnitCard;
@@ -276,6 +278,7 @@ export function deriveLiveCards(
         label: u.label,
         summary: u.summary,
         userTake: attestations[u.id]?.userTake?.trim() || null,
+        threshold: u.threshold,
       });
     }
   }
@@ -310,10 +313,17 @@ export interface BuildReviewQueueResult {
  * - Due computation: a tracked card is included in `dueCards` iff its `due`
  *   timestamp is `<= nowMs`.
  *
- * `dueCards` preserves `liveCards`' order (stable/sorted by the caller), so
- * output ordering is deterministic for a given input — important for tests
- * and for a UI that shouldn't reshuffle mid-session.
+ * `dueCards` preserves `liveCards`' order (stable/sorted by the caller) for
+ * every card EXCEPT one V3-D D2 exception (see `isThresholdCard` below):
+ * output ordering is otherwise deterministic for a given input — important
+ * for tests and for a UI that shouldn't reshuffle mid-session.
  */
+
+/** V3-D D2: a unit card flagged threshold — the only ReviewCard kind that carries the flag at all (bubble/pearl cards are never threshold-eligible). */
+function isThresholdCard(card: ReviewCard): boolean {
+  return card.kind === "unit" && card.threshold === true;
+}
+
 export function buildReviewQueue(
   liveCards: readonly ReviewCard[],
   priorState: ReviewState,
@@ -334,17 +344,48 @@ export function buildReviewQueue(
   ).length;
   let remainingCap = Math.max(0, dailyCap - introducedToday);
 
-  // New-card introduction, in liveCards' stable order.
-  for (const live of liveCards) {
+  // V3-D D2 "review scheduler seeds threshold-unit cards at higher initial
+  // priority (due first among new)": among live cards not yet tracked,
+  // threshold-flagged unit cards are introduced ahead of everything else —
+  // still subject to the same daily cap, so on a capped day the highest-
+  // value new material claims the day's slots first. Stable: within each
+  // rank (threshold / not), liveCards' own order (index) breaks ties, so
+  // this is a no-op reordering whenever no threshold cards are present.
+  const introductionOrder = liveCards
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => {
+      const rank = Number(isThresholdCard(b.c)) - Number(isThresholdCard(a.c));
+      return rank !== 0 ? rank : a.i - b.i;
+    })
+    .map(({ c }) => c);
+
+  const introducedThisCall = new Set<string>();
+  for (const live of introductionOrder) {
     if (remainingCap <= 0) break;
     if (cards[live.id]) continue;
     cards[live.id] = introduceCardState(nowMs);
+    introducedThisCall.add(live.id);
     remainingCap--;
   }
 
+  // Session ordering: SPEC D2 "due first among new" — a threshold card
+  // freshly introduced THIS call floats to the front of the "new" subset of
+  // the queue; already-tracked cards (overdue or otherwise due) keep
+  // liveCards' own order among themselves. Stable/no-op when no card was
+  // both newly-introduced and threshold-flagged this call.
+  const dueOrder = liveCards
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => {
+      const aNewThreshold = introducedThisCall.has(a.c.id) && isThresholdCard(a.c);
+      const bNewThreshold = introducedThisCall.has(b.c.id) && isThresholdCard(b.c);
+      const rank = Number(bNewThreshold) - Number(aNewThreshold);
+      return rank !== 0 ? rank : a.i - b.i;
+    })
+    .map(({ c }) => c);
+
   const dueCards: ReviewCard[] = [];
   let newCount = 0;
-  for (const live of liveCards) {
+  for (const live of dueOrder) {
     const cardState = cards[live.id];
     if (!cardState) continue; // not introduced this call (over the daily cap) — simply absent from the queue
     if (!isDue(cardState, nowMs)) continue;

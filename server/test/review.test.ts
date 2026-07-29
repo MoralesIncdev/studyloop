@@ -350,6 +350,68 @@ describe("buildReviewQueue — output order is stable and matches liveCards orde
   });
 });
 
+// --- V3-D D2: threshold-unit priority (SPEC: "review scheduler seeds
+// threshold-unit cards at higher initial priority — due first among new") --
+
+function thresholdUnitCard(id: string, threshold: boolean, t = 0): ReviewCard {
+  return {
+    id,
+    kind: "unit",
+    projectId: "p1",
+    projectTitle: "P1",
+    sourceType: "local",
+    sourcePath: "/videos/p1.mp4",
+    t,
+    unitType: "MECHANISM",
+    label: "L",
+    summary: "S",
+    userTake: null,
+    threshold,
+  };
+}
+
+describe("buildReviewQueue — V3-D D2 threshold-card priority", () => {
+  it("floats a freshly-introduced threshold card ahead of freshly-introduced non-threshold cards in dueCards, regardless of liveCards order", () => {
+    const liveCards = [thresholdUnitCard("plain", false, 1), thresholdUnitCard("key", true, 2)];
+    const result = buildReviewQueue(liveCards, emptyReviewState(), NOW);
+    expect(result.dueCards.map((c) => c.id)).toEqual(["key", "plain"]);
+  });
+
+  it("gives threshold cards priority for the daily new-card cap over non-threshold cards", () => {
+    const liveCards = [thresholdUnitCard("plain-1", false), thresholdUnitCard("plain-2", false), thresholdUnitCard("key", true)];
+    const result = buildReviewQueue(liveCards, emptyReviewState(), NOW, 2);
+    const introducedIds = Object.keys(result.state.cards);
+    expect(introducedIds).toContain("key");
+    expect(introducedIds).toHaveLength(2);
+  });
+
+  it("does not reorder already-tracked (non-new) cards even when one is threshold-flagged", () => {
+    const liveCards = [thresholdUnitCard("a", false), thresholdUnitCard("b", true)];
+    // Both already tracked (introduced on a prior call) and due now — neither is "new" this call.
+    const priorState = {
+      version: 1 as const,
+      cards: {
+        a: { due: new Date(NOW - 1000).toISOString(), interval: 1, lapses: 0, reps: 1, lastGrade: "good" as const, introducedAt: new Date(NOW - 100000).toISOString() },
+        b: { due: new Date(NOW - 1000).toISOString(), interval: 1, lapses: 0, reps: 1, lastGrade: "good" as const, introducedAt: new Date(NOW - 100000).toISOString() },
+      },
+    };
+    const result = buildReviewQueue(liveCards, priorState, NOW);
+    expect(result.dueCards.map((c) => c.id)).toEqual(["a", "b"]);
+  });
+
+  it("is a complete no-op reordering when no card is threshold-flagged", () => {
+    const liveCards = [thresholdUnitCard("a", false, 3), thresholdUnitCard("b", false, 1), thresholdUnitCard("c", false, 2)];
+    const result = buildReviewQueue(liveCards, emptyReviewState(), NOW);
+    expect(result.dueCards.map((c) => c.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("counts threshold cards toward `new` the same as any other freshly-introduced card", () => {
+    const liveCards = [thresholdUnitCard("key", true)];
+    const result = buildReviewQueue(liveCards, emptyReviewState(), NOW);
+    expect(result.counts.new).toBe(1);
+  });
+});
+
 // --- V3-B B2/B4: deriveLiveCards unit (generation) cards -----------------------
 
 function unit(overrides: Partial<AnalysisUnit> = {}): AnalysisUnit {
@@ -361,6 +423,7 @@ function unit(overrides: Partial<AnalysisUnit> = {}): AnalysisUnit {
     body: "Longer body.",
     anchors: [{ t: 42, quote: "get the underhook" }],
     confidence: 0.8,
+    threshold: false,
     ...overrides,
   };
 }
