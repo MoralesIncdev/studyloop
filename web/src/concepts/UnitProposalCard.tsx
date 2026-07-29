@@ -11,11 +11,12 @@
 // Shared between RightRail's Concepts card (analysis order) and the Study
 // Path rail tab (topo order, + a "n/m attested" progress line owned by the
 // caller) — this component only renders ONE unit's card.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { Icon } from "../components/icons";
 import { formatTimestamp } from "../lib/time";
-import type { AnalysisUnit } from "../lib/types";
+import { pickPrompt, promptPoolFor } from "../lib/notationPrompts";
+import type { AnalysisUnit, UnitOverlay } from "../lib/types";
 import styles from "./UnitProposalCard.module.css";
 
 const UNIT_TYPE_LABEL: Record<AnalysisUnit["type"], string> = {
@@ -26,6 +27,57 @@ const UNIT_TYPE_LABEL: Record<AnalysisUnit["type"], string> = {
   BOUNDARY: "Boundary",
 };
 
+/** V3-D D1 "Advanced fold" — human labels for UnitOverlaySchema's flat field set. */
+const OVERLAY_FIELD_LABEL: Record<keyof UnitOverlay, string> = {
+  levelOfOrganization: "Level of organization",
+  mechanismType: "Mechanism type",
+  entities: "Entities",
+  sourceType: "Source type",
+  causationType: "Causation type",
+  actors: "Actors",
+  perspectiveFlag: "Perspective",
+  schema: "Schema",
+  notation: "Notation",
+  keyContext: "Key context",
+  triggers: "Triggers",
+  failureModes: "Failure modes",
+  drillPairing: "Drill pairing",
+};
+
+/**
+ * V3-D D1 "Advanced" fold: domain overlay fields, collapsed by default,
+ * dimmed label (SPEC: "renderer shows overlay in an 'Advanced' fold on the
+ * unit card"). Renders nothing when the unit carries no overlay content at
+ * all (generic-domain units, or a unit the transcript didn't support any
+ * overlay field for).
+ */
+function AdvancedFold({ overlay }: { overlay: AnalysisUnit["overlay"] }): JSX.Element | null {
+  const [open, setOpen] = useState(false);
+  if (!overlay) return null;
+  const entries = (Object.entries(overlay) as [keyof UnitOverlay, string | string[] | undefined][]).filter(
+    ([, v]) => (Array.isArray(v) ? v.length > 0 : Boolean(v))
+  );
+  if (entries.length === 0) return null;
+  return (
+    <div className={styles.advancedFold}>
+      <button type="button" className={styles.advancedToggle} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <Icon name="chevronDown" size={12} className={open ? styles.advancedChevronOpen : undefined} />
+        <span className={styles.advancedLabel}>Advanced</span>
+      </button>
+      {open && (
+        <dl className={styles.advancedList}>
+          {entries.map(([key, value]) => (
+            <div key={key} className={styles.advancedRow}>
+              <dt className={styles.advancedKey}>{OVERLAY_FIELD_LABEL[key]}</dt>
+              <dd className={styles.advancedValue}>{Array.isArray(value) ? value.join(", ") : value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
+  );
+}
+
 interface Props {
   unit: AnalysisUnit;
 }
@@ -33,6 +85,7 @@ interface Props {
 export function UnitProposalCard({ unit }: Props): JSX.Element {
   const controller = useStudyLoopStore((s) => s.controller);
   const noviceMode = useStudyLoopStore((s) => s.currentProject?.noviceMode ?? false);
+  const domain = useStudyLoopStore((s) => s.currentProject?.domain);
   const entry = useStudyLoopStore((s) => s.attestations[unit.id]);
   const attestUnit = useStudyLoopStore((s) => s.attestUnit);
   const saveUnitTake = useStudyLoopStore((s) => s.saveUnitTake);
@@ -77,11 +130,17 @@ export function UnitProposalCard({ unit }: Props): JSX.Element {
     setEditing(false);
   };
 
+  // V3-D D1 "Generation slots become domain-aware": the same promptPoolFor(domain)
+  // hook the notation modal draws its ghost prompt from (SPEC: "Study Path +
+  // notation modal both consume it") — one prompt per unit, stable across
+  // re-renders/keystrokes (not re-rolled while typing).
+  const domainSlotPrompt = useMemo(() => pickPrompt(promptPoolFor(domain)), [unit.id, domain]);
+
   const generationSlot = (
     <div className={styles.generationSlot}>
       <textarea
         className={styles.takeInput}
-        placeholder={noviceMode ? "Restate it in your own words — or skip" : "Define it / predict it in your own words — or skip"}
+        placeholder={noviceMode ? "Restate it in your own words — or skip" : `${domainSlotPrompt} — or skip`}
         value={take}
         onChange={(e) => setTake(e.target.value)}
         onBlur={handleTakeBlur}
@@ -110,6 +169,11 @@ export function UnitProposalCard({ unit }: Props): JSX.Element {
           </button>
         )}
         <span className={styles.label}>{unit.label}</span>
+        {unit.threshold && (
+          <span className={styles.thresholdBadge} title="Threshold concept — unlocks later material" aria-label="Threshold concept">
+            <Icon name="key" size={13} />
+          </span>
+        )}
         {status === "attested" && (
           <span className={styles.statusBadge} title="Attested" aria-label="Attested">
             <Icon name="check" size={13} />
@@ -118,12 +182,16 @@ export function UnitProposalCard({ unit }: Props): JSX.Element {
         {status === "dismissed" && <span className={styles.statusBadge}>Dismissed</span>}
       </div>
 
+      {/* V3-D D2: "one-line banner on the card ('This idea unlocks later material')". */}
+      {unit.threshold && <p className={styles.thresholdBanner}>This idea unlocks later material</p>}
+
       {!noviceMode && generationSlot}
 
       {revealed && !editing && (
         <div className={styles.body}>
           <p className={styles.summary}>{unit.summary}</p>
           <p className={styles.bodyText}>{entry?.userBody?.trim() || unit.body}</p>
+          <AdvancedFold overlay={unit.overlay} />
         </div>
       )}
 

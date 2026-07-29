@@ -1266,8 +1266,9 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     const gen = get().notationGeneration + 1;
     // V3-A A2: one elaboration prompt per modal-open — chosen here, not
     // re-rolled on every render, so it doesn't cycle while the learner types.
-    // No domain tag on the project model yet (v3-B) — generic pool only.
-    const ghostPrompt = pickPrompt(promptPoolFor(null));
+    // V3-D D1: domain-routed pool (history/music/physical_skill/biology) when
+    // the project has an editable domain tag; generic pool otherwise.
+    const ghostPrompt = pickPrompt(promptPoolFor(project.domain));
 
     // Respect the ffmpeg-missing health gate exactly like the disabled Shot
     // button: don't even attempt the capture (which would just fail on the

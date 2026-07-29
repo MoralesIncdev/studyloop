@@ -83,3 +83,40 @@ export function topoSortUnits(units: readonly AnalysisUnit[], edges: readonly An
 
   return result;
 }
+
+// --- V3-D D2 "Study Path inserts a REINFORCE step (repeat slot) 2 positions
+// after a threshold unit" ----------------------------------------------------
+
+export type StudyPathStep =
+  | { kind: "unit"; unit: AnalysisUnit }
+  | { kind: "reinforce"; id: string; afterUnit: AnalysisUnit };
+
+/**
+ * Wraps `topoSortUnits`' ordering with SPEC D2's REINFORCE insertions: for
+ * every threshold-flagged unit at position `i` in the topo-sorted sequence,
+ * a synthetic "repeat slot" step is inserted at position `i + 2` (clamped to
+ * the end of the path for a threshold unit near the tail). Insertions are
+ * computed against the ORIGINAL (pre-insertion) indices and applied from the
+ * highest target index down to the lowest, so earlier insertions never shift
+ * a later one's already-resolved position — standard "insert-many by
+ * descending index" technique, and the only way multiple insertions compose
+ * correctly without re-deriving positions after each splice.
+ */
+export function buildStudyPathSteps(units: readonly AnalysisUnit[], edges: readonly AnalysisEdge[]): StudyPathStep[] {
+  const ordered = topoSortUnits(units, edges);
+  const steps: StudyPathStep[] = ordered.map((unit) => ({ kind: "unit", unit }));
+
+  const insertions = ordered
+    .map((unit, i) => ({ at: Math.min(i + 2, ordered.length), unit, i }))
+    .filter(({ unit }) => unit.threshold)
+    // Descending by target index (ties broken by descending original index,
+    // an arbitrary but stable choice) so each splice's index is still valid
+    // relative to everything already inserted.
+    .sort((a, b) => (b.at !== a.at ? b.at - a.at : b.i - a.i));
+
+  for (const { at, unit } of insertions) {
+    steps.splice(at, 0, { kind: "reinforce", id: `reinforce:${unit.id}`, afterUnit: unit });
+  }
+
+  return steps;
+}

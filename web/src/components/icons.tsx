@@ -41,7 +41,8 @@ export type IconName =
   | "arrowBack"
   | "arrowForward"
   | "home"
-  | "video";
+  | "video"
+  | "key";
 
 // Filled 24x24 paths, `fill="currentColor"`.
 const FILLED_PATHS: Record<string, string> = {
@@ -99,6 +100,9 @@ const FILLED_PATHS: Record<string, string> = {
   // kimi P2 #15: was a 2px-stroke icon in an otherwise all-filled family —
   // filled "export/share" glyph (box + up arrow) in the same 24px style.
   share: "M16 5l-1.42 1.42-1.58-1.59V15h-2V4.83L9.42 6.42 8 5l4-4 4 4zm4 5v11c0 1.1-.9 2-2 2H6c-1.11 0-2-.9-2-2V10c0-1.11.89-2 2-2h3v2H6v11h12V10h-3V8h3c1.1 0 2 .89 2 2z",
+  // V3-D D2 "threshold-concept" key-icon badge — Material "vpn_key" silhouette
+  // (bow + shaft + teeth), same 24px filled-glyph style as the rest of this table.
+  key: "M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z",
 };
 
 export function Icon({
