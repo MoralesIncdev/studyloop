@@ -33,6 +33,7 @@ import type {
   StudyLoopConfigPatch,
   TranscriptSegment,
 } from "../lib/types";
+import { llmConfigured } from "../lib/types";
 import { hasSeenAttentionLegend, markAttentionLegendSeen } from "../lib/attentionHeatmap";
 import type { PlayerHandle } from "../player/types";
 
@@ -1701,8 +1702,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     // hasn't loaded yet — in that case load it first rather than guessing.
     const config = get().config ?? (await get().loadConfig());
     if (!config) return; // loadConfig already toasted its own failure
-    if (!config.anthropicApiKeySet) {
-      get().pushToast("Add an Anthropic API key in Settings to use Analyze", "info");
+    if (!llmConfigured(config)) {
+      get().pushToast("Add an API key for your AI provider in Settings to use Analyze", "info");
       get().navigate({ view: "settings" });
       return;
     }
@@ -1987,8 +1988,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     // Same gate as startAnalyze: no key configured -> toast + open Settings.
     const config = get().config ?? (await get().loadConfig());
     if (!config) return;
-    if (!config.anthropicApiKeySet) {
-      get().pushToast("Add an Anthropic API key in Settings to improve cards", "info");
+    if (!llmConfigured(config)) {
+      get().pushToast("Add an API key for your AI provider in Settings to improve cards", "info");
       get().navigate({ view: "settings" });
       return;
     }

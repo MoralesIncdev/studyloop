@@ -8,6 +8,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getConfig, resolveDataDir } from "../config.js";
+import { missingCredentialMessage, resolveAnalysisModel, resolveProviderAuth } from "../lib/providers.js";
 import { AnalysisSchema, type Analysis } from "../lib/analysis.js";
 import { readAttestations } from "../lib/attestationStore.js";
 import {
@@ -100,8 +101,8 @@ export async function reviewRoutes(app: FastifyInstance): Promise<void> {
     const config = await getConfig();
     const dataDir = resolveDataDir(config);
     const { cards: liveCards, transformCandidates } = await loadLiveCards(dataDir);
-    const model = config.analysisModel ?? "claude-opus-5";
-    const client = resolveCardTransformClient(config.anthropicApiKey);
+    const model = resolveAnalysisModel(config);
+    const client = resolveCardTransformClient(resolveProviderAuth(config));
 
     return withReviewLock(async () => {
       const priorState = await readReviewState(dataDir);
@@ -126,7 +127,7 @@ export async function reviewRoutes(app: FastifyInstance): Promise<void> {
 
     const config = await getConfig();
     const dataDir = resolveDataDir(config);
-    const model = config.analysisModel ?? "claude-opus-5";
+    const model = resolveAnalysisModel(config);
 
     const graded = await withReviewLock(async () => {
       const state = await readReviewState(dataDir);
@@ -149,7 +150,7 @@ export async function reviewRoutes(app: FastifyInstance): Promise<void> {
     // immediately, so it can legitimately reappear here) — same derivation
     // GET uses, just fed the already-updated state instead of re-reading it.
     const { cards: liveCards, transformCandidates } = await loadLiveCards(dataDir);
-    const client = resolveCardTransformClient(config.anthropicApiKey);
+    const client = resolveCardTransformClient(resolveProviderAuth(config));
     const result = await withReviewLock(async () => {
       const queue = buildReviewQueue(liveCards, graded, Date.now());
       const transformed = await fillTransformCache(queue.state.transformed ?? {}, queue.dueCards, transformCandidates, client, model);
@@ -179,10 +180,10 @@ export async function reviewRoutes(app: FastifyInstance): Promise<void> {
 
     const config = await getConfig();
     const dataDir = resolveDataDir(config);
-    const model = config.analysisModel ?? "claude-opus-5";
-    const client = resolveCardTransformClient(config.anthropicApiKey);
+    const model = resolveAnalysisModel(config);
+    const client = resolveCardTransformClient(resolveProviderAuth(config));
     if (!client) {
-      return reply.status(400).send({ error: "No Anthropic API key configured — add one in Settings", code: "no_api_key" });
+      return reply.status(400).send({ error: `${missingCredentialMessage(config)}`, code: "no_api_key" });
     }
 
     const { cards: liveCards, transformCandidates } = await loadLiveCards(dataDir);

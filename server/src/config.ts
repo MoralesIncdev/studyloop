@@ -2,6 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
 import { pathExists, readJsonIfExists, writeJsonAtomic } from "./lib/store.js";
+import { AnthropicAuthModeSchema, ProviderIdSchema } from "./lib/providers.js";
 
 /**
  * V3-C C1 "Concept Continuity rail" (PEDAGOGY.md §6): hand-tuned default
@@ -24,7 +25,17 @@ export const ConfigSchema = z.object({
   transcriptRoots: z.array(z.string()).default([]),
   conceptDocs: z.array(z.string()).default([]),
   anthropicApiKey: z.string().nullable().default(null),
-  /** V2-C analysis engine model override; null => runtime default "claude-opus-5" (see lib/analysis.ts). */
+  /** Which LLM provider the analyze/card-transform pipelines call (see lib/providers.ts). */
+  llmProvider: ProviderIdSchema.default("anthropic"),
+  /** Anthropic only: "api-key" uses `anthropicApiKey`; "oauth" uses ambient credentials (ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY env, e.g. from `ant auth login`). */
+  anthropicAuthMode: AnthropicAuthModeSchema.default("api-key"),
+  openaiApiKey: z.string().nullable().default(null),
+  googleApiKey: z.string().nullable().default(null),
+  xaiApiKey: z.string().nullable().default(null),
+  deepseekApiKey: z.string().nullable().default(null),
+  kimiApiKey: z.string().nullable().default(null),
+  zaiApiKey: z.string().nullable().default(null),
+  /** Analysis model override; null => the selected provider's default (see lib/providers.ts resolveAnalysisModel). */
   analysisModel: z.string().nullable().default(null),
   /** V2-C share bundles: author handle embedded in exported .studyloop.json files (SPEC default "anonymous"). */
   shareHandle: z.string().min(1).default("anonymous"),
@@ -54,6 +65,14 @@ const DEFAULT_CONFIG: StudyLoopConfig = {
   transcriptRoots: [],
   conceptDocs: [],
   anthropicApiKey: null,
+  llmProvider: "anthropic",
+  anthropicAuthMode: "api-key",
+  openaiApiKey: null,
+  googleApiKey: null,
+  xaiApiKey: null,
+  deepseekApiKey: null,
+  kimiApiKey: null,
+  zaiApiKey: null,
   analysisModel: null,
   shareHandle: "anonymous",
   continuityWeights: { related: 0.15, conceptSearch: 0.3, teacherValidation: 0.3, gapFill: 0.25 },
@@ -101,11 +120,31 @@ export function resolveRoots(config: StudyLoopConfig): ResolvedRoots {
 }
 
 /** Public (redacted) shape of the config, safe to send to the browser. */
-export type PublicConfig = Omit<StudyLoopConfig, "anthropicApiKey"> & { anthropicApiKeySet: boolean };
+export type PublicConfig = Omit<
+  StudyLoopConfig,
+  "anthropicApiKey" | "openaiApiKey" | "googleApiKey" | "xaiApiKey" | "deepseekApiKey" | "kimiApiKey" | "zaiApiKey"
+> & {
+  anthropicApiKeySet: boolean;
+  openaiApiKeySet: boolean;
+  googleApiKeySet: boolean;
+  xaiApiKeySet: boolean;
+  deepseekApiKeySet: boolean;
+  kimiApiKeySet: boolean;
+  zaiApiKeySet: boolean;
+};
 
 export function redactConfig(config: StudyLoopConfig): PublicConfig {
-  const { anthropicApiKey, ...rest } = config;
-  return { ...rest, anthropicApiKeySet: Boolean(anthropicApiKey) };
+  const { anthropicApiKey, openaiApiKey, googleApiKey, xaiApiKey, deepseekApiKey, kimiApiKey, zaiApiKey, ...rest } = config;
+  return {
+    ...rest,
+    anthropicApiKeySet: Boolean(anthropicApiKey),
+    openaiApiKeySet: Boolean(openaiApiKey),
+    googleApiKeySet: Boolean(googleApiKey),
+    xaiApiKeySet: Boolean(xaiApiKey),
+    deepseekApiKeySet: Boolean(deepseekApiKey),
+    kimiApiKeySet: Boolean(kimiApiKey),
+    zaiApiKeySet: Boolean(zaiApiKey),
+  };
 }
 
 export function configPath(): string {

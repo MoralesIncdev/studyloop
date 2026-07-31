@@ -167,14 +167,50 @@ export interface MergeCandidatesResponse {
 
 export type MergeResolveAction = "merge" | "link" | "ignore";
 
-/** GET/PUT /api/config response shape — the server never echoes the actual key back. */
+export type LlmProviderId = "anthropic" | "openai" | "google" | "xai" | "deepseek" | "kimi" | "zai";
+export type AnthropicAuthMode = "api-key" | "oauth";
+
+/** UI metadata per provider — mirrors server/src/lib/providers.ts's registry (labels, defaults, suggestions only; the model field stays free text). */
+export const LLM_PROVIDERS: Record<LlmProviderId, { label: string; keyPlaceholder: string; defaultModel: string; models: string[] }> = {
+  anthropic: {
+    label: "Anthropic (Claude)",
+    keyPlaceholder: "sk-ant-…",
+    defaultModel: "claude-opus-5",
+    models: ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"],
+  },
+  openai: { label: "OpenAI (GPT)", keyPlaceholder: "sk-…", defaultModel: "gpt-5.1", models: ["gpt-5.1", "gpt-5-mini", "gpt-4.1"] },
+  google: {
+    label: "Google (Gemini)",
+    keyPlaceholder: "AIza…",
+    defaultModel: "gemini-2.5-pro",
+    models: ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-3-pro-preview"],
+  },
+  xai: { label: "xAI (Grok)", keyPlaceholder: "xai-…", defaultModel: "grok-4", models: ["grok-4", "grok-3-mini"] },
+  deepseek: { label: "DeepSeek", keyPlaceholder: "sk-…", defaultModel: "deepseek-chat", models: ["deepseek-chat", "deepseek-reasoner"] },
+  kimi: { label: "Kimi (Kimi Code)", keyPlaceholder: "sk-…", defaultModel: "kimi-code", models: ["kimi-code"] },
+  zai: { label: "Z.ai (GLM)", keyPlaceholder: "…", defaultModel: "glm-5", models: ["glm-5", "glm-5.1", "glm-5-turbo", "glm-4.7", "glm-4.6"] },
+};
+
+export const LLM_PROVIDER_IDS = Object.keys(LLM_PROVIDERS) as LlmProviderId[];
+
+/** GET/PUT /api/config response shape — the server never echoes actual keys back, only per-provider `…ApiKeySet` booleans. */
 export interface StudyLoopConfig {
   dataDir: string;
   libraryRoots: string[];
   transcriptRoots: string[];
   conceptDocs: string[];
+  /** Which LLM provider the analyze/card-transform pipelines call. */
+  llmProvider: LlmProviderId;
+  /** Anthropic only: "api-key" uses the saved key; "oauth" uses the server's ambient sign-in (ANTHROPIC_AUTH_TOKEN / ant auth login). */
+  anthropicAuthMode: AnthropicAuthMode;
   anthropicApiKeySet: boolean;
-  /** V2-C: analysis engine model override; null => server default ("claude-opus-5"). */
+  openaiApiKeySet: boolean;
+  googleApiKeySet: boolean;
+  xaiApiKeySet: boolean;
+  deepseekApiKeySet: boolean;
+  kimiApiKeySet: boolean;
+  zaiApiKeySet: boolean;
+  /** Analysis model override; null => the selected provider's default. */
   analysisModel: string | null;
   /** V2-C: author handle embedded in exported .studyloop.json bundles. */
   shareHandle: string;
@@ -182,13 +218,43 @@ export interface StudyLoopConfig {
   continuityWeights: ContinuityWeights;
 }
 
-/** Body accepted by PUT /api/config — this is the only place the plaintext key travels. */
+/** True when the selected provider has (or plausibly has, for OAuth) credentials — the client-side gate before Analyze/Improve calls. */
+export function llmConfigured(config: StudyLoopConfig): boolean {
+  switch (config.llmProvider) {
+    case "anthropic":
+      // OAuth mode can only be verified server-side; treat it as configured
+      // and let the server's no_api_key 400 surface if the token is missing.
+      return config.anthropicAuthMode === "oauth" || config.anthropicApiKeySet;
+    case "openai":
+      return config.openaiApiKeySet;
+    case "google":
+      return config.googleApiKeySet;
+    case "xai":
+      return config.xaiApiKeySet;
+    case "deepseek":
+      return config.deepseekApiKeySet;
+    case "kimi":
+      return config.kimiApiKeySet;
+    case "zai":
+      return config.zaiApiKeySet;
+  }
+}
+
+/** Body accepted by PUT /api/config — this is the only place plaintext keys travel. */
 export interface StudyLoopConfigPatch {
   dataDir?: string;
   libraryRoots?: string[];
   transcriptRoots?: string[];
   conceptDocs?: string[];
+  llmProvider?: LlmProviderId;
+  anthropicAuthMode?: AnthropicAuthMode;
   anthropicApiKey?: string | null;
+  openaiApiKey?: string | null;
+  googleApiKey?: string | null;
+  xaiApiKey?: string | null;
+  deepseekApiKey?: string | null;
+  kimiApiKey?: string | null;
+  zaiApiKey?: string | null;
   analysisModel?: string | null;
   shareHandle?: string;
   continuityWeights?: ContinuityWeights;

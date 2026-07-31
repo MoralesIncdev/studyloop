@@ -7,9 +7,9 @@
 // so it's computed at most once per card. Same injectable-adapter pattern as
 // lib/analysis.ts (fake/real client, resolve*/​__set*ForTests).
 import { createHash } from "node:crypto";
-import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { ANALYSIS_MAX_TOKENS, type AnalysisOutcome } from "./analysis.js";
+import { ANALYSIS_MAX_TOKENS, type AnalysisOutcome, type LLMClientAuth } from "./analysis.js";
+import { createStructuredCaller, type ProviderAuth, type StructuredLLMCaller } from "./providers.js";
 import type { Domain } from "./models.js";
 
 /** SPEC B4: "<40 chars or no '?' etc. heuristic". Deviation from literal wording: implemented as an OR of three cheap fragment signals (empty, short, no terminal punctuation) rather than a single length check — a one-word bubble like "Interesting" is 11 chars (obviously weak) but "Watch the hip angle here, not the shoulder" is 43 chars and reads as a complete thought; length alone would mis-classify both. */
@@ -86,37 +86,21 @@ export interface CardTransformLLMClient {
   transform(input: CardTransformInput, model: string): Promise<AnalysisOutcome<CardTransformResult>>;
 }
 
-export class AnthropicCardTransformClient implements CardTransformLLMClient {
-  private readonly client: Anthropic;
-
-  constructor(apiKey: string) {
-    this.client = new Anthropic({ apiKey });
-  }
+export class LLMCardTransformClient implements CardTransformLLMClient {
+  constructor(private readonly caller: StructuredLLMCaller) {}
 
   async transform(input: CardTransformInput, model: string): Promise<AnalysisOutcome<CardTransformResult>> {
-    let response: Anthropic.Message;
-    try {
-      response = await this.client.messages.create({
-        model,
-        max_tokens: Math.min(1024, ANALYSIS_MAX_TOKENS),
-        system: buildCardTransformSystemPrompt(input.domain),
-        messages: [{ role: "user", content: buildCardTransformUserPrompt(input) }],
-        output_config: { format: { type: "json_schema", schema: CARD_TRANSFORM_JSON_SCHEMA } },
-      });
-    } catch (err) {
-      return { kind: "skipped", reason: "parse_error", detail: err instanceof Error ? err.message : String(err) };
-    }
-    if (response.stop_reason === "refusal") {
-      return { kind: "skipped", reason: "refusal", detail: "Claude declined this card transformation" };
-    }
-    if (response.stop_reason === "max_tokens") {
-      return { kind: "skipped", reason: "max_tokens", detail: "Hit max_tokens before finishing this card" };
-    }
-    const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text" && typeof b.text === "string");
-    if (!textBlock?.text) return { kind: "skipped", reason: "parse_error", detail: "No text content in response" };
+    const result = await this.caller.call({
+      system: buildCardTransformSystemPrompt(input.domain),
+      userPrompt: buildCardTransformUserPrompt(input),
+      jsonSchema: CARD_TRANSFORM_JSON_SCHEMA as unknown as Record<string, unknown>,
+      model,
+      maxTokens: Math.min(1024, ANALYSIS_MAX_TOKENS),
+    });
+    if (result.kind === "skipped") return result;
     let raw: unknown;
     try {
-      raw = JSON.parse(textBlock.text);
+      raw = JSON.parse(result.text);
     } catch (err) {
       return { kind: "skipped", reason: "parse_error", detail: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}` };
     }
@@ -188,16 +172,17 @@ export function __setCardTransformClientForTests(client: CardTransformLLMClient 
 
 /**
  * Resolves the card-transform client. Unlike lib/analysis.ts's
- * resolveAnalysisClient, `apiKey === null` outside fake/test mode returns
+ * resolveAnalysisClient, `auth === null` outside fake/test mode returns
  * `null` (not a thrown error) — card transformation is an enhancement, not a
  * gate the caller must pass before proceeding (SPEC: "fallback = current
  * format" when unavailable, never a blocked review session).
  */
-export function resolveCardTransformClient(apiKey: string | null): CardTransformLLMClient | null {
+export function resolveCardTransformClient(auth: LLMClientAuth): CardTransformLLMClient | null {
   if (injectedCardTransformClientForTests) return injectedCardTransformClientForTests;
   if (process.env.STUDYLOOP_FAKE_ANALYSIS === "1") return new FakeCardTransformClient();
-  if (!apiKey) return null;
-  return new AnthropicCardTransformClient(apiKey);
+  if (!auth) return null;
+  const resolved: ProviderAuth = typeof auth === "string" ? { provider: "anthropic", mode: "api-key", apiKey: auth } : auth;
+  return new LLMCardTransformClient(createStructuredCaller(resolved));
 }
 
 // --- Cache-fill orchestration (moved out of routes/review.ts so the caching

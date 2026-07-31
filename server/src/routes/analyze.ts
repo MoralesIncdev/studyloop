@@ -11,6 +11,7 @@ import { z } from "zod";
 import { getConfig, resolveDataDir, resolveRoots } from "../config.js";
 import { AnalysisSchema, isFakeAnalysisMode, resolveAnalysisClientV3, runAnalysisJobV3 } from "../lib/analysis.js";
 import { AnalysisJobManager, evaluateAnalyzeGuard } from "../lib/analysisJobs.js";
+import { missingCredentialMessage, resolveAnalysisModel, resolveProviderAuth } from "../lib/providers.js";
 import { updateRegistryForProject } from "../lib/conceptRegistry.js";
 import { readConceptRegistry, withConceptRegistryLock, writeConceptRegistry } from "../lib/conceptRegistryStore.js";
 import { resolveTranscriptPath } from "../lib/transcriptResolve.js";
@@ -60,12 +61,13 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
 
     const analysisPath = analysisJsonPath(dataDir, params.data.id);
     const fakeMode = isFakeAnalysisMode();
+    const providerAuth = resolveProviderAuth(config);
     const action = evaluateAnalyzeGuard({
       isRunning: analysisJobs.isRunning(params.data.id),
       analysisExists: await pathExists(analysisPath),
       force: body.data.force ?? false,
       fakeMode,
-      hasApiKey: Boolean(config.anthropicApiKey),
+      hasApiKey: providerAuth !== null,
     });
 
     if (action === "already_running") {
@@ -81,7 +83,7 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
       return parsed.data;
     }
     if (action === "no_api_key") {
-      return reply.status(400).send({ error: "No Anthropic API key configured — add one in Settings", code: "no_api_key" });
+      return reply.status(400).send({ error: missingCredentialMessage(config), code: "no_api_key" });
     }
 
     const roots = resolveRoots(config);
@@ -90,7 +92,7 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: "This project has no transcript to analyze", code: "no_transcript" });
     }
 
-    const model = config.analysisModel ?? "claude-opus-5";
+    const model = resolveAnalysisModel(config);
     const projectId = params.data.id;
     analysisJobs.start(projectId);
 
@@ -99,7 +101,7 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
     // its own in-memory status as it goes, and writes analysis.json on success.
     void (async () => {
       try {
-        const client = resolveAnalysisClientV3(config.anthropicApiKey);
+        const client = resolveAnalysisClientV3(providerAuth);
         const analysis = await runAnalysisJobV3({
           segments,
           model,

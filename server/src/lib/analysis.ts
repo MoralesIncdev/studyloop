@@ -24,7 +24,7 @@
 // so `STUDYLOOP_FAKE_ANALYSIS=1` (see FakeAnalysisClient at the bottom) can
 // drive the exact same code path for demos and the no-key-required dev flow.
 import crypto from "node:crypto";
-import Anthropic from "@anthropic-ai/sdk";
+import { createStructuredCaller, type ProviderAuth, type StructuredLLMCaller } from "./providers.js";
 import { z } from "zod";
 import { formatTimestamp } from "./time.js";
 import { DomainSchema, type Domain } from "./models.js";
@@ -623,7 +623,7 @@ export interface AnalysisLLMClient {
  * a SEPARATE interface (not folded into `AnalysisLLMClient`) so existing
  * tests/callers that construct a minimal `{runChunk, runMerge}` object
  * literal typed as `AnalysisLLMClient` (see test/analysis.test.ts) keep
- * compiling unchanged. `AnthropicAnalysisClient` and `FakeAnalysisClient`
+ * compiling unchanged. `LLMAnalysisClient` and `FakeAnalysisClient`
  * both implement this in addition to the v2 interface.
  */
 export interface AnalysisLLMClientV3 {
@@ -639,16 +639,14 @@ export const ROUTER_MAX_TOKENS = 200;
 export const ANALYSIS_MAX_TOKENS = 16000;
 
 /**
- * Real implementation, backed by @anthropic-ai/sdk. `thinking` is deliberately
- * omitted from every request (SPEC: "omit `thinking` param entirely" — Claude
- * Opus 5 runs adaptive thinking by default when the field is absent).
+ * Real implementation, backed by a provider-specific structured caller (see
+ * lib/providers.ts): Anthropic via @anthropic-ai/sdk with native structured
+ * outputs, OpenAI/Google/xAI/DeepSeek via their JSON modes with the schema
+ * embedded in the prompt. The zod safeParse below stays the real validation
+ * gate regardless of provider.
  */
-export class AnthropicAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV3 {
-  private readonly client: Anthropic;
-
-  constructor(apiKey: string) {
-    this.client = new Anthropic({ apiKey });
-  }
+export class LLMAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV3 {
+  constructor(private readonly caller: StructuredLLMCaller) {}
 
   private async runStructured<T>(
     system: string,
@@ -658,33 +656,11 @@ export class AnthropicAnalysisClient implements AnalysisLLMClient, AnalysisLLMCl
     model: string,
     maxTokens: number = ANALYSIS_MAX_TOKENS
   ): Promise<AnalysisOutcome<T>> {
-    let response: Anthropic.Message;
-    try {
-      response = await this.client.messages.create({
-        model,
-        max_tokens: maxTokens,
-        system,
-        messages: [{ role: "user", content: userPrompt }],
-        // `thinking` is deliberately omitted (SPEC: "omit `thinking` param
-        // entirely") — Claude Opus 5 runs adaptive thinking by default.
-        output_config: { format: { type: "json_schema", schema: jsonSchema } },
-      });
-    } catch (err) {
-      return { kind: "skipped", reason: "parse_error", detail: err instanceof Error ? err.message : String(err) };
-    }
-    if (response.stop_reason === "refusal") {
-      return { kind: "skipped", reason: "refusal", detail: "Claude declined this chunk (safety classifier)" };
-    }
-    if (response.stop_reason === "max_tokens") {
-      return { kind: "skipped", reason: "max_tokens", detail: "Hit max_tokens before finishing this chunk" };
-    }
-    const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text" && typeof b.text === "string");
-    if (!textBlock?.text) {
-      return { kind: "skipped", reason: "parse_error", detail: "No text content in response" };
-    }
+    const result = await this.caller.call({ system, userPrompt, jsonSchema, model, maxTokens });
+    if (result.kind === "skipped") return result;
     let raw: unknown;
     try {
-      raw = JSON.parse(textBlock.text);
+      raw = JSON.parse(result.text);
     } catch (err) {
       return { kind: "skipped", reason: "parse_error", detail: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}` };
     }
@@ -955,24 +931,37 @@ export function __setAnalysisClientForTests(client: AnalysisLLMClient | null): v
 
 export class NoApiKeyError extends Error {
   constructor() {
-    super("No Anthropic API key configured");
+    super("No API key configured for the selected LLM provider");
     this.name = "NoApiKeyError";
   }
+}
+
+/**
+ * Auth accepted by the resolvers below: a full ProviderAuth (routes pass the
+ * result of lib/providers.ts's resolveProviderAuth), a bare string treated as
+ * an Anthropic API key (back-compat with older callers/tests), or null (no
+ * credential — throws NoApiKeyError outside fake/test mode).
+ */
+export type LLMClientAuth = string | ProviderAuth | null;
+
+function callerFromAuth(auth: string | ProviderAuth): StructuredLLMCaller {
+  const resolved: ProviderAuth = typeof auth === "string" ? { provider: "anthropic", mode: "api-key", apiKey: auth } : auth;
+  return createStructuredCaller(resolved);
 }
 
 /**
  * Resolves which LLM client an analyze run should use: a test-injected fake
  * (highest priority — never touches env/network from a test), then the
  * deterministic fake when `STUDYLOOP_FAKE_ANALYSIS=1` (dev/demo mode — no key
- * required), then the real Anthropic-backed client (throws NoApiKeyError if
- * `apiKey` is null; callers should have already gated on this — see
+ * required), then the real provider-backed client (throws NoApiKeyError if
+ * `auth` is null; callers should have already gated on this — see
  * routes/analyze.ts's `evaluateAnalyzeGuard`).
  */
-export function resolveAnalysisClient(apiKey: string | null): AnalysisLLMClient {
+export function resolveAnalysisClient(auth: LLMClientAuth): AnalysisLLMClient {
   if (injectedClientForTests) return injectedClientForTests;
   if (process.env.STUDYLOOP_FAKE_ANALYSIS === "1") return new FakeAnalysisClient();
-  if (!apiKey) throw new NoApiKeyError();
-  return new AnthropicAnalysisClient(apiKey);
+  if (!auth) throw new NoApiKeyError();
+  return new LLMAnalysisClient(callerFromAuth(auth));
 }
 
 let injectedClientForTestsV3: AnalysisLLMClientV3 | null = null;
@@ -983,11 +972,11 @@ export function __setAnalysisClientV3ForTests(client: AnalysisLLMClientV3 | null
 }
 
 /** V3-B B1 counterpart to `resolveAnalysisClient` — same priority order, resolving the typed-spine interface instead. */
-export function resolveAnalysisClientV3(apiKey: string | null): AnalysisLLMClientV3 {
+export function resolveAnalysisClientV3(auth: LLMClientAuth): AnalysisLLMClientV3 {
   if (injectedClientForTestsV3) return injectedClientForTestsV3;
   if (process.env.STUDYLOOP_FAKE_ANALYSIS === "1") return new FakeAnalysisClient();
-  if (!apiKey) throw new NoApiKeyError();
-  return new AnthropicAnalysisClient(apiKey);
+  if (!auth) throw new NoApiKeyError();
+  return new LLMAnalysisClient(callerFromAuth(auth));
 }
 
 export function isFakeAnalysisMode(): boolean {

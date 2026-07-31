@@ -14,5 +14,6 @@ coverage/
 /projects/
 /review.json
 /teacherScores.json
+/conceptRegistry.json
 .claude/
 .gstack/
