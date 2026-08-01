@@ -1,7 +1,8 @@
 /* Console slice 8 (design/mockups/video-console/BUILD-BRIEF.md): shared pane
    shell — bare content over the footage; the chrome strip is the only surface
    that ever gets a background or backdrop-filter (perf: never blur a full
-   pane over video). */
+   pane over video). Console slice D (mock lines 74-197): bare vs glassy mode,
+   resize grip, chip dot, parking/flight/arriving animations. */
 
 .pane {
   position: absolute;
@@ -10,6 +11,104 @@
   cursor: default;
   touch-action: none;
   user-select: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  transition: opacity 0.5s var(--ease), background 0.4s var(--ease), border-color 0.4s var(--ease),
+    box-shadow 0.4s var(--ease);
+}
+
+/* Mock's `.pane.dragging/.sizing` (line 81): everything but opacity goes
+   instant while the pointer is driving geometry. */
+.pane.dragging,
+.pane.sizing {
+  transition: opacity 0.5s var(--ease);
+}
+
+/* Console slice C modality choreography (mock lines 361-365): Generate spotlights
+   the self-test surface (`[data-pane="test"]`) by fading every other pane
+   near-invisible and taking it out of the hit-test tree. `.generate`/`.review`
+   are literal (non-hashed) classes StudyView puts on .consoleRoot — see its own
+   module.css — so they can be targeted here across the CSS-module boundary via
+   :global(). !important so a pane's inline envelope opacity (ConceptPane) can't
+   win over the modality fade. */
+:global(.generate) .pane:not([data-pane="test"]) {
+  opacity: 0.12 !important;
+  pointer-events: none;
+}
+
+/* Generate re-centers the self-test pane (mock line 363) — inline left/top/
+   width lose to !important here. */
+:global(.generate) .pane[data-pane="test"] {
+  left: 50% !important;
+  top: 26% !important;
+  transform: translateX(-50%);
+  width: 420px !important;
+}
+
+/* Review dims everything except the map pane (`[data-pane="map"]`) and the
+   drill pane, which review mode explicitly keeps live (task brief: "DrillPane
+   arrival is allowed... ensure it's not opacity-faded in review") — deliberately
+   NOT the mock's own exemption (`#p-concept`), since review is about testing
+   recall against what you already attested, not re-reading the concept card. */
+:global(.review) .pane:not([data-pane="map"]):not([data-pane="drill"]) {
+  opacity: 0.25 !important;
+}
+
+/* --- bare vs glassy (mock lines 83-95) ------------------------------------
+   Glassy keeps a persistent faint surface + border; its backdrop blur lives
+   ONLY on the chrome strip (perf law). Bare is frameless with a text glow;
+   it gains the faintest hover surface purely as a chrome affordance. */
+.glassy {
+  padding: 10px 14px 14px;
+  background: oklch(0.6 0.05 230 / 5%);
+  border-color: oklch(0.85 0.05 var(--hue) / 12%);
+  box-shadow: 0 10px 40px oklch(0.03 0.01 245 / 35%);
+}
+
+.bare {
+  text-shadow: var(--glow), 0 1px 8px oklch(0.05 0.008 245 / 80%);
+  /* Readability over busy footage: a whisper of scrim behind the text at all
+     times (plain alpha — the no-blur-on-panes perf law still stands),
+     deepening on hover while the user is adjusting the pane. */
+  background: rgb(0 0 0 / 16%);
+  padding: 8px 12px;
+}
+
+.bare:hover {
+  background: rgb(0 0 0 / 34%);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 40%);
+}
+
+/* Drag-to-park arming (mock lines 94-95): the pane shrinks/dims while held
+   over the park zone. */
+.parking {
+  opacity: 0.8;
+}
+
+/* Park/undock flights (mock dockPane lines 1088-1099): transform+opacity are
+   driven inline by Pane.tsx; this class supplies the timing. */
+.flying {
+  transition: transform 0.75s var(--ease), opacity 0.7s var(--ease);
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+/* Mock's `.arriving` materialize (lines 138-142) — undock + fresh arrivals. */
+@keyframes materialize {
+  from {
+    opacity: 0;
+    filter: blur(12px);
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+}
+
+.arriving {
+  animation: materialize 1.1s var(--ease) both;
 }
 
 .chrome {
@@ -29,6 +128,8 @@
     background var(--duration-standard) var(--ease-standard);
 }
 
+/* The only backdrop-filter in the pane engine — the chrome strip alone. */
+.glassy .chrome,
 .pane:hover .chrome,
 .pane.dragging .chrome {
   background: rgb(0 0 0 / 65%);
@@ -43,12 +144,35 @@
 }
 
 .label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: rgb(255 255 255 / 88%);
   white-space: nowrap;
+  text-shadow: none;
+}
+
+/* Mock's `.chip .dot` (lines 120-122): amber proposed / jade attested / dim quiet. */
+.chipDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--ice-faint);
+}
+
+.chipDot[data-status="proposed"] {
+  background: var(--amber);
+  box-shadow: 0 0 8px var(--amber);
+}
+
+.chipDot[data-status="attested"] {
+  background: var(--jade);
+  box-shadow: 0 0 8px var(--jade);
 }
 
 .tools {
@@ -69,14 +193,44 @@
   color: #fff;
 }
 
-/* Edit mode (SURVEY.md, WoW/ElvUI lineage): the pane materializes as a
-   labeled, outlined box — chrome always on, dashed border, grab cursor
-   everywhere. Hidden/ghost panes render their placeholder through .ghostText. */
+/* Resize grip (mock lines 113-116): visible for glassy panes, on hover for
+   bare ones, always in edit mode. */
+.grip {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 15px;
+  height: 15px;
+  line-height: 0;
+  cursor: nwse-resize;
+  opacity: 0;
+  color: rgb(255 255 255 / 65%);
+  transition: opacity 0.35s var(--ease);
+}
+
+.glassy .grip,
+.pane:hover .grip {
+  opacity: 0.8;
+}
+
+.grip:hover {
+  color: #fff;
+}
+
+/* Edit mode (SURVEY.md, WoW/ElvUI lineage): the pane reads as a selected,
+   adjustable surface — a soft glow ring and a raised scrim instead of the old
+   dashed outline, both strengthening on hover. */
 .pane.editing {
-  outline: 1.5px dashed rgb(255 255 255 / 45%);
-  outline-offset: 3px;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 24%), 0 8px 32px rgb(0 0 0 / 45%);
+  background: rgb(0 0 0 / 30%);
   border-radius: var(--radius-xs);
   cursor: grab;
+  opacity: 1 !important;
+}
+
+.pane.editing:hover {
+  box-shadow: 0 0 0 1.5px rgb(255 255 255 / 50%), 0 10px 40px rgb(0 0 0 / 55%);
+  background: rgb(0 0 0 / 42%);
 }
 
 .pane.editing.dragging {
@@ -89,6 +243,17 @@
   -webkit-backdrop-filter: blur(8px);
   opacity: 1;
   pointer-events: auto;
+}
+
+.pane.editing .grip {
+  opacity: 0.8;
+}
+
+/* Mock line 194: a hidden pane reappears ghosted in edit mode (pinkish ring,
+   55%) so the chrome's eye tool can unhide it. */
+.pane.editing.wasHidden {
+  box-shadow: 0 0 0 1.5px oklch(0.7 0.1 320 / 55%), 0 8px 32px rgb(0 0 0 / 45%);
+  opacity: 0.55 !important;
 }
 
 .ghostText {

@@ -33,7 +33,10 @@ export default function App(): JSX.Element {
 
   return (
     <>
-      <TopBar />
+      {/* Console shell (slice A): the study view is a full-bleed stage, not a
+          page under the global chrome — TopBar would eat viewport height the
+          console needs and doesn't belong over the footage. */}
+      {route.view !== "study" && <TopBar />}
       {route.view === "library" && <LibraryView />}
       {route.view === "settings" && <SettingsView />}
       {route.view === "study" && <StudyView key={route.projectId} projectId={route.projectId} />}

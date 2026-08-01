@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { clampRate, useStudyLoopStore } from "./store";
 import type { Project } from "../lib/types";
+import type { PlayerHandle } from "../player/types";
 
 describe("clampRate", () => {
   it("clamps to the 0.5–2.5 range", () => {
@@ -88,6 +89,148 @@ describe("A/B loop store logic", () => {
     useStudyLoopStore.getState().clearLoop();
     expect(useStudyLoopStore.getState().loopA).toBeNull();
     expect(useStudyLoopStore.getState().loopB).toBeNull();
+  });
+});
+
+describe("cycleAbLoop (console slice B, mpv grammar A → B → clear)", () => {
+  function fakeController(t: number): PlayerHandle {
+    return {
+      play: vi.fn(),
+      pause: vi.fn(),
+      seek: vi.fn(),
+      getCurrentTime: () => t,
+      getDuration: () => 1800,
+      setRate: vi.fn(),
+      getVolume: () => 1,
+      setVolume: vi.fn(),
+      on: () => () => {},
+    };
+  }
+
+  beforeEach(() => {
+    useStudyLoopStore.setState({ loopA: null, loopB: null, toasts: [], controller: fakeController(10) });
+  });
+
+  it("is a no-op without a controller", () => {
+    useStudyLoopStore.setState({ controller: null });
+    useStudyLoopStore.getState().cycleAbLoop();
+    expect(useStudyLoopStore.getState().loopA).toBeNull();
+  });
+
+  it("sets A on the first press, B on the second, clears on the third", () => {
+    useStudyLoopStore.getState().cycleAbLoop();
+    expect(useStudyLoopStore.getState().loopA).toBe(10);
+    expect(useStudyLoopStore.getState().loopB).toBeNull();
+
+    useStudyLoopStore.setState({ controller: fakeController(20) });
+    useStudyLoopStore.getState().cycleAbLoop();
+    expect(useStudyLoopStore.getState().loopA).toBe(10);
+    expect(useStudyLoopStore.getState().loopB).toBe(20);
+
+    useStudyLoopStore.getState().cycleAbLoop();
+    expect(useStudyLoopStore.getState().loopA).toBeNull();
+    expect(useStudyLoopStore.getState().loopB).toBeNull();
+  });
+});
+
+describe("focusMode / keymapOpen / autoPaused (console slice B)", () => {
+  beforeEach(() => {
+    useStudyLoopStore.setState({ focusMode: false, keymapOpen: false, autoPaused: false });
+  });
+
+  it("toggleFocusMode flips focusMode", () => {
+    useStudyLoopStore.getState().toggleFocusMode();
+    expect(useStudyLoopStore.getState().focusMode).toBe(true);
+    useStudyLoopStore.getState().toggleFocusMode();
+    expect(useStudyLoopStore.getState().focusMode).toBe(false);
+  });
+
+  it("toggleKeymap flips keymapOpen; closeKeymap always lands on false", () => {
+    useStudyLoopStore.getState().toggleKeymap();
+    expect(useStudyLoopStore.getState().keymapOpen).toBe(true);
+    useStudyLoopStore.getState().closeKeymap();
+    expect(useStudyLoopStore.getState().keymapOpen).toBe(false);
+    useStudyLoopStore.getState().closeKeymap();
+    expect(useStudyLoopStore.getState().keymapOpen).toBe(false);
+  });
+
+  it("setAutoPaused sets the flag directly", () => {
+    useStudyLoopStore.getState().setAutoPaused(true);
+    expect(useStudyLoopStore.getState().autoPaused).toBe(true);
+    useStudyLoopStore.getState().setAutoPaused(false);
+    expect(useStudyLoopStore.getState().autoPaused).toBe(false);
+  });
+});
+
+describe("cabinets / modality / scaffold / pressure (console slice C)", () => {
+  beforeEach(() => {
+    useStudyLoopStore.setState({ openCabinet: null, modality: "watch", scaffold: 100, pressure: 100, isPlaying: false });
+  });
+
+  it("toggleCabinet opens the named cabinet, closing any other that was open", () => {
+    useStudyLoopStore.getState().toggleCabinet("concepts");
+    expect(useStudyLoopStore.getState().openCabinet).toBe("concepts");
+    useStudyLoopStore.getState().toggleCabinet("session");
+    expect(useStudyLoopStore.getState().openCabinet).toBe("session");
+  });
+
+  it("toggleCabinet closes the same cabinet on a second click", () => {
+    useStudyLoopStore.getState().toggleCabinet("captures");
+    useStudyLoopStore.getState().toggleCabinet("captures");
+    expect(useStudyLoopStore.getState().openCabinet).toBeNull();
+  });
+
+  it("closeCabinet always lands on null", () => {
+    useStudyLoopStore.getState().toggleCabinet("session");
+    useStudyLoopStore.getState().closeCabinet();
+    expect(useStudyLoopStore.getState().openCabinet).toBeNull();
+    useStudyLoopStore.getState().closeCabinet();
+    expect(useStudyLoopStore.getState().openCabinet).toBeNull();
+  });
+
+  it("setModality is a no-op re-set when already in that mode", () => {
+    useStudyLoopStore.getState().setModality("watch");
+    expect(useStudyLoopStore.getState().modality).toBe("watch");
+  });
+
+  function fakePlayerHandle(pause = vi.fn()): PlayerHandle {
+    return {
+      play: vi.fn(),
+      pause,
+      seek: vi.fn(),
+      getCurrentTime: () => 0,
+      getDuration: () => 1800,
+      setRate: vi.fn(),
+      getVolume: () => 1,
+      setVolume: vi.fn(),
+      on: () => () => {},
+    };
+  }
+
+  it("setModality('generate') pauses a currently-playing controller", () => {
+    const pause = vi.fn();
+    useStudyLoopStore.setState({ isPlaying: true, controller: fakePlayerHandle(pause) });
+    useStudyLoopStore.getState().setModality("generate");
+    expect(useStudyLoopStore.getState().modality).toBe("generate");
+    expect(pause).toHaveBeenCalledOnce();
+  });
+
+  it("setModality('review') does not touch playback", () => {
+    const pause = vi.fn();
+    useStudyLoopStore.setState({ isPlaying: true, controller: fakePlayerHandle(pause) });
+    useStudyLoopStore.getState().setModality("review");
+    expect(pause).not.toHaveBeenCalled();
+  });
+
+  it("setScaffold / setPressure clamp to [0, 100]", () => {
+    useStudyLoopStore.getState().setScaffold(-10);
+    expect(useStudyLoopStore.getState().scaffold).toBe(0);
+    useStudyLoopStore.getState().setScaffold(140);
+    expect(useStudyLoopStore.getState().scaffold).toBe(100);
+    useStudyLoopStore.getState().setPressure(-10);
+    expect(useStudyLoopStore.getState().pressure).toBe(0);
+    useStudyLoopStore.getState().setPressure(140);
+    expect(useStudyLoopStore.getState().pressure).toBe(100);
   });
 });
 

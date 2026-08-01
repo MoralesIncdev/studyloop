@@ -5,6 +5,7 @@ import { create } from "zustand";
 import { api, ApiError } from "../lib/api";
 import { parseHash, routeToHash, type Route } from "../lib/router";
 import { activeConcepts, activeSegmentIndex } from "../lib/selectors";
+import { nextAbLoopAction } from "../lib/abLoop";
 import { formatTimestamp } from "../lib/time";
 import { buildMinedText } from "../lib/mining";
 import { pickPrompt, promptPoolFor } from "../lib/notationPrompts";
@@ -36,6 +37,7 @@ import type {
 } from "../lib/types";
 import { llmConfigured } from "../lib/types";
 import { hasSeenAttentionLegend, markAttentionLegendSeen } from "../lib/attentionHeatmap";
+import { resetAllPaneLayouts as clearStoredPaneLayouts } from "../lib/consoleLayout";
 import type { PlayerHandle } from "../player/types";
 
 // "concepts" moved out of the bottom dock into the V2 right-rail Concepts
@@ -53,6 +55,13 @@ export interface Toast {
 // and re-running them shouldn't trigger a re-render) — see pauseToastTimer.
 const toastTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const TOAST_LIFETIME_MS = 6000;
+
+/** Console slice D: flashContext's auto-clear timer — same "kept outside the
+ *  store" reasoning as toastTimers above. Mock's own ctxFlashTimer (index.html
+ *  line 1269) is the same single-slot-not-a-queue design: a new flash simply
+ *  restarts the clock rather than queuing. */
+let contextFlashTimer: ReturnType<typeof setTimeout> | null = null;
+const CONTEXT_FLASH_MS = 2600;
 
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError) return err.message;
@@ -122,6 +131,12 @@ function clearPlaybackFocusTimer(): void {
 
 /** RightRail's Transcript/Concepts/Path accordion — only one "large" section open at a time (codex P1-5), remembered per project. V3-B B3 adds "path" (Study Path). */
 export type RailSectionId = "transcript" | "concepts" | "path";
+
+/** Console slice C (mock's setMode, index.html lines 1199-1211): Watch/Generate/Review. */
+export type Modality = "watch" | "generate" | "review";
+
+/** Console slice C: which edge-handle cabinet is open, if any (exclusive). */
+export type CabinetId = "concepts" | "captures" | "session";
 
 const RAIL_SECTION_STORAGE_PREFIX = "studyloop:railSection:";
 /**
@@ -371,6 +386,12 @@ export interface StudyLoopStore {
   setPlaybackRate: (r: number) => void;
   volume: number;
   setVolume: (v: number) => void;
+  /** Console slice B (mock's `autoPaused`): true while playback is paused by a
+   *  hover-pause source (CCOverlay's caption hover) rather than an explicit
+   *  user pause — the status-chips row shows "Paused · reading" instead of
+   *  the 600ms-delayed manual-pause context chip while this is true. */
+  autoPaused: boolean;
+  setAutoPaused: (v: boolean) => void;
 
   // --- V3-A A1: state-aware surface purge -----------------------------------------
   /** True after 1.5s of continuous playback (debounced); false immediately on pause. */
@@ -390,6 +411,11 @@ export interface StudyLoopStore {
   setLoopA: (t: number | null) => void;
   setLoopB: (t: number | null) => void;
   clearLoop: () => void;
+  /** Console slice B (mock lines 897-911, "mpv grammar: A → B → clear"): one
+   *  button/hotkey (L) cycles the loop through set-A → set-B → clear instead
+   *  of separate Set A/Set B/Clear controls — see lib/abLoop.ts for the pure
+   *  transition table this wraps. */
+  cycleAbLoop: () => void;
   /** Console slice 6: condensed playback — the playhead skips stretches with no
    *  concept coverage (PlayerChrome owns the skip logic; this is just the mode). */
   condensedPlayback: boolean;
@@ -405,6 +431,77 @@ export interface StudyLoopStore {
    *  true; the "O" hotkey toggles it (see hotkeys.ts). */
   consoleMode: boolean;
   toggleConsoleMode: () => void;
+  /** Bumped by resetAllPaneLayouts() so ConsoleLayer can key its panes off
+   *  it, forcing them to remount and re-read (now-cleared) storage — panes
+   *  otherwise only load their position once, on mount. */
+  paneLayoutVersion: number;
+  /** Bento button double-click (slice A, mock lines 426-432): forgets every
+   *  pane's stored position for the current project and snaps them back to
+   *  their defaults. No-ops with no project loaded. */
+  resetAllPaneLayouts: () => void;
+  /** Console slice B (mock body.focus, lines 59-62): distraction-free framing
+   *  around the stage — dims corner buttons/status chips, doesn't touch panes
+   *  or the transport itself. F or the transport's focus button toggles it. */
+  focusMode: boolean;
+  toggleFocusMode: () => void;
+  /** Console slice B (mock #keymap, lines 350-360): the centered shortcuts
+   *  overlay. `?` toggles, Esc closes (highest priority in the Escape cascade). */
+  keymapOpen: boolean;
+  toggleKeymap: () => void;
+  closeKeymap: () => void;
+
+  // --- Console slice C (mock lines 200-258, 596-658): edge-handle cabinets ------
+  /** Which slide-in glass cabinet is open, if any — exclusive (opening one closes any other). */
+  openCabinet: CabinetId | null;
+  /** Opening pauses nothing (unlike pane hover-pause) — clicking the same handle again closes it. */
+  toggleCabinet: (id: CabinetId) => void;
+  closeCabinet: () => void;
+  /** Watch/Generate/Review modality (mock's setMode, lines 1199-1211) — a class on
+   *  .consoleRoot drives the stage-dim/pane-fade/heatmap-recolor choreography per
+   *  mode (see StudyView.module.css and each affected component's own CSS module). */
+  modality: Modality;
+  setModality: (m: Modality) => void;
+  /** Session cabinet scaffold slider (0-100, mock default 100 = no blur) — drives
+   *  --scaffold-blur on .consoleRoot, which ConceptPane/DrillPane's `.ai`-classed
+   *  body text reads (mock line 127: `.ai{filter:blur(var(--scaffold-blur))}`). */
+  scaffold: number;
+  setScaffold: (v: number) => void;
+  /** Session cabinet pressure slider (0-100, mock default 100) — drives --pressure
+   *  on .consoleRoot for future ghost-note opacity (mock line 373); wired now,
+   *  nothing reads it yet. */
+  pressure: number;
+  setPressure: (v: number) => void;
+
+  // --- Console slice D: pane engine parity (design/mockups/video-console/index.html
+  // lines 1044-1099, "drag-to-park + waiting ticks + undock") ----------------------
+  /** One entry per currently-parked, tick-anchored pane — `t` is the concept
+   *  anchor its seek-bar tick should pulse `.waiting` at; `conceptId` lets the
+   *  owning pane (ConceptPane) recognize "this is MY parked occurrence" vs a
+   *  stale key from a since-changed concept. PlayerChrome reads this to mark
+   *  the matching tick and wire its click to undockPane. */
+  parkedPanes: Record<string, { conceptId: string; t: number }>;
+  parkPane: (paneId: string, conceptId: string, t: number) => void;
+  /** Clicking a waiting tick (mock's `undockPane`, index.html lines 1102-1110). */
+  undockPane: (paneId: string) => void;
+  /** Console slice D item 7 "Echo pane timestamp jump": the router only carries
+   *  a projectId (lib/router.ts), so a cross-project seek is staged here and
+   *  consumed once on the destination StudyView's load — also suppresses that
+   *  session's resume prompt (a queued seek IS the resume decision). */
+  pendingSeekT: number | null;
+  queuePendingSeek: (t: number) => void;
+  /** Reads and clears in one step — a second read (e.g. a re-render) must not replay the seek. */
+  consumePendingSeek: () => number | null;
+  /** Console slice D item 6: SuggestPane's "Keep as note" flashes the status-chips
+   *  context line with a custom message (mock's flashCtx, index.html lines
+   *  1270-1275) instead of the row's own computed "at T · concept · n notes"
+   *  text — auto-clears itself after the same ~2.6s the mock uses. */
+  contextFlash: string | null;
+  flashContext: (message: string) => void;
+  /** Console slice D item 8 "ghost notes": GhostNote reads this to skip
+   *  resurfacing a note's text while NotePane's textarea is actively focused —
+   *  set by NotePane's own focus/blur handlers. */
+  noteEditing: boolean;
+  setNoteEditing: (editing: boolean) => void;
 
   // --- transcript UX --------------------------------------------------------------
   lastUserScrollAt: number;
@@ -898,6 +995,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       isPlaying: false,
       playbackFocus: false,
       focusOverride: false,
+      autoPaused: false,
       // "none" is a genuine persisted choice (both sections collapsed) and
       // must restore to `null` (the runtime "nothing open" state — see
       // setRailOpenSection), not fall through to the "transcript" default
@@ -912,8 +1010,24 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       loopA: null,
       loopB: null,
       condensedPlayback: false,
-      consoleMode: false,
+      consoleMode: true, // slice A: every project session starts in the console shell
       consoleEditMode: false,
+      focusMode: false,
+      keymapOpen: false,
+      openCabinet: null,
+      modality: "watch",
+      scaffold: 100,
+      pressure: 100,
+      // Console slice D: a stale parked-pane/flash/editing flag from the
+      // PREVIOUS project must not bleed into this one. `pendingSeekT`
+      // deliberately isn't listed here — a cross-project echo jump sets it
+      // right before calling navigate(), and this bulk reset (part of
+      // loadProjectSession, which the resulting StudyView mount triggers)
+      // must not clobber it before StudyView's own effect gets to
+      // consumePendingSeek() it.
+      parkedPanes: {},
+      contextFlash: null,
+      noteEditing: false,
       controller: null,
       bubbles: [],
       bubblesLoading: false,
@@ -1145,14 +1259,26 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       isPlaying: false,
       playbackFocus: false,
       focusOverride: false,
+      autoPaused: false,
       railOpenSection: null,
       highlightedConceptId: null,
       ccEnabled: false,
       loopA: null,
       loopB: null,
       condensedPlayback: false,
-      consoleMode: false,
+      consoleMode: true, // slice A: leaves session state ready for the next project load
       consoleEditMode: false,
+      focusMode: false,
+      keymapOpen: false,
+      openCabinet: null,
+      modality: "watch",
+      scaffold: 100,
+      pressure: 100,
+      // Console slice D: same exclusion as loadProjectSession's own reset —
+      // see its comment. `pendingSeekT` stays out on purpose.
+      parkedPanes: {},
+      contextFlash: null,
+      noteEditing: false,
       bubbles: [],
       bubblesLoading: false,
       notes: "",
@@ -1392,6 +1518,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   setPlaybackRate: (r) => set({ playbackRate: clampRate(r) }),
   volume: 1,
   setVolume: (v) => set({ volume: clampVolume(v) }),
+  autoPaused: false,
+  setAutoPaused: (v) => set({ autoPaused: v }),
 
   // --- V3-A A1: state-aware surface purge ------------------------------------------
   playbackFocus: false,
@@ -1424,6 +1552,22 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       return { loopB: t };
     }),
   clearLoop: () => set({ loopA: null, loopB: null }),
+  cycleAbLoop: () => {
+    const state = get();
+    if (!state.controller) return;
+    const t = state.controller.getCurrentTime();
+    switch (nextAbLoopAction(state.loopA, state.loopB)) {
+      case "setA":
+        state.setLoopA(t);
+        break;
+      case "setB":
+        state.setLoopB(t);
+        break;
+      case "clear":
+        state.clearLoop();
+        break;
+    }
+  },
   condensedPlayback: false,
   toggleCondensedPlayback: () => {
     const next = !get().condensedPlayback;
@@ -1433,7 +1577,10 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       "info"
     );
   },
-  consoleMode: false,
+  // Slice A: the console is the study page's shell now, not an opt-in
+  // overlay — every project session starts with it on (see the two session
+  // reset blocks above/below, which also default it to true).
+  consoleMode: true,
   toggleConsoleMode: () => {
     const next = !get().consoleMode;
     // Leaving console mode always leaves edit mode with it.
@@ -1454,6 +1601,65 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       "info"
     );
   },
+  paneLayoutVersion: 0,
+  resetAllPaneLayouts: () => {
+    const projectId = get().currentProject?.id;
+    if (!projectId) return;
+    clearStoredPaneLayouts(projectId);
+    set((state) => ({ paneLayoutVersion: state.paneLayoutVersion + 1 }));
+    get().pushToast("Pane layout reset", "info");
+  },
+  focusMode: false,
+  toggleFocusMode: () => set((state) => ({ focusMode: !state.focusMode })),
+  keymapOpen: false,
+  toggleKeymap: () => set((state) => ({ keymapOpen: !state.keymapOpen })),
+  closeKeymap: () => set({ keymapOpen: false }),
+
+  // --- Console slice C: edge-handle cabinets ---------------------------------------
+  openCabinet: null,
+  toggleCabinet: (id) => set((state) => ({ openCabinet: state.openCabinet === id ? null : id })),
+  closeCabinet: () => set({ openCabinet: null }),
+  modality: "watch",
+  setModality: (m) => {
+    if (get().modality === m) return;
+    set({ modality: m });
+    // Mock line 1204: entering Generate pauses playback (the console dims to
+    // spotlight the self-test surface — a later slice's #p-test) — the video
+    // doesn't keep playing under a dimmed, un-attended stage.
+    if (m === "generate" && get().isPlaying) get().controller?.pause();
+  },
+  scaffold: 100,
+  setScaffold: (v) => set({ scaffold: Math.min(100, Math.max(0, v)) }),
+  pressure: 100,
+  setPressure: (v) => set({ pressure: Math.min(100, Math.max(0, v)) }),
+
+  // --- Console slice D: pane engine parity -----------------------------------------
+  parkedPanes: {},
+  parkPane: (paneId, conceptId, t) => set((state) => ({ parkedPanes: { ...state.parkedPanes, [paneId]: { conceptId, t } } })),
+  undockPane: (paneId) =>
+    set((state) => {
+      const next = { ...state.parkedPanes };
+      delete next[paneId];
+      return { parkedPanes: next };
+    }),
+  pendingSeekT: null,
+  queuePendingSeek: (t) => set({ pendingSeekT: t }),
+  consumePendingSeek: () => {
+    const t = get().pendingSeekT;
+    if (t != null) set({ pendingSeekT: null });
+    return t;
+  },
+  contextFlash: null,
+  flashContext: (message) => {
+    if (contextFlashTimer) clearTimeout(contextFlashTimer);
+    set({ contextFlash: message });
+    contextFlashTimer = setTimeout(() => {
+      contextFlashTimer = null;
+      set({ contextFlash: null });
+    }, CONTEXT_FLASH_MS);
+  },
+  noteEditing: false,
+  setNoteEditing: (editing) => set({ noteEditing: editing }),
 
   // --- transcript UX --------------------------------------------------------------
   lastUserScrollAt: 0,

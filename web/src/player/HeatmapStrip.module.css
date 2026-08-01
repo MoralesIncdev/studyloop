@@ -38,6 +38,19 @@
   vector-effect: non-scaling-stroke;
 }
 
+/* Console slice C modality choreography (mock line 270): Review recolors the
+   strip to a decay/amber-red ramp instead of the neutral ice tone — the same
+   "this is aging, revisit it" language the rest of review mode uses.
+   `.review` is a literal class on .consoleRoot; see Pane.module.css's comment
+   for why plain global classes cross the CSS-module boundary here. */
+:global(.review) .area {
+  fill: oklch(0.65 0.1 30 / 25%);
+}
+
+:global(.review) .line {
+  stroke: oklch(0.75 0.12 30 / 60%);
+}
+
 /* V3-C C5 "Attention heatmap" (PEDAGOGY §7): overlays render translucent and
    in a distinct hue (accent-blue) from own (white/currentColor) — "own
    solid, overlays translucent", never blended into one curve. */

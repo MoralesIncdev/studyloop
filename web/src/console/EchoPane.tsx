@@ -24,6 +24,7 @@ export function EchoPane({ frameRef }: Props): JSX.Element | null {
   const mergedConcepts = useStudyLoopStore((s) => s.mergedConcepts);
   const projectId = useStudyLoopStore((s) => s.currentProject?.id ?? null);
   const navigate = useStudyLoopStore((s) => s.navigate);
+  const queuePendingSeek = useStudyLoopStore((s) => s.queuePendingSeek);
   const [parkedKey, setParkedKey] = useState<string | null>(null);
 
   const active = useMemo(() => {
@@ -41,10 +42,13 @@ export function EchoPane({ frameRef }: Props): JSX.Element | null {
   return (
     <Pane
       paneId="p-echo"
+      dataPane="echo"
       projectId={projectId}
       frameRef={frameRef}
       defaultPos={{ fx: 0.04, fy: 0.36 }}
       width={300}
+      defaultMode="bare"
+      chipStatus="attested"
       label={active ? <>ECHO &middot; {formatTimestamp(active.t)}</> : "ECHO"}
       tools={
         !hidden && active ? (
@@ -69,12 +73,21 @@ export function EchoPane({ frameRef }: Props): JSX.Element | null {
             <b>{active.elsewhere[0].projectTitle}</b>
             {active.elsewhere.length > 1 ? ` (+${active.elsewhere.length - 1} more)` : ""}.
           </p>
+          {/* Console slice D item 7: when the registry carries the other
+              project's anchor time, the jump lands on that exact moment — the
+              seek is staged (queuePendingSeek) because the router only carries
+              a projectId; the destination StudyView consumes it and skips its
+              resume prompt. Without a time it degrades to plain navigation. */}
           <button
             type="button"
             className={styles.jump}
-            onClick={() => navigate({ view: "study", projectId: active.elsewhere[0].projectId })}
+            onClick={() => {
+              const ref = active.elsewhere[0];
+              if (ref.t != null) queuePendingSeek(ref.t);
+              navigate({ view: "study", projectId: ref.projectId });
+            }}
           >
-            Open it there
+            {active.elsewhere[0].t != null ? `▸ open it there · ${formatTimestamp(active.elsewhere[0].t)}` : "Open it there"}
           </button>
         </>
       )}

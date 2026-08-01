@@ -29,3 +29,23 @@ export function conceptLoopSpan(
   const end = Math.min(duration > 0 ? duration : cap, next ?? cap, cap);
   return { start, end: Math.max(end, start + MIN_SPAN_S) };
 }
+
+/**
+ * Console slice B (design/mockups/video-console/index.html lines 1248-1251):
+ * the ←/→ hotkeys jump to the previous/next concept tick instead of a plain
+ * seek when the video has any ticks at all — a 1s dead zone around `t`
+ * matches the mock exactly so repeated presses at a tick's own timestamp
+ * still advance instead of re-triggering the same tick.
+ */
+export function adjacentConceptTick(
+  allTickTimes: number[],
+  t: number,
+  direction: "prev" | "next"
+): number | null {
+  if (direction === "next") {
+    const next = allTickTimes.filter((x) => x > t + 1).sort((a, b) => a - b)[0];
+    return next ?? null;
+  }
+  const prev = allTickTimes.filter((x) => x < t - 1).sort((a, b) => b - a)[0];
+  return prev ?? null;
+}

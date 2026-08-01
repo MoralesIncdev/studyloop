@@ -39,10 +39,13 @@ export function DrillPane({ frameRef }: Props): JSX.Element | null {
   return (
     <Pane
       paneId="p-drill"
+      dataPane="drill"
       projectId={projectId}
       frameRef={frameRef}
       defaultPos={{ fx: 0.04, fy: 0.12 }}
       width={300}
+      defaultMode="glassy"
+      chipStatus="proposed"
       label={active ? <>DRILL &middot; {formatTimestamp(active.t)}</> : "DRILL"}
       tools={
         !hidden && active ? (
@@ -64,17 +67,17 @@ export function DrillPane({ frameRef }: Props): JSX.Element | null {
         <>
           <div className={styles.label}>{active.label}</div>
           {active.drill.triggers.length > 0 && (
-            <p className={styles.row}>
+            <p className={`${styles.row} ${styles.ai}`}>
               <b>Trigger:</b> {active.drill.triggers.join("; ")}
             </p>
           )}
           {active.drill.failureModes.length > 0 && (
-            <p className={styles.row}>
+            <p className={`${styles.row} ${styles.ai}`}>
               <b>Failure check:</b> {active.drill.failureModes.join("; ")}
             </p>
           )}
           {active.drill.drillPairing && (
-            <p className={styles.row}>
+            <p className={`${styles.row} ${styles.ai}`}>
               <b>Drill:</b> {active.drill.drillPairing}
             </p>
           )}

@@ -1,0 +1,101 @@
+/* Console slice D: self-test pane — mock's #p-test (lines 510-536, 159-172).
+   The prompt sits over the footage; the answer box is blurred 7px behind a
+   "Sealed · attempt first" label until the learner attempts + reveals. */
+.sealed {
+  border: 1px dashed oklch(0.85 0.1 80 / 35%);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  position: relative;
+  overflow: hidden;
+}
+
+.answer {
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgb(255 255 255 / 80%);
+  margin: 0;
+  filter: blur(7px);
+  user-select: none;
+  transition: filter 0.8s var(--ease);
+}
+
+.sealed.revealed .answer {
+  filter: none;
+  user-select: auto;
+}
+
+.sealLabel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: oklch(0.75 0.09 80);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  transition: opacity 0.5s var(--ease);
+}
+
+.sealed.revealed .sealLabel {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.prompt {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: rgb(255 255 255 / 88%);
+  margin: 0;
+}
+
+.attemptRow {
+  display: flex;
+  margin-top: 10px;
+  gap: 8px;
+}
+
+.attemptInput {
+  flex: 1;
+  min-width: 0;
+  background: oklch(0.1 0.012 245 / 55%);
+  border: 1px solid oklch(0.8 0.05 215 / 14%);
+  border-radius: 8px;
+  color: var(--ice-core);
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.attemptInput::placeholder {
+  color: var(--ice-faint);
+}
+
+/* Mock's `.btn`/`.btn.seal` (lines 132-136). */
+.button {
+  padding: 7px 15px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid oklch(0.85 0.1 80 / 50%);
+  background: none;
+  color: oklch(0.9 0.1 80);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: box-shadow 0.25s var(--ease), border-color 0.25s var(--ease);
+}
+
+.button:hover:not(:disabled) {
+  box-shadow: 0 0 18px oklch(0.8 0.12 80 / 35%);
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.attemptButtonRow {
+  margin-top: 12px;
+}

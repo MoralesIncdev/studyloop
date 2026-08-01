@@ -1,0 +1,428 @@
+/* Console slice C (design/mockups/video-console/index.html lines 200-258,
+   606-658): edge-handle cabinets — three thin glow-on-hover tabs directly on
+   the console stage that slide a glass panel in from their edge. Cabinets sit
+   above the pane-engine overlay (ConsoleLayer.module.css z-index 7) but below
+   NotationModal/KeymapOverlay (100/80) — see those modules' own z-index. */
+
+.wrap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ============ edge handles ============ */
+
+.handle {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ice-faint);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 0.3s var(--ease), opacity 0.3s var(--ease);
+}
+
+.handle:hover,
+.handle[aria-pressed="true"] {
+  color: var(--ice-core);
+  text-shadow: var(--glow);
+}
+
+.bar {
+  background: currentColor;
+  border-radius: 2px;
+  box-shadow: 0 0 8px oklch(0.8 0.09 215 / 50%);
+  flex: none;
+}
+
+.hint {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 0.25s var(--ease);
+}
+
+.handle:hover .hint,
+.handle[aria-pressed="true"] .hint {
+  opacity: 1;
+}
+
+.handleLeft,
+.handleRight {
+  top: 50%;
+  transform: translateY(-50%);
+  flex-direction: column;
+}
+
+.handleLeft {
+  left: 12px;
+}
+
+.handleRight {
+  right: 12px;
+}
+
+.handleLeft .bar,
+.handleRight .bar {
+  width: 2.5px;
+  height: 52px;
+}
+
+.handleLeft .hint,
+.handleRight .hint {
+  writing-mode: vertical-rl;
+}
+
+.handleTop {
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+
+.handleTop .bar {
+  height: 2.5px;
+  width: 52px;
+}
+
+/* Console slice C modality choreography (mock line 364): Generate dims the
+   edge handles out of the way (mock's own body.focus does the same at .2 —
+   see StudyView.module.css's focusFrame comment; focus mode's dim there is
+   the corner buttons, our equivalent of the mock's edge-handles, which stays
+   independent of this rule). `.generate` is a literal class StudyView.tsx
+   puts on .consoleRoot — see console/Pane.module.css's comment. */
+:global(.generate) .handle {
+  opacity: 0.15;
+}
+
+/* ============ cabinet shell ============ */
+
+.panel {
+  position: absolute;
+  z-index: 65;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+  transition: transform 0.6s var(--ease);
+  will-change: transform;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-line);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 9%), 0 10px 44px oklch(0.03 0.01 245 / 50%);
+}
+
+.panel.open {
+  pointer-events: auto;
+}
+
+.panelConcepts {
+  left: 0;
+  top: 16px;
+  bottom: 16px;
+  width: 350px;
+  transform: translateX(-108%);
+  border-radius: 0 16px 16px 0;
+}
+
+.panelConcepts.open {
+  transform: none;
+}
+
+.panelCaptures {
+  right: 0;
+  top: 16px;
+  bottom: 16px;
+  width: 320px;
+  transform: translateX(108%);
+  border-radius: 16px 0 0 16px;
+}
+
+.panelCaptures.open {
+  transform: none;
+}
+
+.panelSession {
+  top: 0;
+  left: 50%;
+  width: min(760px, 94%);
+  transform: translate(-50%, -108%);
+  border-radius: 0 0 16px 16px;
+}
+
+.panelSession.open {
+  transform: translate(-50%, 0);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 15px 18px;
+  border-bottom: 1px solid oklch(0.8 0.05 215 / 12%);
+  flex: none;
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ice-dim);
+}
+
+.body {
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: thin;
+}
+
+.empty {
+  padding: 16px 18px;
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--ice-faint);
+}
+
+.close {
+  flex: none;
+  color: var(--ice-faint);
+  padding: 4px;
+  line-height: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.close:hover {
+  color: var(--ice-core);
+}
+
+.tc {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+}
+
+/* ============ concepts cabinet rows ============ */
+
+.conceptRow {
+  display: flex;
+  gap: 12px;
+  padding: 13px 18px;
+  width: 100%;
+  text-align: left;
+  align-items: flex-start;
+  border-bottom: 1px solid oklch(0.8 0.05 215 / 8%);
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.conceptRow:hover {
+  background: oklch(0.8 0.06 215 / 5%);
+}
+
+.conceptRow.now {
+  background: oklch(0.82 0.13 80 / 5%);
+}
+
+.mark {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-top: 3px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ice-faint);
+  display: grid;
+  place-items: center;
+  color: oklch(0.15 0.02 168);
+}
+
+.conceptRow.attested .mark {
+  border-color: var(--jade);
+  background: var(--jade);
+  box-shadow: 0 0 10px oklch(0.78 0.11 168 / 50%);
+}
+
+.conceptRow.proposed .mark,
+.conceptRow.now .mark {
+  border-color: var(--amber);
+  box-shadow: 0 0 10px oklch(0.82 0.13 80 / 50%);
+}
+
+.conceptRow.upcoming {
+  opacity: 0.4;
+}
+
+.rowName {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ice-core);
+}
+
+.rowMeta {
+  display: flex;
+  gap: 10px;
+  margin-top: 2px;
+  color: var(--ice-faint);
+}
+
+.rowMetaLabel {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* ============ captures cabinet rows ============ */
+
+.capItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 18px;
+  border-bottom: 1px solid oklch(0.8 0.05 215 / 8%);
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.capItem:hover {
+  background: oklch(0.8 0.06 215 / 5%);
+}
+
+.capItem .tc {
+  color: var(--amber);
+}
+
+.capItem p {
+  font-size: 13.5px;
+  color: var(--ice-dim);
+  margin: 3px 0 0;
+}
+
+.capShot p {
+  color: var(--ice-faint);
+  font-style: italic;
+}
+
+/* ============ session cabinet ============ */
+
+.sess {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 16px 48px 16px 22px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+/* Unlike the concepts/captures cabinets' fixed head, the session cabinet's
+   single flex row (mock lines 632-657) can wrap at narrower widths — pinning
+   Close to the corner keeps it reachable instead of wrapping into the row
+   and landing wherever the last flex item happens to break. */
+.sessClose {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+}
+
+.sessTitle {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ice-core);
+}
+
+.sessSub {
+  color: var(--ice-faint);
+  font-size: 12px;
+  margin-top: 1px;
+}
+
+.smallLabel {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ice-dim);
+}
+
+.scaffold {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.scaffold input {
+  width: 110px;
+  accent-color: var(--amber);
+}
+
+.modality {
+  display: flex;
+  margin-left: auto;
+  border: 1px solid oklch(0.8 0.05 215 / 25%);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.modality button {
+  padding: 7px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ice-faint);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.modalityOn {
+  background: oklch(0.8 0.06 215 / 12%);
+  color: var(--ice-core) !important;
+  text-shadow: var(--glow);
+}
+
+.sessCounts {
+  display: flex;
+  gap: 22px;
+  text-align: center;
+}
+
+.countN {
+  font-family: var(--mono);
+  font-size: 16px;
+  color: var(--ice-core);
+}
+
+.countOf {
+  color: var(--ice-faint);
+}
+
+.countLabel {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ice-dim);
+}

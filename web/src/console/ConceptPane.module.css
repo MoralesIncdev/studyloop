@@ -16,3 +16,12 @@
   margin: 0;
   text-shadow: 0 1px 3px rgb(0 0 0 / 75%), 0 0 14px rgb(0 0 0 / 45%);
 }
+
+/* Console slice C, Session cabinet's Scaffold slider (mock line 127):
+   AI-generated body text can be blurred back into recall practice as the
+   learner's own mastery grows — --scaffold-blur defaults to 0px (fully
+   legible) on .consoleRoot; StudyView sets it from store.scaffold. */
+.ai {
+  filter: blur(var(--scaffold-blur, 0px));
+  transition: filter 0.4s var(--ease);
+}

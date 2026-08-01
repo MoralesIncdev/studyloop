@@ -11,7 +11,11 @@ import { ConceptPane } from "./ConceptPane";
 import { DrillPane } from "./DrillPane";
 import { EchoPane } from "./EchoPane";
 import { ExhaleOverlay } from "./ExhaleOverlay";
+import { GhostNote } from "./GhostNote";
+import { MapPane } from "./MapPane";
 import { NotePane } from "./NotePane";
+import { SuggestPane } from "./SuggestPane";
+import { TestPane } from "./TestPane";
 import styles from "./ConsoleLayer.module.css";
 
 interface Props {
@@ -21,15 +25,23 @@ interface Props {
 export function ConsoleLayer({ frameRef }: Props): JSX.Element | null {
   const consoleMode = useStudyLoopStore((s) => s.consoleMode);
   const editing = useStudyLoopStore((s) => s.consoleEditMode);
+  // Bumped by store.resetAllPaneLayouts() (bento button double-click) — keying
+  // the panes off it forces a remount, which is how they notice their
+  // just-cleared localStorage entry and fall back to defaultPos.
+  const paneLayoutVersion = useStudyLoopStore((s) => s.paneLayoutVersion);
   if (!consoleMode) return null;
 
   return (
     <div className={`${styles.layer} ${editing ? styles.editing : ""}`}>
       {editing && <div className={styles.editBadge}>Edit layout · drag panes · E or Esc exits</div>}
-      <ConceptPane frameRef={frameRef} />
-      <DrillPane frameRef={frameRef} />
-      <EchoPane frameRef={frameRef} />
-      <NotePane frameRef={frameRef} />
+      <ConceptPane key={`concept-${paneLayoutVersion}`} frameRef={frameRef} />
+      <MapPane key={`map-${paneLayoutVersion}`} frameRef={frameRef} />
+      <DrillPane key={`drill-${paneLayoutVersion}`} frameRef={frameRef} />
+      <EchoPane key={`echo-${paneLayoutVersion}`} frameRef={frameRef} />
+      <SuggestPane key={`suggest-${paneLayoutVersion}`} frameRef={frameRef} />
+      <NotePane key={`note-${paneLayoutVersion}`} frameRef={frameRef} />
+      <TestPane key={`test-${paneLayoutVersion}`} frameRef={frameRef} />
+      <GhostNote />
       <ExhaleOverlay />
     </div>
   );

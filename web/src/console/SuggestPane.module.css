@@ -1,0 +1,42 @@
+/* Console slice D: suggested-cue pane — mock's #p-suggest (lines 556-573). */
+.quote {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: rgb(255 255 255 / 80%);
+  margin: 0;
+}
+
+.quote b {
+  color: rgb(255 255 255 / 95%);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 11px;
+}
+
+/* Mock's `.btn` (lines 132-134). */
+.button {
+  padding: 7px 15px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid oklch(0.8 0.05 215 / 30%);
+  background: none;
+  color: var(--ice);
+  cursor: pointer;
+  transition: box-shadow 0.25s var(--ease), border-color 0.25s var(--ease);
+}
+
+.button:hover:not(:disabled) {
+  border-color: oklch(0.88 0.06 213 / 60%);
+  box-shadow: 0 0 16px oklch(0.8 0.09 215 / 25%);
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

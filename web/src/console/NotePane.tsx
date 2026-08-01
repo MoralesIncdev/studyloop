@@ -28,6 +28,8 @@ export function NotePane({ frameRef }: Props): JSX.Element | null {
 
   const handleFocus = (): void => {
     const store = useStudyLoopStore.getState();
+    // Console slice D item 8: ghost notes stay down while a note is being written.
+    store.setNoteEditing(true);
     const controller = store.controller;
     if (!controller) return;
     if (anchorT == null) setAnchorT(controller.getCurrentTime());
@@ -38,6 +40,7 @@ export function NotePane({ frameRef }: Props): JSX.Element | null {
   };
 
   const handleBlur = (): void => {
+    useStudyLoopStore.getState().setNoteEditing(false);
     if (!pausedByPaneRef.current) return;
     pausedByPaneRef.current = false;
     useStudyLoopStore.getState().controller?.play();
@@ -65,10 +68,13 @@ export function NotePane({ frameRef }: Props): JSX.Element | null {
   return (
     <Pane
       paneId="p-note"
+      dataPane="note"
       projectId={projectId}
       frameRef={frameRef}
       defaultPos={{ fx: 0.04, fy: 0.6 }}
       width={260}
+      defaultMode="glassy"
+      chipStatus="quiet"
       label={anchorT != null ? <>NOTE &middot; {formatTimestamp(anchorT)}</> : "NOTE"}
     >
       <textarea

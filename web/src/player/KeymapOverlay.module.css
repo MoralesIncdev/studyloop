@@ -1,0 +1,69 @@
+/* Mock lines 351-360: centered glass modal. Backdrop is a plain click-catcher
+   (Esc also closes, via hotkeys.ts) rather than a full dim layer — the
+   console's footage stays visible behind it, matching the mock's own
+   (backdrop-less) treatment. */
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  /* chromeLayer is pointer-events:none (see PlayerChrome.module.css) — the
+     modal opts back in so its click-to-close catcher and panel stay live. */
+  pointer-events: auto;
+}
+
+.panel {
+  width: min(420px, 92%);
+  padding: 22px 28px;
+  border-radius: 14px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-line);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 9%), 0 10px 44px oklch(0.03 0.01 245 / 50%);
+  animation: panel-in 0.25s var(--ease) both;
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.heading {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ice-core);
+  letter-spacing: 0.02em;
+  margin: 0 0 14px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+  font-size: 13px;
+  color: var(--ice-dim);
+  border-bottom: 1px solid var(--glass-line);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ice-core);
+  border: 1px solid oklch(0.8 0.05 215 / 30%);
+  border-radius: 5px;
+  padding: 1.5px 7px;
+  white-space: nowrap;
+}
