@@ -1,0 +1,59 @@
+/* Console slice 8: quick-note pane — the textarea is a tool, so unlike bare
+   concept text it gets its own translucent surface (no backdrop-filter). */
+
+.input {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: var(--radius-xs);
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  resize: none;
+}
+
+.input::placeholder {
+  color: rgb(255 255 255 / 45%);
+}
+
+.input:focus {
+  outline: none;
+  border-color: rgb(255 255 255 / 40%);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.hint {
+  font-size: 10.5px;
+  color: rgb(255 255 255 / 60%);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 75%);
+  white-space: nowrap;
+}
+
+.pin {
+  padding: 3px 12px;
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pin:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 60%);
+}
+
+.pin:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
