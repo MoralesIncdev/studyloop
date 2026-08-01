@@ -6,7 +6,13 @@
 // opens a click-to-inspect popover (SPEC C5) instead of seeking — it
 // stopPropagation()s so the click never reaches SeekBar's track underneath.
 import { useCallback, useRef } from "react";
+import { formatTimestamp } from "../lib/time";
 import styles from "./HeatmapStrip.module.css";
+
+/** Console slice 5: the peak label is suppressed until this many buckets have
+ *  data — a half-watched video shouldn't advertise a misleading spike
+ *  (SURVEY.md, YouTube's cold-start suppression). */
+const PEAK_MIN_NONZERO_BUCKETS = 8;
 
 interface Props {
   own: number[];
@@ -14,6 +20,10 @@ interface Props {
   height?: number;
   /** Click-to-inspect (SPEC C5) — receives the click's ratio (0..1) along the strip. Omit to render decoratively (no pointer events). */
   onInspect?: (ratio: number) => void;
+  /** Console slice 5 (SURVEY.md, YouTube "Most replayed"): with both present,
+   *  the tallest own-layer peak gets a clickable "Most reviewed" label. */
+  duration?: number;
+  onSeekPeak?: (t: number) => void;
 }
 
 /** Monotone cubic (Catmull-Rom-derived) smoothing so the strip reads as a
@@ -46,12 +56,23 @@ function layerPaths(buckets: number[], width: number, height: number): { line: s
   return { line, area };
 }
 
-export function HeatmapStrip({ own, overlays = [], height = 32, onInspect }: Props): JSX.Element | null {
+export function HeatmapStrip({ own, overlays = [], height = 32, onInspect, duration, onSeekPeak }: Props): JSX.Element | null {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const width = 100; // viewBox units — scales to 100% via the SVG's width attr
 
   const ownPaths = layerPaths(own, width, height);
   const overlayPaths = layerPaths(overlays, width, height);
+
+  // Console slice 5: locate the own-layer peak (cold-start suppressed).
+  let peak: { ratio: number; t: number } | null = null;
+  if (duration != null && duration > 0 && onSeekPeak && own.length > 1) {
+    const nonzero = own.filter((v) => v > 0).length;
+    if (nonzero >= PEAK_MIN_NONZERO_BUCKETS) {
+      const maxV = Math.max(...own);
+      const i = own.indexOf(maxV);
+      peak = { ratio: i / (own.length - 1), t: ((i + 0.5) / own.length) * duration };
+    }
+  }
 
   // Rules of Hooks: every hook must run unconditionally on every render, so
   // this early return has to come AFTER useCallback below — an earlier
@@ -75,6 +96,21 @@ export function HeatmapStrip({ own, overlays = [], height = 32, onInspect }: Pro
   if (!ownPaths && !overlayPaths) return null;
 
   return (
+    <>
+    {peak && (
+      <button
+        type="button"
+        className={styles.peakLabel}
+        style={{ left: `clamp(60px, ${(peak.ratio * 100).toFixed(2)}%, calc(100% - 60px))` }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSeekPeak?.(peak.t);
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        Most reviewed · {formatTimestamp(peak.t)}
+      </button>
+    )}
     <svg
       ref={svgRef}
       className={`${styles.strip} ${onInspect ? styles.interactive : ""}`}
@@ -111,5 +147,6 @@ export function HeatmapStrip({ own, overlays = [], height = 32, onInspect }: Pro
         </g>
       )}
     </svg>
+    </>
   );
 }

@@ -49,6 +49,10 @@ interface Props {
   overlayMarkers?: SeekBarOverlayMarker[];
   loopA?: number | null;
   loopB?: number | null;
+  /** Console slice 3: the timestamp a note-in-progress is anchored to — rendered
+   *  as a provisional (yellow, pulsing) tick while the notation modal is open,
+   *  solidifying into a real bubble pin on save (Frame.io's yellow selector). */
+  provisionalT?: number | null;
   onSeek: (t: number) => void;
   /** Console slice 1: called when a concept tick is clicked, instead of onSeek —
    *  PlayerChrome uses it to scope playback to the concept's span. */
@@ -77,6 +81,7 @@ export function SeekBar({
   overlayMarkers = [],
   loopA = null,
   loopB = null,
+  provisionalT = null,
   onSeek,
   onConceptTick,
   activeConceptTickId = null,
@@ -95,6 +100,41 @@ export function SeekBar({
   // V3-C C5: click-to-inspect popover state — the ratio (0..1) of the click
   // that opened it, or null when closed.
   const [inspectRatio, setInspectRatio] = useState<number | null>(null);
+  // Console slice 7 "timeline zoom" (SURVEY.md): the visible window of the
+  // timeline, or null for the whole video. Scroll on the bar zooms around the
+  // cursor; double-click (or the chip) resets. Required for 7-hour footage,
+  // where a full-width bar gives seconds per pixel and ticks pile into mud.
+  const [viewport, setViewport] = useState<{ s: number; e: number } | null>(null);
+
+  const vs = viewport?.s ?? 0;
+  const ve = viewport?.e ?? duration;
+
+  // A new video (duration change) always starts unzoomed.
+  useEffect(() => setViewport(null), [duration]);
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return undefined;
+    const onWheel = (e: WheelEvent): void => {
+      if (duration <= 0) return;
+      e.preventDefault();
+      const rect = track.getBoundingClientRect();
+      const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+      setViewport((cur) => {
+        const s0 = cur?.s ?? 0;
+        const e0 = cur?.e ?? duration;
+        const anchor = s0 + ratio * (e0 - s0);
+        const factor = e.deltaY < 0 ? 1 / 1.3 : 1.3;
+        const span = Math.min(duration, Math.max(30, (e0 - s0) * factor));
+        if (span >= duration) return null;
+        const s = Math.max(0, Math.min(duration - span, anchor - ratio * span));
+        return { s, e: s + span };
+      });
+    };
+    // Native non-passive listener: React's synthetic wheel can't preventDefault.
+    track.addEventListener("wheel", onWheel, { passive: false });
+    return () => track.removeEventListener("wheel", onWheel);
+  }, [duration]);
 
   const inspectMarks = useMemo<HeatmapMark[]>(() => {
     if (inspectRatio === null || !attentionMarks || !attentionBucketCount || duration <= 0) return [];
@@ -107,9 +147,9 @@ export function SeekBar({
       if (!track || duration <= 0) return 0;
       const rect = track.getBoundingClientRect();
       const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-      return ratio * duration;
+      return vs + ratio * (ve - vs);
     },
-    [duration]
+    [duration, vs, ve]
   );
 
   const handleMouseMove = useCallback(
@@ -169,7 +209,11 @@ export function SeekBar({
     [onSeek, currentTime, duration]
   );
 
-  const pct = (t: number): string => `${duration > 0 ? Math.min(100, Math.max(0, (t / duration) * 100)) : 0}%`;
+  const span = ve - vs;
+  const pct = (t: number): string => `${span > 0 ? Math.min(100, Math.max(0, ((t - vs) / span) * 100)) : 0}%`;
+  /** Whether a marker at `t` falls inside the visible window (zoomed views hide
+   *  out-of-window markers instead of piling them at the edges). */
+  const inView = (t: number): boolean => !viewport || (t >= vs - span * 0.01 && t <= ve + span * 0.01);
 
   return (
     <div className={styles.wrapper}>
@@ -181,6 +225,7 @@ export function SeekBar({
         onMouseLeave={() => setHover(null)}
         onMouseDown={handleMouseDown}
         onClick={handleClick}
+        onDoubleClick={() => setViewport(null)}
         onKeyDown={handleKeyDown}
         tabIndex={0}
         role="slider"
@@ -194,6 +239,8 @@ export function SeekBar({
           <HeatmapStrip
             own={attentionOwn ?? []}
             overlays={attentionOverlays}
+            duration={duration}
+            onSeekPeak={onSeek}
             onInspect={
               attentionMarks
                 ? (ratio) => setInspectRatio((cur) => (cur === ratio ? null : ratio))
@@ -208,7 +255,7 @@ export function SeekBar({
           />
         )}
         <div className={styles.fill} style={{ width: pct(currentTime) }} />
-        {conceptTicks.map((tick) => (
+        {conceptTicks.filter((tick) => inView(tick.t)).map((tick) => (
           <Tooltip key={tick.id} label={tick.title ? `${tick.title} — ${formatTimestamp(tick.t)}` : formatTimestamp(tick.t)}>
             <button
               type="button"
@@ -226,7 +273,7 @@ export function SeekBar({
             />
           </Tooltip>
         ))}
-        {bubbles.map((bubble) => (
+        {bubbles.filter((bubble) => inView(bubble.t)).map((bubble) => (
           <button
             key={bubble.id}
             type="button"
@@ -246,7 +293,7 @@ export function SeekBar({
         ))}
         {/* V2-C: pearl diamonds — visually distinct from bubble pins (dots above)
             and concept ticks (bars below); size scales with importance. */}
-        {pearls.map((pearl) => (
+        {pearls.filter((pearl) => inView(pearl.t)).map((pearl) => (
           <button
             key={pearl.id}
             type="button"
@@ -266,7 +313,7 @@ export function SeekBar({
           />
         ))}
         {/* V2-C: imported overlay markers — one colored dot per author handle. */}
-        {overlayMarkers.map((marker) => (
+        {overlayMarkers.filter((marker) => inView(marker.t)).map((marker) => (
           <Tooltip key={marker.id} label={`${marker.handle} — ${formatTimestamp(marker.t)}`}>
             <button
               type="button"
@@ -284,8 +331,11 @@ export function SeekBar({
         {/* Decorative — `.loopMarker` is `pointer-events: none` (mouse events pass
             through to the track underneath for its own seek-preview tooltip), so
             these were never independently hoverable; no tooltip to attach. */}
-        {loopA != null && <div className={styles.loopMarker} style={{ left: pct(loopA) }} />}
-        {loopB != null && <div className={styles.loopMarker} style={{ left: pct(loopB) }} />}
+        {loopA != null && inView(loopA) && <div className={styles.loopMarker} style={{ left: pct(loopA) }} />}
+        {loopB != null && inView(loopB) && <div className={styles.loopMarker} style={{ left: pct(loopB) }} />}
+        {provisionalT != null && inView(provisionalT) && (
+          <div className={styles.provisionalTick} style={{ left: pct(provisionalT) }} />
+        )}
         <div className={styles.playhead} style={{ left: pct(currentTime) }} />
         {hoverPearl && (
           <div className={styles.bubbleTooltip} style={{ left: `clamp(28px, ${pct(hoverPearl.t)}, calc(100% - 28px))` }}>
@@ -309,6 +359,16 @@ export function SeekBar({
           </div>
         )}
       </div>
+      {viewport && duration > 0 && (
+        <button
+          type="button"
+          className={styles.zoomChip}
+          onClick={() => setViewport(null)}
+          aria-label="Reset timeline zoom"
+        >
+          {(duration / (viewport.e - viewport.s)).toFixed(1)}× · reset
+        </button>
+      )}
       {inspectRatio !== null && (
         <AttentionPopover
           marks={inspectMarks}

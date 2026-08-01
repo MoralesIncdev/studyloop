@@ -181,6 +181,45 @@
   background: var(--accent-amber);
 }
 
+/* Console slice 3: note-in-progress anchor — provisional until saved. */
+.provisionalTick {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  width: 3px;
+  border-radius: 1px;
+  background: var(--accent-amber);
+  pointer-events: none;
+  animation: provisionalPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes provisionalPulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Console slice 7: zoom state indicator — scroll on the bar zooms, this resets. */
+.zoomChip {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 40px);
+  padding: 2px 10px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 72%);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.zoomChip:hover {
+  border-color: rgb(255 255 255 / 45%);
+}
+
 .loopMarker {
   position: absolute;
   top: -3px;
