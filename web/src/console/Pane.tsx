@@ -22,9 +22,11 @@ import { useEffect, useRef, useState, type PointerEvent, type ReactNode, type Re
 import { useStudyLoopStore } from "../state/store";
 import {
   clampFraction,
+  clampPaneHeight,
   clampPaneWidth,
   clearPaneLayout,
   loadPaneLayout,
+  savePaneHeight,
   savePaneHidden,
   savePaneLayout,
   savePaneMode,
@@ -47,7 +49,9 @@ interface DragState {
 
 interface SizeState {
   startWidth: number;
+  startHeight: number;
   startClientX: number;
+  startClientY: number;
 }
 
 /** Mock: the bottom strip of the frame that arms parking while dragging a
@@ -124,9 +128,11 @@ export function Pane({
   const hoverPausedRef = useRef(false);
   const posRef = useRef<PaneFraction>(defaultPos);
   const widthRef = useRef<number | undefined>(width);
+  const heightRef = useRef<number | undefined>(undefined);
   const [pos, setPos] = useState<PaneFraction>(defaultPos);
   const [mode, setMode] = useState<PaneMode>(defaultMode);
   const [widthPx, setWidthPx] = useState<number | undefined>(width);
+  const [heightPx, setHeightPx] = useState<number | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
   const [sizing, setSizing] = useState(false);
   const [parking, setParking] = useState(false);
@@ -134,7 +140,7 @@ export function Pane({
   const [hiding, setHiding] = useState(false);
   const [flight, setFlight] = useState<{ dx: number; dy: number } | null>(null);
 
-  // Restore the persisted position/width/mode/hidden whenever the project changes.
+  // Restore the persisted position/size/mode/hidden whenever the project changes.
   useEffect(() => {
     const layout = projectId ? loadPaneLayout(projectId, paneId) : null;
     const next = layout ?? defaultPos;
@@ -144,6 +150,8 @@ export function Pane({
     setHidden(layout?.hidden ?? false);
     widthRef.current = layout?.width ?? width;
     setWidthPx(layout?.width ?? width);
+    heightRef.current = layout?.height;
+    setHeightPx(layout?.height);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, paneId]);
 
@@ -216,6 +224,9 @@ export function Pane({
       const nextWidth = clampPaneWidth(size.startWidth + (e.clientX - size.startClientX));
       widthRef.current = nextWidth;
       setWidthPx(nextWidth);
+      const nextHeight = clampPaneHeight(size.startHeight + (e.clientY - size.startClientY));
+      heightRef.current = nextHeight;
+      setHeightPx(nextHeight);
       return;
     }
     const drag = dragRef.current;
@@ -261,6 +272,7 @@ export function Pane({
       setSizing(false);
       paneRef.current?.releasePointerCapture(e.pointerId);
       if (projectId && widthRef.current != null) savePaneWidth(projectId, paneId, posRef.current, widthRef.current);
+      if (projectId && heightRef.current != null) savePaneHeight(projectId, paneId, posRef.current, heightRef.current);
       return;
     }
     if (!dragRef.current) return;
@@ -280,7 +292,8 @@ export function Pane({
     e.stopPropagation();
     const pane = paneRef.current;
     if (!pane) return;
-    sizeRef.current = { startWidth: pane.getBoundingClientRect().width, startClientX: e.clientX };
+    const rect = pane.getBoundingClientRect();
+    sizeRef.current = { startWidth: rect.width, startHeight: rect.height, startClientX: e.clientX, startClientY: e.clientY };
     pane.setPointerCapture(e.pointerId);
     setSizing(true);
   };
@@ -290,6 +303,8 @@ export function Pane({
     setPos(defaultPos);
     widthRef.current = width;
     setWidthPx(width);
+    heightRef.current = undefined;
+    setHeightPx(undefined);
     setMode(defaultMode);
     setHidden(false);
     if (projectId) clearPaneLayout(projectId, paneId);
@@ -373,6 +388,10 @@ export function Pane({
         left: `${pos.fx * 100}%`,
         top: `${pos.fy * 100}%`,
         width: widthPx != null ? `${widthPx}px` : undefined,
+        // Height stays content-driven until the first grip drag; once fixed,
+        // overflow scrolls inside the pane rather than stretching it.
+        height: heightPx != null ? `${heightPx}px` : undefined,
+        overflowY: heightPx != null ? "auto" : undefined,
         opacity: flight || hiding ? 0 : opacity,
         transform: flight ? `translate(${flight.dx}px, ${flight.dy}px) scale(0.04)` : undefined,
       }}
