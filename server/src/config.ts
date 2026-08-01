@@ -45,7 +45,17 @@ export const ConfigSchema = z.object({
 
 export type StudyLoopConfig = z.infer<typeof ConfigSchema>;
 
-const CONFIG_DIR = path.join(os.homedir(), ".studyloop");
+// STUDYLOOP_CONFIG_DIR only (mirrors STUDYLOOP_PORT/STUDYLOOP_FAKE_ANALYSIS's
+// env-var-gated-override pattern): lets the e2e harness (playwright.config.ts,
+// e2e/fixtures/seed.mjs) point the whole config store — and therefore
+// resolveDataDir()'s dataDir, plus libraryRoots/transcriptRoots — at a
+// disposable fixture directory instead of the real ~/.studyloop/config.json.
+// Without this there is no way to run the app end-to-end against seeded
+// fixture data without reading/overwriting the real user's config (API keys
+// included) or reusing their real dataDir.
+const CONFIG_DIR = process.env.STUDYLOOP_CONFIG_DIR
+  ? path.resolve(process.env.STUDYLOOP_CONFIG_DIR)
+  : path.join(os.homedir(), ".studyloop");
 const CONFIG_PATH = path.join(CONFIG_DIR, "config.json");
 
 export function expandHome(p: string): string {
