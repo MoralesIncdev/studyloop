@@ -180,6 +180,8 @@ export const api = {
   getReviewQueue: () => request<ReviewQueueResponse>("/api/review/queue"),
   gradeReviewCard: (cardId: string, grade: ReviewGrade) =>
     request<ReviewQueueResponse>("/api/review/grade", { method: "POST", body: JSON.stringify({ cardId, grade }) }),
+  /** Phase 7 "CSV export": a plain URL (not a `request()` call) — the Review view links to this directly via an anchor's `download` attribute so the browser handles the file save, matching videoStreamUrl/shotUrl below. */
+  reviewExportCsvUrl: () => "/api/review/export.csv",
 
   // --- V3-B B2: attestation + reveal-gating ----------------------------------------
   getAttestations: (id: string) => request<AttestationsFile>(`/api/projects/${encodeURIComponent(id)}/attestations`),

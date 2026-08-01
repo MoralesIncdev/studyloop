@@ -22,6 +22,7 @@ import { analyzeRoutes } from "./routes/analyze.js";
 import { heatmapRoutes } from "./routes/heatmap.js";
 import { shareRoutes } from "./routes/share.js";
 import { reviewRoutes } from "./routes/review.js";
+import { reviewExportRoutes } from "./routes/reviewExport.js";
 import { attestationRoutes } from "./routes/attestation.js";
 import { continuityRoutes } from "./routes/continuity.js";
 import { pearlReviewRoutes } from "./routes/pearlReview.js";
@@ -82,6 +83,7 @@ async function main(): Promise<void> {
   await app.register(heatmapRoutes);
   await app.register(shareRoutes);
   await app.register(reviewRoutes);
+  await app.register(reviewExportRoutes);
   await app.register(attestationRoutes);
   await app.register(continuityRoutes);
   await app.register(pearlReviewRoutes);

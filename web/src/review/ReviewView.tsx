@@ -11,6 +11,7 @@ import { Icon } from "../components/icons";
 import { api } from "../lib/api";
 import { formatTimestamp } from "../lib/time";
 import { lapseTier } from "../lib/lapseTier";
+import { FRONT_DOOR_ARRIVAL_NOTE_KEY } from "../lib/reviewFrontDoor";
 import { ReviewClipPlayer } from "./ReviewClipPlayer";
 import type { ReviewCard } from "../lib/types";
 import styles from "./ReviewView.module.css";
@@ -181,6 +182,44 @@ function CardBack({ card }: { card: ReviewCard }): JSX.Element {
   );
 }
 
+/**
+ * Phase 7 "Front door" (SPEC move 3): a single neutral-phrasing line — "n
+ * due", no urgency theatrics (PEDAGOGY §5 forbids guilt mechanics) — shown
+ * only when this mount was reached via App.tsx's auto-redirect (sees
+ * lib/reviewFrontDoor.ts's one-shot sessionStorage note). Consumed exactly
+ * once: read on mount, then the key is removed, so navigating away and back
+ * into Review normally afterward shows nothing.
+ */
+function FrontDoorNote(): JSX.Element | null {
+  const [due, setDue] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.sessionStorage.getItem(FRONT_DOOR_ARRIVAL_NOTE_KEY);
+    if (raw === null) return;
+    window.sessionStorage.removeItem(FRONT_DOOR_ARRIVAL_NOTE_KEY);
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) setDue(parsed);
+  }, []);
+
+  if (due === null) return null;
+  return (
+    <p className={styles.frontDoorNote}>
+      {due} due
+    </p>
+  );
+}
+
+/** Phase 7 "CSV export": a plain download anchor (no fetch/blob juggling) — matches how videoStreamUrl/shotUrl are consumed elsewhere in this view. Always available, not gated on session state, since it exports the full due-or-tracked deck, not just the current session's cards. */
+function ExportCsvButton(): JSX.Element {
+  return (
+    <a className={styles.exportButton} href={api.reviewExportCsvUrl()} download>
+      <Icon name="download" size={16} />
+      Export CSV
+    </a>
+  );
+}
+
 function StreakLine(): JSX.Element | null {
   const streak = useStudyLoopStore((s) => s.reviewStreak);
   if (!streak || streak.count <= 0) return null;
@@ -270,6 +309,9 @@ export function ReviewView(): JSX.Element {
       <button type="button" className={styles.exitButton} onClick={() => navigate({ view: "library" })} aria-label="Exit review">
         <Icon name="close" size={20} />
       </button>
+
+      <ExportCsvButton />
+      <FrontDoorNote />
 
       <div className={styles.content}>
         {(sessionLoading || (!session && !sessionLoading)) && (
