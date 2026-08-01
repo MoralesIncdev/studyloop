@@ -175,6 +175,12 @@
   background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), var(--accent-green);
 }
 
+/* Console slice 1: the tick whose span is the current playback window. */
+.conceptTick[data-active="true"] {
+  transform: scaleX(1.6) scaleY(1.35);
+  background: var(--accent-amber);
+}
+
 .loopMarker {
   position: absolute;
   top: -3px;

@@ -50,6 +50,11 @@ interface Props {
   loopA?: number | null;
   loopB?: number | null;
   onSeek: (t: number) => void;
+  /** Console slice 1: called when a concept tick is clicked, instead of onSeek —
+   *  PlayerChrome uses it to scope playback to the concept's span. */
+  onConceptTick?: (tick: SeekBarConceptTick) => void;
+  /** The tick whose span is currently the playback window (renders amber). */
+  activeConceptTickId?: string | null;
   /** Called when a bubble pin is clicked, instead of onSeek. Defaults to onSeek. */
   onSeekBubble?: (t: number) => void;
   /** Called when a pearl diamond is clicked, instead of onSeek. Defaults to onSeek. */
@@ -73,6 +78,8 @@ export function SeekBar({
   loopA = null,
   loopB = null,
   onSeek,
+  onConceptTick,
+  activeConceptTickId = null,
   onSeekBubble,
   onSeekPearl,
   attentionOwn,
@@ -207,11 +214,14 @@ export function SeekBar({
               type="button"
               className={styles.conceptTick}
               data-kind="concept"
+              data-active={activeConceptTickId === tick.id}
               style={{ left: pct(tick.t) }}
               aria-label={`Concept: ${tick.title ?? "untitled"} at ${formatTimestamp(tick.t)}`}
+              aria-pressed={activeConceptTickId === tick.id}
               onClick={(e) => {
                 e.stopPropagation();
-                onSeek(tick.t);
+                if (onConceptTick) onConceptTick(tick);
+                else onSeek(tick.t);
               }}
             />
           </Tooltip>

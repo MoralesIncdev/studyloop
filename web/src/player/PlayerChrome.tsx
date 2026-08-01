@@ -8,7 +8,8 @@ import { useStudyLoopStore } from "../state/store";
 import { api } from "../lib/api";
 import { analysisConceptToConceptCard, hashHueForHandle } from "../lib/analysisFormat";
 import { Icon } from "../components/icons";
-import { SeekBar, type SeekBarOverlayMarker } from "./SeekBar";
+import { SeekBar, type SeekBarConceptTick, type SeekBarOverlayMarker } from "./SeekBar";
+import { conceptLoopSpan } from "../lib/conceptLoop";
 import { PlayerControls } from "./PlayerControls";
 import styles from "./PlayerChrome.module.css";
 
@@ -28,6 +29,9 @@ export function PlayerChrome({ frameRef, onVisibleChange }: Props): JSX.Element 
   const isPlaying = useStudyLoopStore((s) => s.isPlaying);
   const loopA = useStudyLoopStore((s) => s.loopA);
   const loopB = useStudyLoopStore((s) => s.loopB);
+  const setLoopA = useStudyLoopStore((s) => s.setLoopA);
+  const setLoopB = useStudyLoopStore((s) => s.setLoopB);
+  const clearLoop = useStudyLoopStore((s) => s.clearLoop);
   const controller = useStudyLoopStore((s) => s.controller);
   const bubbles = useStudyLoopStore((s) => s.bubbles);
   const concepts = useStudyLoopStore((s) => s.concepts);
@@ -125,6 +129,39 @@ export function PlayerChrome({ frameRef, onVisibleChange }: Props): JSX.Element 
     [concepts, analysis]
   );
 
+  const conceptTicks = useMemo<SeekBarConceptTick[]>(
+    () =>
+      tickerConcepts.flatMap((c) =>
+        c.anchors
+          .map((a, i) => (a.t != null ? { id: `${c.id}-${i}`, t: a.t, title: c.title } : null))
+          .filter((tick): tick is { id: string; t: number; title: string } => tick !== null)
+      ),
+    [tickerConcepts]
+  );
+
+  // Console slice 1 (SURVEY.md delta #1): clicking a concept tick scopes playback
+  // to the concept's span via the existing A-B loop; clicking it again releases.
+  // External loop changes (PlayerControls' clear, manual A/B) deactivate it
+  // naturally because active state is derived from loopA/loopB matching the span.
+  const [conceptLoop, setConceptLoop] = useState<{ id: string; start: number; end: number } | null>(null);
+  const activeConceptTickId =
+    conceptLoop && loopA === conceptLoop.start && loopB === conceptLoop.end ? conceptLoop.id : null;
+  const handleConceptTick = useCallback(
+    (tick: SeekBarConceptTick) => {
+      if (conceptLoop && conceptLoop.id === tick.id && loopA === conceptLoop.start && loopB === conceptLoop.end) {
+        clearLoop();
+        setConceptLoop(null);
+        return;
+      }
+      const span = conceptLoopSpan(tick.t, conceptTicks.map((x) => x.t), duration);
+      setLoopA(span.start);
+      setLoopB(span.end);
+      setConceptLoop({ id: tick.id, ...span });
+      controller?.seek(span.start);
+    },
+    [conceptLoop, loopA, loopB, conceptTicks, duration, controller, clearLoop, setLoopA, setLoopB]
+  );
+
   const overlayMarkers = useMemo<SeekBarOverlayMarker[]>(() => {
     if (!overlaysVisible) return [];
     return overlays.flatMap((o) => {
@@ -184,11 +221,9 @@ export function PlayerChrome({ frameRef, onVisibleChange }: Props): JSX.Element 
                   }))
                 : []
             }
-            conceptTicks={tickerConcepts.flatMap((c) =>
-              c.anchors
-                .map((a, i) => (a.t != null ? { id: `${c.id}-${i}`, t: a.t, title: c.title } : null))
-                .filter((tick): tick is { id: string; t: number; title: string } => tick !== null)
-            )}
+            conceptTicks={conceptTicks}
+            onConceptTick={handleConceptTick}
+            activeConceptTickId={activeConceptTickId}
             pearls={(analysis?.pearls ?? []).map((p) => ({ id: `pearl-${p.t}-${p.label}`, t: p.t, label: p.label, importance: p.importance }))}
             overlayMarkers={overlayMarkers}
             onSeekPearl={(t) => controller?.seek(Math.max(0, t - 5))}
