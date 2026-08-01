@@ -37,10 +37,19 @@ interface Props {
   tools?: ReactNode;
   /** Override the default 340px pane width. */
   width?: number;
+  /**
+   * Console slice C: rendered as a `data-pane` attribute on the root — the
+   * modality choreography (StudyView's `.generate`/`.review` class on
+   * .consoleRoot) targets specific panes via `[data-pane="…"]` exemptions in
+   * Pane.module.css (generate keeps the future self-test pane readable;
+   * review keeps a future map pane and the drill pane readable) without
+   * threading modality state through every pane component.
+   */
+  dataPane?: string;
   children: ReactNode;
 }
 
-export function Pane({ paneId, projectId, frameRef, defaultPos, label, tools, width, children }: Props): JSX.Element {
+export function Pane({ paneId, projectId, frameRef, defaultPos, label, tools, width, dataPane, children }: Props): JSX.Element {
   // Edit mode (SURVEY.md, WoW/ElvUI lineage): chrome forced visible, dashed
   // outline, drags snap to the grid, and a per-pane reset tool appears.
   const editing = useStudyLoopStore((s) => s.consoleEditMode);
@@ -114,6 +123,7 @@ export function Pane({ paneId, projectId, frameRef, defaultPos, label, tools, wi
       ref={paneRef}
       className={`${styles.pane} ${dragging ? styles.dragging : ""} ${editing ? styles.editing : ""}`}
       style={{ left: `${pos.fx * 100}%`, top: `${pos.fy * 100}%`, width: width ? `${width}px` : undefined }}
+      data-pane={dataPane}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

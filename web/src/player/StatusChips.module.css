@@ -13,6 +13,14 @@
   opacity: 0.2;
 }
 
+/* Console slice C modality choreography (mock line 364): Generate dims
+   non-essential floating UI further than focus mode does. `.generate` is a
+   literal (non-hashed) class StudyView puts on .consoleRoot — see its own
+   module.css comment on why plain global classes are used for this. */
+:global(.generate) .row {
+  opacity: 0.15;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;

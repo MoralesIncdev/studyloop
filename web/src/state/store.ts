@@ -125,6 +125,12 @@ function clearPlaybackFocusTimer(): void {
 /** RightRail's Transcript/Concepts/Path accordion — only one "large" section open at a time (codex P1-5), remembered per project. V3-B B3 adds "path" (Study Path). */
 export type RailSectionId = "transcript" | "concepts" | "path";
 
+/** Console slice C (mock's setMode, index.html lines 1199-1211): Watch/Generate/Review. */
+export type Modality = "watch" | "generate" | "review";
+
+/** Console slice C: which edge-handle cabinet is open, if any (exclusive). */
+export type CabinetId = "concepts" | "captures" | "session";
+
 const RAIL_SECTION_STORAGE_PREFIX = "studyloop:railSection:";
 /**
  * `"none"` (both sections collapsed) is a distinct, valid persisted choice —
@@ -436,6 +442,28 @@ export interface StudyLoopStore {
   keymapOpen: boolean;
   toggleKeymap: () => void;
   closeKeymap: () => void;
+
+  // --- Console slice C (mock lines 200-258, 596-658): edge-handle cabinets ------
+  /** Which slide-in glass cabinet is open, if any — exclusive (opening one closes any other). */
+  openCabinet: CabinetId | null;
+  /** Opening pauses nothing (unlike pane hover-pause) — clicking the same handle again closes it. */
+  toggleCabinet: (id: CabinetId) => void;
+  closeCabinet: () => void;
+  /** Watch/Generate/Review modality (mock's setMode, lines 1199-1211) — a class on
+   *  .consoleRoot drives the stage-dim/pane-fade/heatmap-recolor choreography per
+   *  mode (see StudyView.module.css and each affected component's own CSS module). */
+  modality: Modality;
+  setModality: (m: Modality) => void;
+  /** Session cabinet scaffold slider (0-100, mock default 100 = no blur) — drives
+   *  --scaffold-blur on .consoleRoot, which ConceptPane/DrillPane's `.ai`-classed
+   *  body text reads (mock line 127: `.ai{filter:blur(var(--scaffold-blur))}`). */
+  scaffold: number;
+  setScaffold: (v: number) => void;
+  /** Session cabinet pressure slider (0-100, mock default 100) — drives --pressure
+   *  on .consoleRoot for future ghost-note opacity (mock line 373); wired now,
+   *  nothing reads it yet. */
+  pressure: number;
+  setPressure: (v: number) => void;
 
   // --- transcript UX --------------------------------------------------------------
   lastUserScrollAt: number;
@@ -948,6 +976,10 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       consoleEditMode: false,
       focusMode: false,
       keymapOpen: false,
+      openCabinet: null,
+      modality: "watch",
+      scaffold: 100,
+      pressure: 100,
       controller: null,
       bubbles: [],
       bubblesLoading: false,
@@ -1190,6 +1222,10 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       consoleEditMode: false,
       focusMode: false,
       keymapOpen: false,
+      openCabinet: null,
+      modality: "watch",
+      scaffold: 100,
+      pressure: 100,
       bubbles: [],
       bubblesLoading: false,
       notes: "",
@@ -1525,6 +1561,24 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   keymapOpen: false,
   toggleKeymap: () => set((state) => ({ keymapOpen: !state.keymapOpen })),
   closeKeymap: () => set({ keymapOpen: false }),
+
+  // --- Console slice C: edge-handle cabinets ---------------------------------------
+  openCabinet: null,
+  toggleCabinet: (id) => set((state) => ({ openCabinet: state.openCabinet === id ? null : id })),
+  closeCabinet: () => set({ openCabinet: null }),
+  modality: "watch",
+  setModality: (m) => {
+    if (get().modality === m) return;
+    set({ modality: m });
+    // Mock line 1204: entering Generate pauses playback (the console dims to
+    // spotlight the self-test surface — a later slice's #p-test) — the video
+    // doesn't keep playing under a dimmed, un-attended stage.
+    if (m === "generate" && get().isPlaying) get().controller?.pause();
+  },
+  scaffold: 100,
+  setScaffold: (v) => set({ scaffold: Math.min(100, Math.max(0, v)) }),
+  pressure: 100,
+  setPressure: (v) => set({ pressure: Math.min(100, Math.max(0, v)) }),
 
   // --- transcript UX --------------------------------------------------------------
   lastUserScrollAt: 0,

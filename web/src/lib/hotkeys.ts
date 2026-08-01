@@ -119,6 +119,7 @@ export function useHotkeys(enabled: boolean): void {
         case "escape":
           if (store.keymapOpen) store.closeKeymap();
           else if (store.consoleEditMode) store.toggleConsoleEditMode();
+          else if (store.openCabinet) store.closeCabinet();
           break;
         default:
           break;

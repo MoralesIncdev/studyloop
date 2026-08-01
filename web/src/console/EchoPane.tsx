@@ -41,6 +41,7 @@ export function EchoPane({ frameRef }: Props): JSX.Element | null {
   return (
     <Pane
       paneId="p-echo"
+      dataPane="echo"
       projectId={projectId}
       frameRef={frameRef}
       defaultPos={{ fx: 0.04, fy: 0.36 }}

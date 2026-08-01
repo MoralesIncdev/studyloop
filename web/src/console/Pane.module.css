@@ -10,6 +10,27 @@
   cursor: default;
   touch-action: none;
   user-select: none;
+  transition: opacity 0.5s var(--ease);
+}
+
+/* Console slice C modality choreography (mock lines 361-365): Generate spotlights
+   a self-test surface — a later slice's `[data-pane="test"]` — by fading every
+   other pane near-invisible and taking it out of the hit-test tree. `.generate`/
+   `.review` are literal (non-hashed) classes StudyView puts on .consoleRoot — see
+   its own module.css — so they can be targeted here across the CSS-module
+   boundary via :global(). */
+:global(.generate) .pane:not([data-pane="test"]) {
+  opacity: 0.12;
+  pointer-events: none;
+}
+
+/* Review dims everything except a future map pane (`[data-pane="map"]`) and the
+   drill pane, which review mode explicitly keeps live (task brief: "DrillPane
+   arrival is allowed... ensure it's not opacity-faded in review") — deliberately
+   NOT the mock's own exemption (`#p-concept`), since review is about testing
+   recall against what you already attested, not re-reading the concept card. */
+:global(.review) .pane:not([data-pane="map"]):not([data-pane="drill"]) {
+  opacity: 0.25;
 }
 
 .chrome {

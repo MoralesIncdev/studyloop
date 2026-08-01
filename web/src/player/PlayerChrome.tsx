@@ -60,12 +60,21 @@ export function PlayerChrome({ frameRef, onVisibleChange }: Props): JSX.Element 
   const focusMode = useStudyLoopStore((s) => s.focusMode);
   const keymapOpen = useStudyLoopStore((s) => s.keymapOpen);
   const closeKeymap = useStudyLoopStore((s) => s.closeKeymap);
+  // Console slice C: Review force-opens the chapters rail (mock line 348,
+  // `body.review .chapters{max-height:140px}`) — folding that into the same
+  // `chaptersOpen` the scrim's own visibility already keys off (below) also
+  // satisfies "the heatmap strip becomes always-visible" in review for free,
+  // since HeatmapStrip lives inside the scrim's opacity chain rather than
+  // having its own independent hover-reveal the way the mock's `.heat` does.
+  const modality = useStudyLoopStore((s) => s.modality);
 
   const [hovering, setHovering] = useState(false);
-  const [chaptersOpen, setChaptersOpen] = useState(false);
+  const [chaptersOpenManual, setChaptersOpenManual] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [viewport, setViewport] = useState<{ s: number; e: number } | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const chaptersOpen = chaptersOpenManual || modality === "review";
 
   // Visible whenever paused, the chapters rail is open, or the mouse has
   // moved within the last IDLE_HIDE_MS while playing.
@@ -336,7 +345,7 @@ export function PlayerChrome({ frameRef, onVisibleChange }: Props): JSX.Element 
           isFullscreen={isFullscreen}
           onToggleFullscreen={toggleFullscreen}
           chaptersOpen={chaptersOpen}
-          onToggleChapters={() => setChaptersOpen((v) => !v)}
+          onToggleChapters={() => setChaptersOpenManual((v) => !v)}
           zoomFactor={zoomFactor}
           onResetZoom={() => setViewport(null)}
         />

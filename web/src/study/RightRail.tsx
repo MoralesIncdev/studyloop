@@ -267,6 +267,19 @@ export function RightRail({ segments, transcriptLoading }: Props): JSX.Element {
         </div>
       </RailCard>
 
+      {/* Console slice C (BUILD-BRIEF task 3): the left edge cabinet
+          (console/cabinets/ConceptsCabinet.tsx) now covers "every concept,
+          click to seek" — the one thing this card's <ConceptsDock/> also
+          does — but this card is NOT a pure duplicate: it's also the only
+          UI for attaching/detaching a concept doc (ConceptsDock's
+          unattached-state picker) and the only attestation surface
+          (UnitsProposalsSection/AiBreakdownSection's attest/dismiss
+          controls, plus Pearls/Themes), none of which the read-only cabinet
+          replicates. Removing it here would delete the app's only way to
+          attach a concept doc or attest a unit — left intact per the task
+          brief's own escape hatch ("if surgical removal is messy, leave
+          RightRail intact and note it") until slice D's self-test pane
+          gives attestation another home. */}
       <RailCard
         id="concepts-rail"
         title="Concepts"

@@ -162,6 +162,78 @@ describe("focusMode / keymapOpen / autoPaused (console slice B)", () => {
   });
 });
 
+describe("cabinets / modality / scaffold / pressure (console slice C)", () => {
+  beforeEach(() => {
+    useStudyLoopStore.setState({ openCabinet: null, modality: "watch", scaffold: 100, pressure: 100, isPlaying: false });
+  });
+
+  it("toggleCabinet opens the named cabinet, closing any other that was open", () => {
+    useStudyLoopStore.getState().toggleCabinet("concepts");
+    expect(useStudyLoopStore.getState().openCabinet).toBe("concepts");
+    useStudyLoopStore.getState().toggleCabinet("session");
+    expect(useStudyLoopStore.getState().openCabinet).toBe("session");
+  });
+
+  it("toggleCabinet closes the same cabinet on a second click", () => {
+    useStudyLoopStore.getState().toggleCabinet("captures");
+    useStudyLoopStore.getState().toggleCabinet("captures");
+    expect(useStudyLoopStore.getState().openCabinet).toBeNull();
+  });
+
+  it("closeCabinet always lands on null", () => {
+    useStudyLoopStore.getState().toggleCabinet("session");
+    useStudyLoopStore.getState().closeCabinet();
+    expect(useStudyLoopStore.getState().openCabinet).toBeNull();
+    useStudyLoopStore.getState().closeCabinet();
+    expect(useStudyLoopStore.getState().openCabinet).toBeNull();
+  });
+
+  it("setModality is a no-op re-set when already in that mode", () => {
+    useStudyLoopStore.getState().setModality("watch");
+    expect(useStudyLoopStore.getState().modality).toBe("watch");
+  });
+
+  function fakePlayerHandle(pause = vi.fn()): PlayerHandle {
+    return {
+      play: vi.fn(),
+      pause,
+      seek: vi.fn(),
+      getCurrentTime: () => 0,
+      getDuration: () => 1800,
+      setRate: vi.fn(),
+      getVolume: () => 1,
+      setVolume: vi.fn(),
+      on: () => () => {},
+    };
+  }
+
+  it("setModality('generate') pauses a currently-playing controller", () => {
+    const pause = vi.fn();
+    useStudyLoopStore.setState({ isPlaying: true, controller: fakePlayerHandle(pause) });
+    useStudyLoopStore.getState().setModality("generate");
+    expect(useStudyLoopStore.getState().modality).toBe("generate");
+    expect(pause).toHaveBeenCalledOnce();
+  });
+
+  it("setModality('review') does not touch playback", () => {
+    const pause = vi.fn();
+    useStudyLoopStore.setState({ isPlaying: true, controller: fakePlayerHandle(pause) });
+    useStudyLoopStore.getState().setModality("review");
+    expect(pause).not.toHaveBeenCalled();
+  });
+
+  it("setScaffold / setPressure clamp to [0, 100]", () => {
+    useStudyLoopStore.getState().setScaffold(-10);
+    expect(useStudyLoopStore.getState().scaffold).toBe(0);
+    useStudyLoopStore.getState().setScaffold(140);
+    expect(useStudyLoopStore.getState().scaffold).toBe(100);
+    useStudyLoopStore.getState().setPressure(-10);
+    expect(useStudyLoopStore.getState().pressure).toBe(0);
+    useStudyLoopStore.getState().setPressure(140);
+    expect(useStudyLoopStore.getState().pressure).toBe(100);
+  });
+});
+
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 }

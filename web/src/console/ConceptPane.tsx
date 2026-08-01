@@ -53,6 +53,7 @@ export function ConceptPane({ frameRef }: Props): JSX.Element | null {
   return (
     <Pane
       paneId="p-concept"
+      dataPane="concept"
       projectId={projectId}
       frameRef={frameRef}
       defaultPos={{ fx: 0.62, fy: 0.12 }}
@@ -76,7 +77,7 @@ export function ConceptPane({ frameRef }: Props): JSX.Element | null {
       ) : (
         <>
           <div className={styles.title}>{active.card.title}</div>
-          <p className={styles.body}>{bodyPreview(active.card.body)}</p>
+          <p className={`${styles.body} ${styles.ai}`}>{bodyPreview(active.card.body)}</p>
         </>
       )}
     </Pane>

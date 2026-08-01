@@ -18,6 +18,12 @@
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --mono: "SF Mono", ui-monospace, Menlo, monospace;
   --sans: "Inter", "SF Pro Display", -apple-system, "Avenir Next", sans-serif;
+  /* Console slice C: Session cabinet's Scaffold/Pressure sliders (mock lines
+     637-644) drive these — StudyView sets the real values inline from
+     store.scaffold/store.pressure; these are just the pre-slider-input
+     defaults (0px blur, full pressure). */
+  --scaffold-blur: 0px;
+  --pressure: 1;
 
   background: var(--bg);
   color: var(--ice);
@@ -73,6 +79,22 @@
 
 .playerFrame:fullscreen {
   border-radius: 0;
+}
+
+/* Console slice C modality choreography (mock line 57): wraps just the real
+   <video>/<iframe> so the Generate-mode dim/desaturate filter never touches
+   the panes/transport stacked above it. `.generate` is a literal
+   (non-hashed) class StudyView.tsx puts directly on .consoleRoot — see
+   console/Pane.module.css's comment for why plain global classes are used to
+   cross the CSS-module boundary for this. */
+.videoLayer {
+  position: absolute;
+  inset: 0;
+  transition: filter 0.7s var(--ease);
+}
+
+:global(.generate) .videoLayer {
+  filter: brightness(0.45) saturate(0.7);
 }
 
 /* Corner controls (mock lines 175-182, 426-438). backdrop-filter is scoped to

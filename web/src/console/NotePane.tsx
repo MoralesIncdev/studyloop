@@ -65,6 +65,7 @@ export function NotePane({ frameRef }: Props): JSX.Element | null {
   return (
     <Pane
       paneId="p-note"
+      dataPane="note"
       projectId={projectId}
       frameRef={frameRef}
       defaultPos={{ fx: 0.04, fy: 0.6 }}

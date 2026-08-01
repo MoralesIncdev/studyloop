@@ -17,6 +17,7 @@ import { YouTubePlayer } from "../player/YouTubePlayer";
 import { PlayerChrome } from "../player/PlayerChrome";
 import { CCOverlay } from "../player/CCOverlay";
 import { ConsoleLayer } from "../console/ConsoleLayer";
+import { Cabinets } from "../console/cabinets/Cabinets";
 import { RightRail } from "./RightRail";
 import { NotationModal } from "../notes/NotationModal";
 import { MergeQueuePanel } from "../concepts/MergeQueuePanel";
@@ -58,6 +59,15 @@ export function StudyView({ projectId }: Props): JSX.Element {
   // an inset glow border over the stage, and the corner buttons (this view's
   // equivalent of the mock's edge-handles) dim to stay out of the way.
   const focusMode = useStudyLoopStore((s) => s.focusMode);
+  // Console slice C (mock lines 361-386, 1199-1211): Watch/Generate/Review
+  // modality — a literal (non-hashed) class on .consoleRoot so every affected
+  // component's own CSS module can target it with `:global(.generate)`/
+  // `:global(.review)` without threading modality state through each one
+  // (see Pane.module.css's comment for the full rationale). Scaffold/Pressure
+  // drive CSS custom properties the same way.
+  const modality = useStudyLoopStore((s) => s.modality);
+  const scaffold = useStudyLoopStore((s) => s.scaffold);
+  const pressure = useStudyLoopStore((s) => s.pressure);
 
   // `undefined` = not yet decided (show resume prompt if applicable), a number =
   // the position the player should start at.
@@ -159,8 +169,16 @@ export function StudyView({ projectId }: Props): JSX.Element {
 
   const showResumePrompt = startAt === undefined && currentProject.lastPosition > RESUME_THRESHOLD_SECONDS;
 
+  // Mock's slider formulas (index.html lines 1152-1153, 1314): scaffold=100
+  // (slider default) => 0px blur, fully legible; pressure=100 => --pressure:1.
+  const consoleRootStyle = {
+    "--scaffold-blur": `${((100 - scaffold) * 0.07).toFixed(2)}px`,
+    "--pressure": (pressure / 100).toFixed(2),
+  } as React.CSSProperties;
+  const modalityClass = modality === "generate" ? "generate" : modality === "review" ? "review" : "";
+
   return (
-    <div className={styles.consoleRoot}>
+    <div className={`${styles.consoleRoot} ${modalityClass}`} style={consoleRootStyle}>
       <section className={styles.console}>
         <div className={styles.playerFrame} ref={frameRef}>
           {showResumePrompt && (
@@ -178,14 +196,21 @@ export function StudyView({ projectId }: Props): JSX.Element {
               </div>
             </div>
           )}
-          {startAt !== undefined && currentProject.source.type === "local" && (
-            <LocalVideoPlayer key={currentProject.id} src={api.videoStreamUrl(currentProject.source.path)} startAt={startAt} />
-          )}
-          {startAt !== undefined && currentProject.source.type === "youtube" && (
-            <YouTubePlayer key={currentProject.id} videoId={currentProject.source.videoId} startAt={startAt} />
-          )}
+          {/* Console slice C (mock line 57, `body.generate .footage{filter:...}`):
+              the dim/desaturate filter targets only the video layer, never a
+              scrim over the panes/transport above it — scoped to this wrapper
+              alone rather than the whole playerFrame. */}
+          <div className={styles.videoLayer}>
+            {startAt !== undefined && currentProject.source.type === "local" && (
+              <LocalVideoPlayer key={currentProject.id} src={api.videoStreamUrl(currentProject.source.path)} startAt={startAt} />
+            )}
+            {startAt !== undefined && currentProject.source.type === "youtube" && (
+              <YouTubePlayer key={currentProject.id} videoId={currentProject.source.videoId} startAt={startAt} />
+            )}
+          </div>
           {startAt !== undefined && <CCOverlay chromeVisible={chromeHovering} />}
           {startAt !== undefined && <ConsoleLayer frameRef={frameRef} />}
+          {startAt !== undefined && <Cabinets />}
           {startAt !== undefined && <PlayerChrome frameRef={frameRef} onVisibleChange={setChromeHovering} />}
           {/* Console slice B: mock's `.focus-frame` (lines 59-62) — inset
               rounded border + soft glow, pointer-events:none so it never

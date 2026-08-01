@@ -20,3 +20,13 @@
   font-weight: 700;
   color: rgb(255 255 255 / 92%);
 }
+
+/* Console slice C: same scaffold-blur wiring as ConceptPane.module.css — see
+   its comment. Blurs the whole row (including the "Trigger:"/"Failure
+   check:" label), same as the mock's own `.t-body.ai` — drill rows aren't
+   split into separate label/value markup, so there's no clean way to blur
+   only the value half. */
+.ai {
+  filter: blur(var(--scaffold-blur, 0px));
+  transition: filter 0.4s var(--ease);
+}
