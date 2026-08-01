@@ -1,0 +1,1169 @@
+{
+  "summary": "Survey unique video UI implementations across 5 niches for the StudyLoop console design",
+  "agentCount": 6,
+  "logs": [],
+  "result": {
+    "niches": [
+      {
+        "niche": "review-tools",
+        "products": [
+          {
+            "name": "Frame.io (V4)",
+            "url": "https://help.frame.io/en/articles/9105251-commenting-on-your-media",
+            "mechanisms": [
+              {
+                "name": "Comment bubbles parked on the playbar",
+                "how_it_works": "Every comment renders as a small bubble/marker on the playbar at its exact timecode. Point comments are a plain bubble; range comments render as a bubble with a 'long tail' — a line extending along the bar for the duration of the range (legacy drew this as a green line). The markers persist across playback; clicking a comment card in the side panel jumps the playhead to that exact frame, and if the comment is a range, 'the specific points highlighted in the range will become the new playback window' — spacebar then plays just that range, with an optional loop toggle. Markers are dismissed only by resolving/deleting the comment, never by playback.",
+                "steal_for_studyloop": "This is direct validation of StudyLoop's 'concepts park onto their timestamp tick' design. Steal two specifics: (1) ranged concepts get a tail/underline along the seek bar, not just a dot, so span-concepts (a whole guard sequence, a proof section) read differently from point-concepts; (2) clicking a parked tick should scope playback to that concept's range — the range temporarily becomes the playback window with loop available, which is exactly what drilling a BJJ sequence needs."
+              },
+              {
+                "name": "I/O range marking as a typing side-effect",
+                "how_it_works": "While reviewing, pressing I marks an in-point and O marks an out-point (Shift+I / Shift+O jump to them); legacy alternative: hold R to drop the in-point, release R to set the out-point. Alternatively, start typing a comment — a yellow selector appears on the playbar with draggable bracket handles you grip to widen the range before sending. Esc collapses the range back to a point comment. On submit the yellow selector becomes the persistent range marker.",
+                "steal_for_studyloop": "Steal the dual modality: keyboard I/O (or hold-key) for power users, and a draggable yellow provisional range on the seek bar the moment a note-in-progress exists. In StudyLoop, opening a note pane should drop a provisional tick at the playhead that the learner can drag into a range; Esc reverts to a point anchor. The 'provisional = yellow, committed = solid' color state change is worth copying literally."
+              },
+              {
+                "name": "Auto-pause on comment focus, focus-return on send",
+                "how_it_works": "The instant you begin typing in the comment box the player pauses so you don't miss footage; the comment is stamped to the paused frame. When you hit Send, keyboard focus immediately returns to the player, so spacebar/J-K-L work again without clicking. The whole loop is type -> send -> resume without touching the mouse.",
+                "steal_for_studyloop": "This is the core player-state choreography StudyLoop needs for generate-first pedagogy: focusing any answer/note pane pauses the video and captures the timestamp; committing the attempt returns focus to the player. The non-obvious half is the focus return — most tools trap focus in the text field and break keyboard playback until the user clicks the video."
+              },
+              {
+                "name": "Pin-anchored comments + click-to-reveal annotations",
+                "how_it_works": "Clicking the white pin icon on the playbar turns it purple and turns the cursor into a pin; clicking anywhere on the frame drops a pixel-anchored comment there. Annotation mode (P key) offers arrows, lines, boxes, free-draw, colors, undo/redo (Cmd+Z / Shift+Cmd+Z). Crucially, annotations and pins do NOT display during normal playback — they appear on the frame only when their comment card is clicked (a settings toggle can show all pins on the viewer). Comment cards carry a pin or lasso icon telling you which kind they are before you click.",
+                "steal_for_studyloop": "Validates the holographic-overlay restraint: spatial marks live in the note, not on the footage, and are summoned by selecting the note. For StudyLoop, a concept's on-frame highlight (e.g., circling a grip) should render only when its tick or pane is selected, keeping the edge-to-edge video clean. Also steal the armed-tool state signal: the pin button changes color and the cursor changes shape, so 'I am in drop-a-pin mode' is unambiguous."
+              },
+              {
+                "name": "Keyboard-first review grammar",
+                "how_it_works": "Full editor-grade shortcut map: Space/K pause, J/L variable-speed shuttle, arrows single-frame step, Shift+arrows 10-frame jump, C opens a comment, P opens annotation, R marks range, F fullscreen, Ctrl+L loop, Z+drag marquee zoom, ? shows the cheat sheet. Hover-scrubbing the timeline shows a frame-accurate thumbnail preview of each point before you commit the seek.",
+                "steal_for_studyloop": "Adopt the J-K-L + frame-step + '?' overlay grammar wholesale — students studying technique need the same frame surgery editors do. Hover-preview thumbnails on the seek bar matter double in StudyLoop because parked concept ticks plus a thumbnail tell you what a tick is about before committing the seek."
+              }
+            ],
+            "notable_states": [
+              "Typing-a-comment state: player force-paused, yellow provisional range selector live on playbar, Esc collapses range to point",
+              "Range-scoped playback state: after clicking a range comment, the range becomes the playback window with loop toggle",
+              "Armed pin/annotation state: pin icon purple, cursor becomes pin; annotation mode with its own undo/redo stack",
+              "Comment resolved via 'Mark as Complete' — progress-tracking state distinct from delete; internal (lock-icon) vs public comments as a visibility state",
+              "iOS: tapping a comment creates a 4-second replay range around its timestamp for context"
+            ],
+            "traps": [
+              "Replies are invisible to filtering, sorting, and search — burying decisions in threads makes them unretrievable. StudyLoop must index everything attached to a tick, including follow-ups.",
+              "Showing all pinned comments on the viewer by default (V4's default, with an opt-out toggle) clutters the frame on heavily-annotated media; StudyLoop should default to clean video and reveal-on-select.",
+              "Comment density on the playbar has no clustering — on long lectures with hundreds of concepts, per-comment bubbles at 1px spacing become untappable. StudyLoop needs tick clustering/zoom, which Frame.io avoids only because review sessions are short.",
+              "The whole model is one flat comment stream per asset — no typed anchors (question vs concept vs correction). Fine for review, fatal for study; StudyLoop's ticks must carry type."
+            ]
+          },
+          {
+            "name": "Vimeo Review Pages",
+            "url": "https://vimeo.com/blog/post/how-to-make-most-out-video-review-pages",
+            "mechanisms": [
+              {
+                "name": "Tap-the-frame note entry with zero-account guests",
+                "how_it_works": "A reviewer (including non-members via unlisted link) hits play, taps/clicks anywhere on the video frame, and a note box appears attached to that timestamp — clicking the picture IS the annotation gesture; alternatively they can type a timecode into a note manually. Notes accumulate in a single feed alongside the player.",
+                "steal_for_studyloop": "The click-anywhere-on-footage-to-anchor gesture is the lowest-friction time-anchoring in the niche and fits StudyLoop's bare-overlay philosophy: clicking the video at a moment should be the primary 'capture this' gesture, spawning a floating bare-text note at the click point with the timestamp already bound."
+              },
+              {
+                "name": "Notes-as-todos with resolve checkoff",
+                "how_it_works": "Any note can be treated as a to-do: it stays open in the feed until someone checks it off as resolved. Replies thread under individual notes in real time. Resolved notes leave the active list but survive in history.",
+                "steal_for_studyloop": "Maps cleanly to spaced review: a concept tick is 'open' until the learner demonstrates it (generate-first pass), then flips to resolved-until-next-review. The binary open/resolved checkoff with a persistent audit history is simpler and more legible than a status dropdown."
+              },
+              {
+                "name": "Hide-notes / presentation mode",
+                "how_it_works": "A 'Hide notes' control at the top of the review page temporarily conceals all commentary, and a separate comment-free view-only presentation link exists for showing the cut clean. Version dropdown swaps in previous versions with each version's own notes attached.",
+                "steal_for_studyloop": "StudyLoop needs the same global 'lights off' toggle: one keystroke that hides every pane, tick label, and heatmap for pure watching — and a shareable clean view. Also steal notes-travel-with-version: if a lecture video is re-uploaded/re-cut, anchors belong to a version, not the file."
+              }
+            ],
+            "notable_states": [
+              "Presentation mode (comment-free view-only) vs review mode as fully separate surfaces",
+              "Hide-notes toggle: same page, annotations temporarily suppressed",
+              "Per-version note sets selected via version dropdown"
+            ],
+            "traps": [
+              "All feedback lands in one undifferentiated chronological feed with no on-timeline structure to speak of — on a 90-minute lecture the feed becomes unusable scroll. The seek bar, not the feed, must be the primary index.",
+              "No real keyboard review grammar — the flow is mouse/tap-first, which caps throughput for heavy users; do not let StudyLoop's overlay design regress to click-only.",
+              "Notes have no spatial component beyond the tap (no drawing until much later, and weakly) — proof that timestamp-only anchoring loses information on visually dense material."
+            ]
+          },
+          {
+            "name": "Wipster",
+            "url": "https://www.wipster.io/",
+            "mechanisms": [
+              {
+                "name": "Click-to-comment with automatic pause and frame-pin",
+                "how_it_works": "Reviewer clicks anywhere on the playing video; playback pauses, a comment box appears at/near the click point, and the note is automatically timestamped and pinned to that exact frame and spot. Other reviewers see notes appear in real time.",
+                "steal_for_studyloop": "Same choreography as Frame.io's auto-pause but triggered by the spatial click itself — click = pause + anchor + open input in one gesture. For StudyLoop this collapses 'pause, open pane, type' into one action, which matters when a learner wants to capture a fleeting detail mid-technique."
+              },
+              {
+                "name": "Comments as checkable tasks with audit trail",
+                "how_it_works": "Each comment carries a timecode; the editor jumps to the flagged frame, makes the change, and checks the note off as resolved. The system keeps an audit trail of what was addressed, who replied, and who signed off, across versions.",
+                "steal_for_studyloop": "The 'jump to frame -> act -> check off' loop is structurally identical to a review rep in StudyLoop: seek to concept tick -> attempt recall -> mark outcome. Steal the audit-trail framing: every checkoff is a dated event, which is exactly the data spaced repetition scheduling needs."
+              },
+              {
+                "name": "Side-by-side version compare with mapped comments",
+                "how_it_works": "Any two versions of an asset can be compared side by side, and comments are version-aware — each round of feedback maps to its clip+version, so review cycles are tracked without re-uploading context. Premiere/FCP panel extensions let editors navigate comment timecodes and check off tasks from inside the NLE.",
+                "steal_for_studyloop": "Version-aware anchoring is the right model if StudyLoop ever supports re-encoded or trimmed source videos; anchor to (video-version, timecode), not raw file offset. Side-by-side is also a study pattern: compare your attempt recording against the instructional at the same timestamp."
+              }
+            ],
+            "notable_states": [
+              "Review vs approval states per asset: comment round open, changes requested, approved/signed-off",
+              "Real-time multi-reviewer presence — notes from others materialize live during your own pass",
+              "In-NLE panel state: same comment set surfaced inside Premiere/FCP with checkoff"
+            ],
+            "traps": [
+              "Wipster's whole UI orbits the approval funnel (sign-off, stakeholders, reminders) — ceremony that is dead weight for a solo learner. StudyLoop should steal the checkoff mechanics without importing workflow states nobody asked for.",
+              "Click-anywhere-to-comment means every stray click on the video spawns a comment box instead of play/pause — the gesture conflicts with the universal 'click video = toggle playback' expectation. StudyLoop must disambiguate (e.g., modifier-click or an armed mode) or learners will constantly misfire.",
+              "Pin visuals stay on the frame during review passes, which gets noisy; there is no strong hide/reveal discipline like Frame.io's click-to-reveal."
+            ]
+          },
+          {
+            "name": "Filestage",
+            "url": "https://filestage.io/video-review-software/",
+            "mechanisms": [
+              {
+                "name": "Click-to-comment auto-creates a timeline marker",
+                "how_it_works": "Reviewer clicks the video to add a comment; the act automatically creates both the timestamp on the comment and a visible marker on the video timeline, so subsequent reviewers see which parts of the video are already under discussion before playing them. Drawing/annotation tools let the reviewer mark up the frame attached to the comment.",
+                "steal_for_studyloop": "The pre-play signal is the steal: markers on the timeline tell you where the discussion density is before you watch. That is embryonic-heatmap thinking — StudyLoop's attention heatmap is this idea done properly, aggregating ticks + watch data into density rather than discrete markers."
+              },
+              {
+                "name": "Explicit per-reviewer verdict: Request Changes vs Approve",
+                "how_it_works": "When a reviewer finishes a pass they must choose a terminal action — 'Request changes' or 'Approve' — which rolls up into a central dashboard of who has approved what, per version, with automated due-date reminders driving stragglers back in.",
+                "steal_for_studyloop": "The forced end-of-pass verdict is a useful pedagogy pattern: at the end of a study session over a segment, prompt a self-verdict ('got it' / 'needs another pass') instead of letting the session trail off. That verdict feeds the spaced-review scheduler the same way approval states feed Filestage's dashboard."
+              },
+              {
+                "name": "Automatic stacked version history with frozen feedback",
+                "how_it_works": "Every uploaded version stacks in one place; each version freezes its complete comment+annotation record. The dashboard shows review status across all files/versions centrally.",
+                "steal_for_studyloop": "Freeze-per-version is the right durability model for study notes: a concept map built against a video should remain replayable exactly as it was even if the learner later re-imports or re-analyzes the video."
+              }
+            ],
+            "notable_states": [
+              "Per-reviewer terminal states (approved / changes requested) rolled up per file and version",
+              "Due-date pressure state: pending reviewers receive escalating automated reminders",
+              "Version stack: each version a frozen snapshot of its feedback"
+            ],
+            "traps": [
+              "Filestage is dashboard-first, player-second — the review player is comparatively shallow (no editor-grade keyboard grammar, no range comments to speak of). Confirms that project-management chrome cannot substitute for player depth.",
+              "Marker-per-comment on the timeline with no aggregation again fails at density; on collaborative reviews the bar becomes confetti.",
+              "Approval ceremony (verdicts, reminders, dashboards) targets teams under deadline; importing any of it wholesale into a learning tool would create guilt-driven nagging rather than spaced review."
+            ]
+          }
+        ],
+        "niche_summary": "Professional video review tools have converged on one load-bearing insight StudyLoop should treat as settled law: the seek bar is the index. Frame.io parks every comment as a bubble at its timecode — with a tail for ranges — and clicking a comment both seeks the playhead and temporarily makes the range the playback window (loopable), which is precisely StudyLoop's park-on-tick plus drill-a-segment mechanic already proven at scale. The niche has also solved player-state choreography: typing pauses the player and stamps the frame, sending returns keyboard focus to the player, and spatial marks (pins, drawings) stay OFF the footage during playback, appearing only when their note is selected — restraint that validates StudyLoop's clean edge-to-edge video with reveal-on-demand overlays. Frame.io uniquely proves keyboard-first review works (J-K-L shuttle, frame-stepping, I/O range marking, C-to-comment with a yellow provisional range you can drag), while Wipster/Filestage prove the value of checkoff lifecycles and version-frozen anchors. What none of them solve — and where StudyLoop diverges — is marker density on long footage (all four scatter per-comment confetti with no clustering or aggregation; the attention heatmap is the correct evolution), typed anchors (all comments are one flat kind), and any pedagogy: these tools close feedback loops between people, so StudyLoop must swap the approval ceremony for generate-first attempts and spaced-review scheduling while keeping the interaction skeleton intact."
+      },
+      {
+        "niche": "sports-coaching",
+        "products": [
+          {
+            "name": "Hudl (team platform + Sportscode Studio telestration)",
+            "url": "https://www.hudl.com/products/hudl",
+            "mechanisms": [
+              {
+                "name": "Range-scoped comments with drag handles",
+                "how_it_works": "While watching film, the coach clicks Comment on the moment; a comment box opens and the comment gets an in/out range on the timeline that the coach adjusts by dragging two handles before saving. Comments render as marks on the timeline, display over the video during full-screen playback as the playhead crosses their range, and are threaded: athletes reply, and @-mentioning a player fires a direct notification. The composer also offers Video and Camera icons to attach a recorded video reply or a screenshot instead of text.",
+                "steal_for_studyloop": "Concept ticks on the StudyLoop seek bar should carry an optional duration, not just a point: drag the tick's edge to widen it into a range, and the parked concept's pane auto-surfaces while the playhead is inside the range, then re-parks. The @-mention/reply thread pattern maps to attaching learner questions to a tick so AI answers land anchored to the moment."
+              },
+              {
+                "name": "Annotations on the full video (clip-creation ceremony removed)",
+                "how_it_works": "Hudl originally required creating a clip, trimming it, sending it to a playlist, then sharing — just to attach a drawing. They shipped 'text and drawings on the full video': tools apply directly at the current timeline position of the whole game video, the drawing auto-saves, and a mark appears in the timeline. Created on web, visible in the iOS app.",
+                "steal_for_studyloop": "Validation of StudyLoop's core bet: annotation must happen in place on the master timeline with zero export/clip ceremony. The tick IS the artifact. Any flow that makes the learner 'make a clip' to save a thought is the anti-pattern Hudl publicly walked back from."
+              },
+              {
+                "name": "Studio telestration presets + auto-tracking",
+                "how_it_works": "In Sportscode Studio, computer vision auto-detects the chroma key and calibrates the pitch, so 3D-looking spotlights and arrows land in field space, and player tracking is automatic — the drawing follows the player without manual keyframing. Coaches pre-set graphical styles/conventions; Hudl's own case study cites annotating 5–10 clips in 15–20 minutes for a 1-to-1 player session.",
+                "steal_for_studyloop": "Preset annotation styles are the transferable part: StudyLoop should have one-keystroke annotation types (concept, question, mistake, drill) each with fixed visual style, so parking a concept costs ~2 seconds. Auto-anchoring (the annotation follows its subject) is the ceiling version of concepts staying glued to their tick."
+              }
+            ],
+            "notable_states": [
+              "Review mode vs comment-compose mode: clicking Comment freezes context and exposes range handles; posting returns to playback",
+              "Timeline shows annotation marks persistently; full-screen playback surfaces comments transiently as their range is crossed",
+              "Cross-surface asymmetry: annotations authored on web, consumed on mobile — author state and consumer state are different UIs"
+            ],
+            "traps": [
+              "Product-generation fragmentation (Classic vs v3 vs Sportscode vs Studio) means the same feature has three names and three behaviors — StudyLoop must keep one annotation model everywhere",
+              "The original clip-first workflow (create clip → trim → playlist → share just to annotate) added so much ceremony Hudl had to publicly reverse it; never gate annotation behind object creation",
+              "Comments as a separate side-panel list (older Hudl) divorced feedback from the footage; the win came from putting it on the video and timeline"
+            ]
+          },
+          {
+            "name": "OnForm (successor to the Ubersense/Hudl Technique lineage)",
+            "url": "https://onform.com/",
+            "mechanisms": [
+              {
+                "name": "Voiceover telestration recording (analysis-as-artifact)",
+                "how_it_works": "Coach taps record inside the analysis view, then scrubs, steps frame-by-frame, draws lines/angles/shapes, and talks; the app captures screen + voice + touch into a rendered video. The athlete consumes a movie of the coach's hands and voice walking through their swing — 'like the coach is standing next to them.' Can also inset a face-cam video. Delivered into a per-athlete message thread.",
+                "steal_for_studyloop": "StudyLoop's generate-first reveal could be delivered this way: after the learner attempts an answer, the AI reveal plays as a choreographed replay — playhead moves, panes open, strokes draw themselves in sequence — instead of dumping static text. Also: let learners record their own explain-back attempt over the footage as the 'generate' step."
+              },
+              {
+                "name": "Two-tap side-by-side / overlay comparison",
+                "how_it_works": "Select two videos in the athlete's library, tap Compare; both load into a split view (or overlay mode) where each side can be independently scrubbed to a matching event, then playback locks together. Used for before/after progress checks or athlete-vs-pro reference.",
+                "steal_for_studyloop": "For BJJ instructionals: compare-attempt-vs-reference as a first-class mode — learner's own recorded attempt in a pane beside the instructional, independently aligned to the same position in the technique, then lock-stepped. Entry cost must stay at two actions."
+              },
+              {
+                "name": "Calibrated measurement overlays (gingerbread, ruler, stopwatch)",
+                "how_it_works": "The 'gingerbread' tool runs pose estimation and overlays a skeleton on the athlete so joint motion is visible through the movement; the ruler measures real distances after calibrating against a known reference length in frame; the stopwatch runs on-video to capture splits between frames. All are placed by direct touch on the paused frame.",
+                "steal_for_studyloop": "The pattern is domain-specific measurement layers toggled over footage. StudyLoop equivalents: grip/frame diagrams over BJJ footage, formula overlays over lecture boards — layers that live in a pane, toggle per-concept, and are anchored to a frame."
+              },
+              {
+                "name": "Frame-by-frame with preset speed steps",
+                "how_it_works": "Playback offers discrete preset slow-motion speeds plus single-frame stepping buttons; analysis defaults to paused-frame interaction (draw on the frozen frame), with slow-mo used for the between-pose motion.",
+                "steal_for_studyloop": "Discrete speed presets (1x / 0.5x / 0.25x / frame-step) beat a continuous speed slider for study workflows — fewer decisions, muscle-memory keys. Map to keyboard in the console."
+              }
+            ],
+            "notable_states": [
+              "Capture mode vs analysis mode vs recording-a-review mode — recording mode adds a red-dot state where every scrub/draw becomes part of the artifact",
+              "Comparison mode has an alignment sub-state (sides independent) then a locked sub-state (transport joined)",
+              "Athlete-side state is passive: they receive a rendered video in a thread, not the live annotation objects"
+            ],
+            "traps": [
+              "Rendered voiceover reviews are frozen artifacts — the athlete can't query, toggle, or re-anchor anything afterward; StudyLoop annotations must stay live data, with replay as a view not a format",
+              "Consumption lives in a chat thread, so knowledge is ordered by send-date, not by position in the source material — exactly what StudyLoop's tick-parking avoids",
+              "Tool sprawl in a toolbar (10+ icons) pushes casual users to only ever use the pen; keep the visible tool count tiny and progressive"
+            ]
+          },
+          {
+            "name": "Dartfish (myDartfish Pro / Analyzer)",
+            "url": "https://www.dartfish.com/features/",
+            "mechanisms": [
+              {
+                "name": "Labeled key positions as multi-point sync anchors",
+                "how_it_works": "In the Analyzer, each clip gets 'key positions' — named markers at technically meaningful instants (e.g. 'takeoff', 'contact'). When comparing clips, matching labels let you snap all clips to the same phase and re-synchronize at successive checkpoints as the clips drift (different tempo athletes). Constraint: every compared clip must contain a key position with an exactly identical label — capitalization and spacing sensitive.",
+                "steal_for_studyloop": "Named ticks as alignment anchors: if a technique has phases (grip → entry → finish), ticks with shared names across the instructional and the learner's attempt let the comparison view snap phase-to-phase instead of clock-to-clock. But match by picking from existing tick names, never by string typing — Dartfish's exact-string requirement is the fragile part."
+              },
+              {
+                "name": "Split-screen up to four clips on one transport",
+                "how_it_works": "Analyzer split screen places up to four clips side by side under a single shared transport; Dartfish's FAQ explicitly answers 'can they play at different speeds?' with 'No — resynchronize manually at different positions instead.' One clock, many viewports.",
+                "steal_for_studyloop": "A shared-clock rule keeps multi-pane comparison comprehensible; expose re-sync (nudge one pane's offset) rather than per-pane speed. StudyLoop panes showing two videos should have one master transport plus per-pane offset nudge."
+              },
+              {
+                "name": "Blend overlay with flip/zoom/move registration",
+                "how_it_works": "When side-by-side is too coarse, blend mode overlays two clips semi-transparently; the user manually registers them with flip (mirror a lefty vs righty), zoom, and move on one layer until the bodies coincide, then plays. The Pro-only SimulCam does this with pixel-level background registration so the blend survives camera pans.",
+                "steal_for_studyloop": "Manual registration controls (flip/scale/offset on one layer) are cheap and cover most of the value of fancy registration. A 'ghost' pane mode — reference technique at 50% opacity over the learner's attempt — is directly buildable."
+              },
+              {
+                "name": "StroMotion frozen-trail",
+                "how_it_works": "Freezes successive positions of the athlete/object and superimposes them into one image or sequence, so a whole movement's path reads as a static trail — the pole-vault-arc-as-one-picture effect.",
+                "steal_for_studyloop": "A 'summary frame' per concept: compress a technique's key poses into one composite image that becomes the concept's card in the cabinet / spaced-review deck — a visual answer key for generate-first prompts."
+              }
+            ],
+            "notable_states": [
+              "Analyzer (workbench) vs export (delivery) are hard-separated modes; athletes only ever see exports",
+              "Blend mode has an explicit registration sub-state (adjust flip/zoom/move while paused) before the playback sub-state",
+              "Key-position sync has synced vs drifted states, with manual re-snap at the next shared label"
+            ],
+            "traps": [
+              "The genuinely great comparison tech (SimulCam) is gated behind Pro pricing, so most users experience the crude version — don't design a flagship mechanic you then paywall into irrelevance",
+              "Exact-string label matching for sync silently fails on a capitalization difference — sync anchors must be selected references, not typed strings",
+              "Analyst-workstation ergonomics: enormous capability, but athletes consume dead exports; the feedback loop runs through a human editor every time"
+            ]
+          },
+          {
+            "name": "Kinovea (open-source desktop analysis)",
+            "url": "https://www.kinovea.org/features.html",
+            "mechanisms": [
+              {
+                "name": "Key images as annotation containers",
+                "how_it_works": "Navigating to a frame and clicking 'Add key image' marks that frame; a thumbnail appears in a filmstrip under the player (blue-bordered when the playhead sits on it, close button to delete). All drawings (label, pencil, line/arrow, circle, cross, angle/goniometer) attach to the current key image; deleting the key image deletes its drawings. Each key image has a comment window — title pre-filled with the timestamp, rich-text body, movable/resizable.",
+                "steal_for_studyloop": "This is the cleanest existing model of 'annotations belong to a moment, the moment is the object' — identical in spirit to StudyLoop's parked concept ticks. The thumbnail filmstrip is a stealable secondary navigation: a strip of key-moment thumbnails as an alternative view of the tick row, with the active tick visually lit while the playhead is on it."
+              },
+              {
+                "name": "Opacity envelope (fade-in / opaque / fade-out) around the anchor frame",
+                "how_it_works": "Every drawing has a configurable visibility envelope: it fades in over frames approaching its key image, is fully opaque at the key image, and fades out after; opacity of the opaque section is also settable, and 'persistence' can be disabled to show drawings only on their exact frame. Default = visible on the key image, ghosting into neighbors.",
+                "steal_for_studyloop": "Directly steal for the holographic overlay: a parked concept's floating text/pane should fade in as the playhead approaches its tick, hold at full presence through its range, and dissolve after — a temporal opacity envelope, not a binary show/hide. This is the single most StudyLoop-shaped mechanism in the niche."
+              },
+              {
+                "name": "Time-origin synchronization + joint timeline",
+                "how_it_works": "Dual-screen mode gives each video its own transport plus a joint timeline. Sync = mark a common event as each video's 'time origin' (button or right-click), or press 'synchronize on current frames' after positioning both manually. Joint controls step both videos frame-by-frame together; speed sliders are linked by default and normalize different capture framerates so 50% means the same real-world slowdown in both; a merge button superimposes both at 50% opacity; a swap button exchanges panes.",
+                "steal_for_studyloop": "The time-origin concept (each video keeps its own clock; sync is an offset between marked events) is the right data model for attempt-vs-reference comparison. Linked-by-default, unlinkable-in-settings speed is the right default polarity."
+              },
+              {
+                "name": "Per-tool style profiles",
+                "how_it_works": "A color/style profile sets the default appearance of each drawing tool independently before creation; existing drawings keep their style when the profile changes later.",
+                "steal_for_studyloop": "Semantic styling: each annotation type in StudyLoop gets a fixed style token (concept = cyan, question = amber, mistake = red), configured once, applied at creation — so the heatmap and tick row read by color without per-annotation styling decisions."
+              }
+            ],
+            "notable_states": [
+              "Single-player vs dual-player mode is a top-level workspace switch, with a third joint-transport control set appearing only in dual mode",
+              "Playhead-on-key-image is a visible state (blue thumbnail border) distinct from playhead-between-key-images",
+              "Drawings have three temporal visibility states: fading in, opaque, fading out — plus a persistence-off state"
+            ],
+            "traps": [
+              "Fading defaults confuse newcomers ('my lines disappear when I play') — multiple forum threads; if annotations have temporal envelopes, the UI must show why something vanished (e.g. the tick glows as its content fades)",
+              "Deleting a key image silently deletes all its drawings — cascade deletes on the anchor object need an undo or a warning",
+              "Zero delivery story: annotations live in a sidecar file on one desktop; nothing reaches the athlete without manual video export"
+            ]
+          },
+          {
+            "name": "Coach's Eye (TechSmith, legacy — discontinued 2021)",
+            "url": "http://www.alandesignsthings.com/coachs-eye",
+            "mechanisms": [
+              {
+                "name": "The flywheel scrubber",
+                "how_it_works": "A large rotary wheel rendered below the video; dragging a thumb across it spins it with analog feel, mapping rotation to frames so the user scrubs bidirectionally at whatever speed the thumb moves — fast flicks for coarse travel, slow rolls for single-frame precision. It was the first of its kind and widely imitated because it solved touch scrubbing's core problem: a seek bar's pixel width can't give frame precision on long video, a wheel's 'gearing' can.",
+                "steal_for_studyloop": "StudyLoop needs a precision transport distinct from the seek bar: a scroll-wheel/trackpad gesture (or a hover-summoned jog strip) geared for frame-level hunting, so the seek bar stays the macro map (ticks + heatmap) and the jog surface owns micro navigation. Two instruments, two zoom levels of time."
+              },
+              {
+                "name": "Recorded analysis sessions",
+                "how_it_works": "Same pattern OnForm inherited: hit record, then every scrub, drawing stroke, and spoken word is captured into a shareable video review. Coaches on iPad could also run linked or unlinked side-by-side comparisons and record over those.",
+                "steal_for_studyloop": "Confirms the replayable-walkthrough pattern predates OnForm and drove adoption twice; do it as replayable state choreography (live objects animated in sequence) rather than rendered pixels."
+              },
+              {
+                "name": "On-video timers",
+                "how_it_works": "Insertable on-screen timers that run over the footage between chosen points; years after shutdown, users publicly say they keep the dead app installed just for this — a signal of a small mechanism with outsized retention.",
+                "steal_for_studyloop": "Cheap, sticky utility layers (elapsed-time-between-two-ticks readout for BJJ transitions, 'time on this concept' counter) earn daily use; consider a tiny utilities cabinet."
+              }
+            ],
+            "notable_states": [
+              "Linked vs unlinked dual-video transport was an explicit toggle on iPad",
+              "Record-review mode turned the whole console into a capture surface (every interaction became content)",
+              "Post-shutdown state is instructive: rendered exports survived, but every annotation as data died with the app"
+            ],
+            "traps": [
+              "Discontinuation wiped all structured annotation data because annotations only ever existed as rendered video — StudyLoop's local-first, annotations-as-data stance is the direct counter; keep them exportable/open-format",
+              "Design goal 'minimize interaction, minimize learning' aged well, but the app stayed a single-clip tool — no library/knowledge layer, so accumulated analysis never compounded",
+              "Imitators copied the flywheel's look without its gearing/inertia tuning and it felt worse than a plain scrub bar — precision transports live or die on feel, budget real tuning time"
+            ]
+          }
+        ],
+        "niche_summary": "Sports video analysis converged on four ideas StudyLoop should treat as settled prior art. First, annotations anchor to a marked moment that is itself a first-class object — Kinovea's key images (with thumbnail filmstrip, timestamp-titled comments, and cascade-delete semantics) and Hudl's range-scoped, drag-handle comments are the two best models, and Hudl's public reversal of its clip-first workflow proves annotation must happen in place on the master timeline with zero export ceremony. Second, annotations have temporal visibility envelopes, not binary show/hide: Kinovea's fade-in/opaque/fade-out ramp around the anchor frame is exactly the behavior StudyLoop's parked concepts need as the playhead approaches a tick. Third, precision time control is a dedicated instrument separate from the seek bar — Coach's Eye's geared flywheel and universal discrete speed presets (1x/0.5x/0.25x/frame-step) — and comparison of two clips always runs on one shared clock synced via marked events (Kinovea time origins, Dartfish labeled key positions), never per-pane speeds. Fourth, the niche's universal weakness is delivery: every tool ultimately ships the athlete a rendered voiceover video (OnForm, Coach's Eye, Dartfish exports), which is persuasive to watch but dead as data — Coach's Eye's shutdown erased a decade of annotations. StudyLoop's opening is to keep the replayable-walkthrough consumption pattern (it demonstrably works, twice) while keeping every annotation live, queryable, and feeding the tick row, heatmap, and spaced review."
+      },
+      {
+        "niche": "language-learning",
+        "niche_summary": "The language-learning overlay niche has solved the exact problem StudyLoop's console faces: putting interactive, information-dense UI directly over playing footage without ruining the viewing experience. Their core discovery is that intent is inferable from the cursor and the clock — hover-over-the-overlay means \"I'm studying now,\" so the video pauses itself and auto-resumes on mouse-out, making pause/play choreography free instead of a button. Their second discovery is that state should live in the text itself: per-word color coding (unknown/learning/known) turns every subtitle line into a passive progress heatmap with zero extra chrome. Third, capture must be one keystroke: the best mining flows (asbplayer's Ctrl+Shift+U) grab the current time-anchored line plus its audio/screenshot into SRS without opening any dialog, because any dialog during playback kills flow. Finally, they treat the timeline as navigable knowledge — condensed playback that skips unannotated dead air, and subtitle-granular seeking (prev/replay/next on A/S/D) — which maps directly onto StudyLoop's concept ticks and attention heatmap.",
+        "products": [
+          {
+            "name": "Language Reactor",
+            "url": "https://www.languagereactor.com/",
+            "mechanisms": [
+              {
+                "name": "Hover-pause with auto-resume (intent-inferred player state)",
+                "how_it_works": "Dual subtitles (target language above, native below) render over the bottom of the video. The moment the cursor enters a subtitle word, the video pauses automatically and a small dictionary popup appears anchored to that word showing translation, pronunciation, and example sentences. Move the cursor off the word/subtitle area and playback resumes. No click, no pause button — the overlay itself is the pause trigger. Clicking the word instead saves it to a personal vocabulary list.",
+                "steal_for_studyloop": "This is the single best pattern for the holographic pane system: hovering any floating concept/annotation over the footage should soft-pause the video (with a subtle visual state change), and moving off it resumes. It makes 'reading an overlay' and 'watching' mutually exclusive states the player manages for you — no explicit mode switch, no pause-button hunting."
+              },
+              {
+                "name": "Synced transcript sidebar with clickable lines",
+                "how_it_works": "A full-episode transcript opens in a right-side panel next to the (shrunk) video. The current line highlights and the panel auto-scrolls in sync with playback. Clicking any line seeks the video to that timestamp. The panel can show L1, L2, or both, and is toggleable so the video can go back to full width.",
+                "steal_for_studyloop": "Direct model for a StudyLoop edge cabinet: a slide-out transcript/notes cabinet whose entries are time-anchored, auto-scrolls with playback, click-to-seek. Key detail: it coexists with dense in-video overlays because it's collapsible — the cabinet is the 'read everything' surface, the overlay is the 'read now' surface."
+              },
+              {
+                "name": "Subtitle-granular keyboard transport (A/S/D/Q)",
+                "how_it_works": "A jumps to the previous subtitle, S replays the current one, D advances to the next, Q toggles auto-pause mode (playback halts at the end of every line; spacebar continues). Seeking happens in units of meaning (lines), not seconds.",
+                "steal_for_studyloop": "Make StudyLoop's seek keys operate on concept ticks / segments, not fixed second offsets: prev-concept, replay-this-segment, next-concept. Auto-pause-at-each-tick becomes a 'lesson stepping' mode — and the spacebar-to-continue gate is exactly where generate-first prompts belong."
+              },
+              {
+                "name": "Blur-to-reveal translation layer",
+                "how_it_works": "The translation (or the target-language line) can be rendered blurred by default; hovering over it reveals it. Learner attempts comprehension first, then checks. The blur is per-layer and set in settings, so density is user-controlled.",
+                "steal_for_studyloop": "This is generate-first pedagogy already shipped as a UI primitive: AI answers/summaries in overlay panes render blurred until hover or a reveal keypress, forcing an attempt before the reveal. Cheap to build, proven to work over live video."
+              }
+            ],
+            "notable_states": [
+              "AP (auto-pause) mode on/off — a persistent player mode where every subtitle boundary is a stop point, toggled by one key (Q), continued by spacebar",
+              "Hover-paused vs playing — a transient state entered/exited purely by cursor position over the overlay",
+              "Transcript-panel-open vs full-width video — panel toggling resizes the stage rather than covering it"
+            ],
+            "traps": [
+              "Two full subtitle tracks plus colored saved-word highlights plus a sidebar is at the edge of tolerable density; reviewers consistently note it stops feeling like 'watching TV.' StudyLoop should keep at most one always-on text layer over footage and push the rest to cabinets.",
+              "Hover-pause with a large subtitle hitbox means accidental pauses whenever the mouse drifts across the lower third; the pause zone must be tight to the actual text, not the whole region.",
+              "Feature sprawl behind settings: dozens of toggles (blur, tracks, MT sources) make first-run overwhelming — good defaults matter more than configurability."
+            ]
+          },
+          {
+            "name": "asbplayer",
+            "url": "https://github.com/killergerbah/asbplayer",
+            "mechanisms": [
+              {
+                "name": "Three-tier one-key mining (dialogless capture)",
+                "how_it_works": "When a subtitle worth keeping appears, one hotkey (Ctrl+Shift+X) opens the flashcard creator pre-filled with the sentence, sliced audio for exactly that subtitle's time span, and a screenshot; the user adds word/definition and exports to Anki via AnkiConnect. Crucially there are faster variants: export directly with no dialog at all, and 'update last card' to append the current line to the previously made card. Capture is anchored to the subtitle's start/end timestamps, not to when the key was pressed.",
+                "steal_for_studyloop": "StudyLoop's 'mine this moment' must have a zero-dialog tier: one keystroke parks the current concept/segment (with its time span, frame grab, and transcript slice) onto its seek-bar tick and into the review queue, with editing deferred. The 'append to last capture' variant is gold for multi-line ideas that span several segments."
+              },
+              {
+                "name": "Auto-pause on subtitle mouseover with auto-resume",
+                "how_it_works": "An explicit setting: 'Auto-pause when mousing over subtitles,' with an 'Enabled with auto-resume' option — playback pauses while the cursor sits on subtitle text and resumes when it leaves. Separate from the boundary auto-pause preference, which can pause at the start OR end of every subtitle (start-pause supports 'read then listen'; end-pause supports 'listen then verify').",
+                "steal_for_studyloop": "Adopt both axes as settings: hover-pause (with auto-resume) for overlay reading, and boundary-pause with a start/end choice for stepping modes — start-of-segment pause is exactly where a generate-first prompt ('what do you think happens next?') slots in before content plays."
+              },
+              {
+                "name": "Condensed and fast-forward playback over the annotation track",
+                "how_it_works": "Condensed playback skips all video sections that have no subtitles (with a configurable minimum skip interval so tiny gaps aren't jarring); fast-forward mode instead plays unsubtitled stretches at high speed. The subtitle track effectively becomes a density map that drives the transport.",
+                "steal_for_studyloop": "Map onto the attention heatmap: a 'condensed review' mode that plays only high-attention or concept-bearing segments and skips (or 4x's) dead air. For BJJ instructionals and lectures this is the killer replay feature — the heatmap isn't just a display, it's a playback program."
+              },
+              {
+                "name": "Per-word status styling synced from external systems",
+                "how_it_works": "Words inside the subtitle overlay are styled (color, underline, outline, background) by learning status — Uncollected/Unknown/Learning/Graduated/Young/Mature — synced from Anki and WaniKani or tracked locally. Hotkeys change a word's status while watching. Yomitan integration adds reading annotations above words and frequency ranks below.",
+                "steal_for_studyloop": "Concept mentions in StudyLoop's overlay/transcript should carry SRS state visually (new/learning/known) using typography-level styling rather than badges — the footage overlay becomes a live mastery readout, and the same states can tint the concept's tick on the seek bar."
+              },
+              {
+                "name": "Subtitle offset nudging as a first-class control",
+                "how_it_works": "Dedicated hotkeys shift subtitle timing forward/back in small increments and navigate by subtitle; there's also a toggleable controls overlay that only appears on videos that have subtitles loaded.",
+                "steal_for_studyloop": "Time-anchored annotations will drift against re-encoded or trimmed video; give StudyLoop a global anchor-offset nudge (and per-annotation drag on the tick) rather than forcing re-annotation. Also copy the conditional chrome: transport overlay only exists when there is something anchored to control."
+              }
+            ],
+            "notable_states": [
+              "Condensed vs fast-forward vs normal playback — three transport programs derived from the same annotation density data",
+              "Auto-pause-at-start vs auto-pause-at-end — two pedagogically distinct stepping modes",
+              "Mining dialog open (video held) vs dialogless export (video never interrupted) vs update-last-card",
+              "Word status lifecycle: Uncollected → Unknown → Learning → Graduated → Young → Mature, editable live via hotkeys"
+            ],
+            "traps": [
+              "35+ hotkeys with no progressive disclosure — power users love it, everyone else bounces off setup docs. StudyLoop needs a 5-key core with everything else discoverable later.",
+              "Setup requires assembling Anki + AnkiConnect + note types + field mappings before the first card; any flow where the capture destination must be configured before capture works will lose most users. StudyLoop's SRS must work out of the box.",
+              "It leans on a separate tool (Yomitan) for the dictionary popup, so the overlay experience is a composite of two extensions that can visually collide — own your whole overlay stack."
+            ]
+          },
+          {
+            "name": "Migaku",
+            "url": "https://migaku.com/",
+            "mechanisms": [
+              {
+                "name": "Five-color word-status ink over live subtitles",
+                "how_it_works": "Every word in the subtitle overlay is tinted by knowledge state: red = unknown, orange = seen (card made, studied at least once), green = known (determined automatically by Migaku Memory from review history), grey = ignored, purple = deliberately tracked/prominent. Status transitions happen automatically as the user studies cards, so the subtitle coloring evolves over weeks without manual bookkeeping.",
+                "steal_for_studyloop": "The compounding trick is that state changes elsewhere (in review sessions) re-paint the video overlay. StudyLoop concepts reviewed in spaced review should visibly 'cool down' in the console — tick color, overlay text weight — so returning to an old video shows at a glance what you now own. Also steal 'ignored' and 'tracked' as explicit user overrides on the automatic pipeline."
+              },
+              {
+                "name": "Dual-trigger popup dictionary (click, or hover+Shift)",
+                "how_it_works": "Click a word, or hover it and press Shift, to open a popup card over the page containing dictionary definitions, example sentences, and ChatGPT explanations. The modifier-key trigger means plain hovering never spawns UI — popups only appear on demonstrated intent. Works on any greenlisted website, not just video pages.",
+                "steal_for_studyloop": "Hover+modifier is the answer to popup spam over dense footage: bare hover shows nothing (or a minimal underline), hover+Shift (or click) materializes the full holographic card. Reserve plain hover for the cheap affordance, a chord for the expensive one."
+              },
+              {
+                "name": "Subtitle Browser panel with per-line lookup batching",
+                "how_it_works": "A toolbar button opens a Subtitle Browser listing every subtitle line of the current video. From it, the user can search selected text, or auto-search ALL unknown (red) words in the current line at once — one action fans out to a batch of dictionary lookups presented together.",
+                "steal_for_studyloop": "Batch-explain per segment: a single action on a transcript line that expands every unfamiliar concept in it into cards, instead of forcing word-by-word interrogation. Maps to a 'explain everything in this segment' affordance on StudyLoop's transcript cabinet entries."
+              },
+              {
+                "name": "Per-site enable gating",
+                "how_it_works": "The overlay machinery is off by default everywhere; the user clicks the extension icon and chooses 'Enable for this website,' which is remembered per domain (greenlisting). The dense apparatus only exists where explicitly invited.",
+                "steal_for_studyloop": "Translate to per-video or per-mode gating: the full console (panes, ticks, heatmap) should be an opt-in state per video, with a clean 'just watch' default, and the choice remembered per video."
+              }
+            ],
+            "notable_states": [
+              "Word status lifecycle (red→orange→green) driven automatically by SRS history, with grey/purple as manual overrides",
+              "Popup closed / popup open-on-demand (click or hover+Shift) — no passive popup state",
+              "Subtitle Browser open (list-of-lines mode) vs pure overlay watching"
+            ],
+            "traps": [
+              "Five simultaneous ink colors over footage reads as confetti on vocabulary-dense content; StudyLoop should cap the visible palette to ~3 states and encode the rest more quietly (opacity/weight).",
+              "Automatic status inference ('Migaku Memory decides you know it') frustrates users when it's wrong and there's no obvious correction path in the moment — every automatic state needs a one-click override at the point where the user notices the error.",
+              "Subscription-gated core mechanics (the popup and statuses are the product) mean the whole reading experience degrades when the account lapses — never let the annotation layer be the hostage."
+            ]
+          },
+          {
+            "name": "LingQ (video mode)",
+            "url": "https://www.lingq.com/",
+            "mechanisms": [
+              {
+                "name": "Video-atop-scrolling-lesson with live highlighting",
+                "how_it_works": "Imported YouTube videos render as a lesson: video docked at the top, full transcript scrolling beneath, with the currently spoken sentence live-highlighted in sync with playback. Side buttons toggle per-sentence translations and jump the video back. The transcript is the primary reading surface; the video is a synced companion rather than the canvas.",
+                "steal_for_studyloop": "The inverse of StudyLoop's video-first layout, and worth offering as a second mode: a 'reading mode' where the transcript is dominant and the video shrinks to a docked player, for dense lectures where text carries the load. Live sentence highlighting synced to the playhead is the shared primitive either way."
+              },
+              {
+                "name": "Click-while-playing word capture (no pause required)",
+                "how_it_works": "Unknown words render blue; clicking a blue word while the video keeps playing creates a 'LingQ' — the word turns yellow, gets a saved meaning, and enters the SRS flashcard pool. The interaction is deliberately non-modal: lookups and captures happen against the scrolling transcript without stopping playback, and yellow persists across every future lesson containing that word.",
+                "steal_for_studyloop": "Capture-without-pausing is a distinct mode from hover-pause study: during a first watch, clicking a concept in the transcript cabinet should silently park it on its tick and queue it, with zero interruption. The global persistence (yellow everywhere, forever) is the model for cross-video concept identity in StudyLoop."
+              },
+              {
+                "name": "Sentence mode as timestamp-stepped study",
+                "how_it_works": "Sentence mode presents one sentence at a time with the video clip for just that sentence's time span; advancing steps both text and video together. It depends on per-sentence timestamps, and imported lessons with bad timestamps visibly break it (a recurring support issue).",
+                "steal_for_studyloop": "Segment-stepped review — play exactly one concept's time span, show its pane, ask the generate-first question, advance — is the natural review loop for the console. The LingQ lesson: this entire mode is only as good as timestamp accuracy, so invest in alignment tooling and graceful degradation when anchors are imprecise."
+              }
+            ],
+            "notable_states": [
+              "Blue (never touched) → yellow (LingQed, in SRS) → known — word states persist globally across all lessons, not per video",
+              "Full-lesson video mode vs sentence mode (one timestamped sentence + its clip at a time)",
+              "Per-sentence translation shown/hidden via side toggle"
+            ],
+            "traps": [
+              "'Complete Lesson' silently flips all remaining blue words to known — a bulk state mutation users repeatedly ask to disable. Never let a navigation action mass-mutate learning state implicitly.",
+              "Sentence mode breaks visibly when imported timestamps are off, and users have no in-player fix — provide anchor repair in situ.",
+              "The transcript-first layout means the video itself gets little interaction love (no in-video overlays at all); LingQ demonstrates that treating video as an audio track with pictures wastes the visual channel StudyLoop is built around."
+            ]
+          },
+          {
+            "name": "Voracious (subs2srs lineage desktop player)",
+            "url": "https://github.com/rsimmons/voracious",
+            "mechanisms": [
+              {
+                "name": "Quiz-style hide/reveal viewing modes",
+                "how_it_works": "Special viewing modes automatically pause at the end of each subtitle with the subtitle text hidden; the learner attempts to comprehend by ear, then presses a key to reveal the text (and optionally the translation) step by step, then advances. Listening, reading, and comprehension are trained by controlling exactly which layer (audio, L2 text, L1 text) is exposed at each stop.",
+                "steal_for_studyloop": "This is generate-first pedagogy as a player mode, a decade before AI: stop → attempt → staged reveal → advance. StudyLoop's version replaces 'reveal subtitle' with 'reveal AI explanation/answer,' but the staged, keyboard-driven reveal sequence at auto-pause boundaries is the proven choreography."
+              },
+              {
+                "name": "Subtitle-unit keyboard navigation with instant replay",
+                "how_it_works": "Dedicated keys replay the current subtitle and jump forward/back one subtitle; navigation units are lines of dialogue, not seconds. Combined with hover dictionary definitions (Japanese, via imported EPWING dictionaries) and auto-generated furigana rendered above words.",
+                "steal_for_studyloop": "Replay-current-segment as a single dedicated key is the most-used control in every tool in this lineage — StudyLoop should bind 'replay this concept's span' to one key. Furigana-above-words is also a precedent for stacking a secondary annotation line above primary overlay text without a popup."
+              },
+              {
+                "name": "One-step subs2srs-style card export from the player",
+                "how_it_works": "From any subtitle, export a sentence card to Anki via AnkiConnect carrying the subtitle text plus the audio slice and/or a video frame for that subtitle's exact time span — the media attachment boundaries come from the subtitle timing, not manual trimming.",
+                "steal_for_studyloop": "Reinforces the asbplayer rule: the annotation's time anchor should define the media capture window automatically. A parked concept on a tick already knows its span; 'send to review' should package frame + clip + transcript slice with zero manual trimming."
+              }
+            ],
+            "notable_states": [
+              "Normal watching vs quiz mode (auto-pause + hidden subs + staged reveal)",
+              "Per-layer exposure states within a stop: audio-only → L2 revealed → L1 revealed",
+              "Library/browse mode (Kodi-style collection scan) vs player mode"
+            ],
+            "traps": [
+              "Effectively abandoware (community forks carry it) — a niche desktop Electron player without a sync/ecosystem story couldn't retain users against browser extensions that met learners where their content already was. StudyLoop's local-first stance must still meet content where it lives (YouTube) rather than demanding a curated library.",
+              "Japanese-only dictionary/furigana pipeline shows the cost of hardcoding one content domain into the overlay engine — keep StudyLoop's annotation layers content-agnostic with pluggable enrichers.",
+              "EPWING dictionary import as a setup prerequisite is another 'configure before first value' gate; the first session must deliver value with zero imports."
+            ]
+          }
+        ]
+      },
+      {
+        "niche": "learning-platforms",
+        "products": [
+          {
+            "name": "YouTube (Most Replayed heatmap, chapters, key moments)",
+            "url": "https://support.google.com/youtube/answer/12825599",
+            "mechanisms": [
+              {
+                "name": "Most Replayed heatmap (hover-revealed, normalized, spline-smoothed)",
+                "how_it_works": "Video is bucketed into exactly 100 equal segments regardless of length; replay counts per segment are normalized 0-1 against the max segment so the tallest peak is always full height. The server sends only 100 normalized floats as JSON; the client draws a smooth SVG path (cardinal spline of cubic Beziers, tension 0.2, with artificial baseline anchors at both ends). Crucially, the graph is INVISIBLE during normal playback — it fades in as a gray silhouette above the red progress bar only on hover/scrub (desktop) or while dragging the seek thumb (mobile), and fades out when the pointer leaves. The single tallest peak gets a 'Most replayed' label with a thumbnail + timestamp, and tapping any peak seeks there. There is a cold-start phase: the graph simply doesn't render until enough sessions exist.",
+                "steal_for_studyloop": "This is the exact template for the attention heatmap: render it as a scrub-time-only silhouette above the seek bar (chrome-on-hover matches the holographic overlay philosophy), normalize per-video against your own max-attention bucket, smooth with a spline so it reads as terrain not a bar chart, and suppress it entirely below a minimum-data threshold so a half-watched video doesn't show a misleading spike. Label the top peak ('most reviewed moment') and make peaks directly clickable seek targets."
+              },
+              {
+                "name": "Chapters as physical gaps in the seek bar",
+                "how_it_works": "Chapters segment the progress bar into visibly separate pill segments divided by small gaps/vertical marks. Hovering any segment shows the chapter title in the thumbnail-preview tooltip; the segment under the pointer subtly thickens; clicking seeks to it. The same chapters also exist as a clickable timestamp list below the video and in a slide-up chapter sheet on mobile. On videos without creator chapters, YouTube auto-generates 'key moments' from ML for the same affordance.",
+                "steal_for_studyloop": "Render StudyLoop's concept ticks against a seek bar that is itself segmented by chapter/section, so a parked concept reads as 'tick within segment' — two levels of time anchoring. Steal the hover choreography: tooltip = frame thumbnail + chapter name + nearest parked concept title, and thicken the hovered segment so the seek bar communicates structure before any click."
+              },
+              {
+                "name": "Scrub-time information layering",
+                "how_it_works": "During normal playback the player chrome is nearly nothing; on hover/scrub YouTube stacks three synchronized layers at once: filmstrip thumbnail preview, chapter title, and heatmap silhouette — all keyed to the same hover x-position and all dismissed together when the pointer leaves. Keyboard: arrow keys 5s, J/L 10s, 0-9 jump to percentage, and chapters are reachable via previous/next chapter gestures.",
+                "steal_for_studyloop": "The seek-bar hover should be StudyLoop's single richest surface: one hover x-position should simultaneously light up the frame preview, the chapter, the heatmap height, and any concept tick within a few pixels. One input, four synchronized readouts, one shared dismissal — this is exactly the 'chrome appears on hover' contract already designed."
+              }
+            ],
+            "notable_states": [
+              "Playing-clean (zero chrome) vs hover-scrub (full information stack) vs paused (chrome persists) — three distinct visual states with automatic transitions",
+              "Heatmap cold-start state: feature silently absent until data threshold met, no empty/placeholder graph",
+              "Mobile drag state: heatmap and chapter title only appear while finger is down on the scrubber"
+            ],
+            "traps": [
+              "Autoplay-next with countdown timer at video end — hijacks the reflective moment after finishing; for study, end-of-video should open review/summary, never a countdown to unrelated content",
+              "The heatmap is used by creators to optimize for replay spikes (clickbait moments); StudyLoop's heatmap must be a private study instrument, never a signal learners perform for",
+              "End-screen overlay cards that cover the final 20 seconds of actual content with promotional tiles — never occlude footage with navigation chrome while instruction is still happening",
+              "Auto-generated 'key moments' are frequently wrong on technical content; if StudyLoop auto-generates chapters, they must be editable/dismissible, not authoritative"
+            ]
+          },
+          {
+            "name": "Coursera (in-video questions + Save Note)",
+            "url": "https://www.coursera.org",
+            "mechanisms": [
+              {
+                "name": "In-video quiz interruption (pause-overlay with Submit/Skip, no timer)",
+                "how_it_works": "At an author-set timestamp the video pauses itself and the question renders as an overlay in the video viewport (question text, input field, Submit and Skip buttons). No countdown timer, ungraded, one question at a time; answering or skipping resumes playback from the pause point. Stanford's analysis of 96k learners (ML course logs) found 74% of viewers who start a video attempt its quiz — higher than the 66% who finish watching — and 76% answer correctly first try; in-video dropout is LOWER in lectures that have quizzes.",
+                "steal_for_studyloop": "This is the acceptable-interruption recipe: pause at a semantic boundary (end of a concept, not mid-sentence), overlay inside the video frame so context stays visible, always provide a visible skip, never add time pressure, never gate playback on correctness. Maps directly onto generate-first pedagogy — the learner attempt IS the Coursera question pattern, with the AI reveal replacing the grade."
+              },
+              {
+                "name": "Quizzes as navigation landmarks (measured seek behavior)",
+                "how_it_works": "The same study measured seek chains: learners seek BACKWARD from a quiz at 55x the baseline back-seek rate (they see the question, then rewind to hunt the answer in the preceding section before submitting), and seek FORWARD to quizzes/the 10s before them at 4x baseline (using quizzes as jump targets). Learners almost never skip over a quiz in either direction (0.42x/0.60x baseline crossing rates). Notably, Coursera's UI gives no affordance for seeking to a quiz — learners approximate it by scrubbing to just before it. Also: 50% of quizzes sit in the last tenth of the video, and many learners quit right after answering, skipping the recap.",
+                "steal_for_studyloop": "Learners treat questions as anchors, so make the anchors first-class: render every question/concept as a tick on the seek bar that is directly clickable (Coursera's missing affordance), and make 'rewind to the start of the concept this question covers' a one-tap action since the 55x back-seek proves that's the dominant behavior. Place generate-first prompts at concept boundaries, not at video end, or learners will bail before the recap."
+              },
+              {
+                "name": "Save Note: one-click timestamped frame capture + transcript highlight-to-note",
+                "how_it_works": "A 'Save Note' button below the player captures the current video frame as a screenshot into a course-level notes binder, with optional typed commentary; separately, selecting text in the synced transcript pops a 'Save Note' button that stores the highlight (and 'Delete Note' appears on re-selection to remove it). Saved notes are private, editable, deletable, and visible in a live sidebar during the lecture plus a centralized notes page per course. Coursera explicitly framed this as low-friction capture: highlight 'without missing the video' — the video keeps playing picture-in-picture while you highlight.",
+                "steal_for_studyloop": "Steal the zero-cost capture verb: one keystroke grabs frame + timestamp + surrounding transcript into a pane, video never stops. Steal the dual capture path (frame-capture vs transcript-highlight) and the dual review surface (in-context sidebar during playback, aggregated binder outside it). StudyLoop's parked concepts are these notes with a home on the seek bar."
+              }
+            ],
+            "notable_states": [
+              "Question-overlay state: video frame frozen and dimmed behind the question, context visible, player controls suppressed until Submit/Skip",
+              "Post-answer state: immediate feedback shown, then playback auto-resumes — no manual 'find where I was'",
+              "Note-review sidebar open vs closed while video continues playing (notes never steal the player)"
+            ],
+            "traps": [
+              "Quiz placement at the tail of videos trains learners to quit after the question and skip recaps — verified in the logs; don't end sessions on an assessment",
+              "No seek-to-quiz affordance despite learners demonstrably wanting it (they scrub-hunt to just before questions); shipping time-anchored interactions without ticks on the bar creates this exact frustration",
+              "Downloaded/offline videos silently lose the in-video questions entirely — degraded modes must degrade visibly, not silently strip the pedagogy",
+              "Making in-video questions graded or unskippable (Coursera deliberately doesn't) converts a retrieval-practice moment into an anxiety gate and invites answer-hunting scrubbing instead of thinking"
+            ]
+          },
+          {
+            "name": "Open edX (video player + in-video quiz XBlock)",
+            "url": "https://github.com/openedx/xblock-in-video-quiz",
+            "mechanisms": [
+              {
+                "name": "Word-level clickable synced transcript",
+                "how_it_works": "The transcript renders in a column beside the video, auto-scrolls in sync with playback with the current segment highlighted, and clicking any WORD seeks the video to the moment that word is spoken. The transcript is toggleable and downloadable; the mapping is just the .srt cue times, but the interaction grain is word/cue-level rather than paragraph-level.",
+                "steal_for_studyloop": "Transcript-as-scrubber is the highest-value navigation surface for lecture study: every transcript line in a StudyLoop pane should be a seek target, and the currently-spoken line should glow so the pane doubles as a position indicator. This also gives concepts a text anchor to park from — select words, park a concept, and the tick lands at the cue time."
+              },
+              {
+                "name": "Timestamp-to-component overlay quiz (and why its architecture failed)",
+                "how_it_works": "The in-video-quiz XBlock is configured with a JSON 'problem timemap' — {'seconds': 'problem_component_id'} — and when playback crosses a mapped timestamp it pauses the video and overlays the referenced problem component on top of the player; a Continue button closes the overlay and resumes from the pause point. Answering is optional. The maintainers' own docs call the design 'both clever and brittle': it works by injecting foreign components into the player DOM and 'is vulnerable to breaking as the LMS experience changes.'",
+                "steal_for_studyloop": "The timemap concept (time → interactive component) is exactly StudyLoop's parked-concept model — steal the data shape. But heed the architecture lesson: in-video interactions must be first-class children of the player (rendered in the overlay pane system), never a separate module that overlays a player it doesn't own. StudyLoop's holographic pane layer IS the fix for this failure mode."
+              }
+            ],
+            "notable_states": [
+              "Transcript-following state (auto-scroll locked to playhead) vs transcript-browsing state (user scrolled away; auto-scroll suspended until they return or click)",
+              "Overlay-quiz state: video paused underneath, single Continue affordance to exit — a modal state with exactly one exit"
+            ],
+            "traps": [
+              "Bolting interactions onto a player via DOM overlay from outside (the XBlock approach) — brittle by the maintainers' own admission; interactions and player must share one state machine",
+              "A modal overlay whose only exit is 'Continue' with no skip-context: if the learner wants to rewind to review before answering (the dominant real behavior per the Coursera data), a hard-modal overlay fights them",
+              "Transcript auto-scroll that rudely yanks the pane back to the playhead while the user is reading elsewhere — the following/browsing state split must be explicit"
+            ]
+          },
+          {
+            "name": "Brilliant",
+            "url": "https://brilliant.org",
+            "mechanisms": [
+              {
+                "name": "Attempt-before-explanation loop (generate-first, industrialized)",
+                "how_it_works": "Every lesson screen is a single concept with an interactive prompt (drag a slider, manipulate a diagram, pick/type an answer) followed by a Check button. Feedback is instant and answer-specific: correct answers get a brief celebratory flourish (Rive animations), wrong answers get targeted encouragement plus an explanation that is itself often interactive — you manipulate the solution rather than read it. There is no video to interrupt because the interaction IS the content; progression is one small screen at a time with an always-visible 'Continue'.",
+                "steal_for_studyloop": "Validates generate-first as the core loop and adds two refinements worth stealing: (1) feedback must branch on the specific wrong answer, not just right/wrong — the AI reveal should respond to what the learner actually attempted; (2) the reveal should be explorable (scrub the relevant footage region, expand the concept) rather than a static text dump. Keep the interaction atom small: one concept, one attempt, one reveal."
+              },
+              {
+                "name": "Wrong-answer dignity (struggle is choreographed, not punished)",
+                "how_it_works": "Wrong answers never block progression: you can retry, reveal the explanation, or continue. The UI reserves its animation budget asymmetrically — big warm moments for success, gentle low-key acknowledgment ('moments of encouragement') for misses, and no red-X shaming, no lives/hearts, no lockouts.",
+                "steal_for_studyloop": "In BJJ/lecture study the learner's wrong attempt is the most valuable data in the session. Copy the asymmetric emotional budget: quiet, curious tone on a miss ('here's what the footage actually shows'), warmth on a hit, and never gate the video. A failed generate-first attempt should auto-offer 'rewatch the 20 seconds this came from' as the primary recovery action."
+              }
+            ],
+            "notable_states": [
+              "Attempting (input enabled, Check disabled until an answer exists) → checking → revealed (explanation expanded, retry available) → continue — a strict four-state screen lifecycle",
+              "Struggling state detected across multiple misses triggers softer scaffolding rather than repetition of the same prompt"
+            ],
+            "traps": [
+              "The XP/streak/leagues layer: streak-guilt notifications and competitive leagues optimize for daily app-opens, not retention of material — StudyLoop's spaced review should surface 'what's due' without loss-aversion mechanics",
+              "Bite-sized screens can atomize understanding: learners complete hundreds of micro-interactions without ever confronting a long-form whole — StudyLoop must keep the full-length video primary and the interactions subordinate",
+              "Celebration inflation: when every trivial correct answer gets confetti, the signal decays; reserve delight for genuinely hard recalls (e.g., a successful spaced-review generation days later)"
+            ]
+          },
+          {
+            "name": "Skillshare (pushpin timestamp notes)",
+            "url": "https://help.skillshare.com/hc/en-us/articles/208716897-How-do-I-use-Notes",
+            "mechanisms": [
+              {
+                "name": "Pushpin notes pinned directly onto the progress bar",
+                "how_it_works": "A pushpin icon sits in the player controls; clicking it at any moment opens an 'Add a Note' box bound to the current timestamp. Saved notes render as small markers ON the progress bar itself; hovering a marker previews that note, clicking it jumps playback to the note's timestamp, and the pushpin icon also opens a list view of all notes for the class. Notes can be marked personal (private) or public (visible to all students as community annotations on the same timeline).",
+                "steal_for_studyloop": "This is the closest shipped ancestor of StudyLoop's 'concepts park onto their timestamp tick.' Steal the full lifecycle: capture-at-playhead, marker-on-bar, hover-preview, click-to-seek, plus a parallel list view of the same objects — the tick and the cabinet entry are two views of one record. The personal/public split also previews a future share-bundle layer: a friend's parked concepts appearing as a second row of ticks."
+              },
+              {
+                "name": "Hover-preview of timeline annotations",
+                "how_it_works": "Hovering over a note marker on the timeline surfaces the note content in place (a tooltip-style preview) without seeking or pausing — read cost is zero, commitment (seeking) is a separate deliberate click.",
+                "steal_for_studyloop": "Enforce the same two-step contract on concept ticks: hover = free glance (concept title + first line in a floating bare-text label, per the holographic aesthetic), click = seek/expand. Never make glancing at an anchor cost the current playback position."
+              }
+            ],
+            "notable_states": [
+              "Note-composition state: video keeps its frame visible while the input box is open, timestamp frozen at capture moment even if entry takes a minute",
+              "Timeline dual-population state: user's own pins vs community pins on the same bar"
+            ],
+            "traps": [
+              "Public-by-default community notes turn the timeline into comment clutter on popular classes — timeline markers must be private-first, with other people's layers strictly opt-in",
+              "Locking note-taking behind the paid tier (free accounts can't take notes) — punishing the single behavior that most predicts learning; capture must never be the paywalled verb in a study tool",
+              "Notes live inside Skillshare with no export path (a whole ecosystem of third-party tools exists just to get notes OUT into Notion/markdown) — StudyLoop's local-first stance should make timestamped notes trivially exportable from day one"
+            ]
+          }
+        ],
+        "niche_summary": "Mainstream platforms converge on one law StudyLoop should treat as settled: time-anchored objects must live ON the seek bar, revealed on hover and hidden during playback — YouTube's 100-bucket normalized, spline-smoothed Most Replayed silhouette plus gap-segmented chapters, and Skillshare's pushpin notes (capture-at-playhead → marker-on-bar → hover-preview → click-to-seek) are the two proven templates for the attention heatmap and concept-parking respectively. On interruption, the Stanford Coursera log study is the ground truth: pause-overlay questions with Submit/Skip, no timer, and no grade get 74% voluntary attempt rates and reduce dropout, while learners seek backward from questions at 55x baseline and forward to them at 4x — meaning questions become the video's de facto navigation landmarks, so StudyLoop should make them clickable ticks (the affordance Coursera measurably lacks) and bundle a one-tap 'rewind to the concept start' with every prompt. Brilliant proves the generate-first loop at scale but its real lessons are answer-specific feedback, explorable (not static) reveals, and an asymmetric emotional budget that never punishes misses; edX contributes word-level click-to-seek transcripts and a cautionary architecture tale — its in-video quiz overlay bolted onto a player it didn't own is 'brittle' by its maintainers' own admission, vindicating StudyLoop's unified pane system. The traps are equally consistent: autoplay countdowns and end-screen occlusion that hijack the post-video reflective moment (MasterClass/Coursera instead resume you to your last incomplete position with zero ceremony — the right choreography), streak/XP guilt mechanics, questions placed at video tails that train learners to skip recaps, public annotation clutter, and paywalled or non-exportable note capture."
+      },
+      {
+        "niche": "hud-editors",
+        "products": [
+          {
+            "name": "World of Warcraft Edit Mode (Dragonflight, patch 10.0+)",
+            "url": "https://www.wowhead.com/news/dragonflight-edit-mode-now-features-magnetic-snapping-and-align-to-grid-329112",
+            "mechanisms": [
+              {
+                "name": "Hard-gated Edit Mode as a separate screen state",
+                "how_it_works": "Edit Mode is entered deliberately from the Escape/Game Options menu, not by hovering or accidental drag. Inside it, every movable frame becomes an outlined, selectable box; combat/gameplay is untouched. Exiting returns you to play with zero editing affordances left on screen. Layouts are named, saved, copied — and the game auto-remembers a different layout per character specialization, so the HUD swaps itself when your role changes.",
+                "steal_for_studyloop": "Give StudyLoop a real Edit Mode toggle for the pane system rather than always-live dragging: in play mode panes are bare text over footage; in edit mode every pane gets an outline and handles. Auto-swap layouts by study mode the way WoW swaps by spec — a 'watching' layout, a 'note-taking' layout, a 'review/quiz' layout, each remembered per video type."
+              },
+              {
+                "name": "Two-tier snapping: grid snap when grid is on, element magnetism when it is off",
+                "how_it_works": "Edit Mode has a Grid checkbox (with adjustable grid spacing) and a 'Snap to Elements' option. With the grid visible, dragged frames prefer snapping to grid lines, and changing grid spacing changes where things snap. With the grid disabled, frames instead magnetically snap inline to each other's edges and centers. So the same drag gesture produces context-appropriate alignment without the user configuring anything per-frame.",
+                "steal_for_studyloop": "Implement exactly this dual behavior for panes over video: an optional faint grid in edit mode, and when grid is off, panes magnetize to each other's edges and to safe-zone lines (edges of the seek bar, cabinet rails). Alignment happens as a property of the drag, never as a separate 'align' command."
+              },
+              {
+                "name": "Layout share strings via clipboard",
+                "how_it_works": "Share → Copy to Clipboard serializes the entire layout to a text string; Import in the layout dropdown opens a paste box, you name it, click Import, and the layout appears as a new saved slot. This made HUD layouts a community-shareable artifact (forum threads exist solely for trading Edit Mode strings).",
+                "steal_for_studyloop": "Serialize the whole console arrangement (pane positions/sizes/opacities, cabinet states, heatmap visibility) to a compact string or JSON blob. Local-first friendly — no server needed — and it lets a BJJ coach or lecturer share their study-console layout with students alongside a share bundle."
+              }
+            ],
+            "notable_states": [
+              "Play mode (frames locked, no chrome) vs Edit Mode (all frames outlined and draggable) is a hard binary switch",
+              "Per-specialization layout auto-switching: the active layout follows the player's current role",
+              "Unsaved-changes prompt on leaving Edit Mode: changes must be saved to a named layout"
+            ],
+            "traps": [
+              "Blizzard shipped Edit Mode with coarse per-frame options only (no per-frame opacity/fade conditions at launch), which is why ElvUI persists — if StudyLoop's edit mode can position panes but not tune their presence (opacity, auto-hide), power users will feel the ceiling immediately.",
+              "Edit Mode covers 'almost all' elements — the frames it excludes are a constant community complaint. Any pane in StudyLoop that cannot be moved/hidden in edit mode will read as broken, so the rule must be universal: if it draws over video, it is editable."
+            ]
+          },
+          {
+            "name": "ElvUI (WoW addon, mover/anchor system)",
+            "url": "https://www.warcrafttavern.com/wow/guides/elvui-addon-guide/",
+            "mechanisms": [
+              {
+                "name": "Toggle Anchors: every element grows a labeled mover overlay",
+                "how_it_works": "Typing /moveui (or clicking Toggle Anchors) overlays a colored, labeled rectangle on every UI element simultaneously — including ones currently hidden — showing exactly what exists and where. Drag any rectangle to move the real element. Shift+right-click temporarily hides one mover so you can see what's behind it; Ctrl+right-click resets a single element to default.",
+                "steal_for_studyloop": "In edit mode, render every pane — including auto-hidden ones (hover chrome, parked concept popovers, cabinet contents) — as labeled ghost rectangles at their true positions. Hidden-until-triggered UI is exactly what users can't otherwise position; ElvUI proves you should materialize it for editing."
+              },
+              {
+                "name": "Nudge box with exact coordinates",
+                "how_it_works": "Left-clicking a mover opens a small floating nudge box: arrow buttons for 1px moves, editable X/Y coordinate fields, and a Reset button. Mousewheel over the mover nudges vertically, Shift+mousewheel horizontally. Drag for coarse placement, nudge for the last few pixels — no zooming or squinting required.",
+                "steal_for_studyloop": "When a pane is selected in edit mode, show a tiny nudge widget: arrow keys / 1px buttons plus numeric position, and per-pane Reset. This is the cheapest possible cure for 'drag overshoot' fiddliness, and it also gives keyboard-only accessibility for pane placement."
+              },
+              {
+                "name": "Right-click mover → jump straight to that element's settings",
+                "how_it_works": "Right-clicking any mover opens the options window pre-navigated to that exact element's config section (size, opacity, fonts, visibility conditions). Spatial selection is the entry point to deep configuration — you never hunt a settings tree for the thing you're pointing at.",
+                "steal_for_studyloop": "Right-click (or a gear on hover) on any pane in edit mode opens that pane's settings directly — opacity, font scale, auto-hide behavior, which tick/timestamp it parks to. Never make the user find the pane by name in a global settings panel."
+              }
+            ],
+            "notable_states": [
+              "Movers shown vs hidden is orthogonal to the options window being open — you can drag with options closed",
+              "Per-element temporary hide (Shift+right-click) creates a 'peek under' sub-state within edit mode",
+              "Profiles are exportable as text strings and per-character, layered over the mover positions"
+            ],
+            "traps": [
+              "ElvUI's full options tree is notoriously overwhelming (hundreds of toggles across dozens of tabs); its usability survives only because movers give spatial entry. Do not build a StudyLoop settings tree that requires naming panes — but also don't ship ElvUI-scale option density at all.",
+              "Movers-always-labeled works because WoW pauses nothing; but ElvUI has no live preview of conditional states (combat fade etc.) inside move mode — users must leave, trigger combat, and return. StudyLoop should simulate states (hover chrome visible, heatmap on) inside edit mode instead."
+            ]
+          },
+          {
+            "name": "Final Fantasy XIV HUD Layout editor",
+            "url": "https://na.finalfantasyxiv.com/uiguide/know/know-hud/hud-layout.html",
+            "mechanisms": [
+              {
+                "name": "Stepped element scaling via a single cycling shortcut",
+                "how_it_works": "With an element selected (gold outline), Ctrl+Home (R3 on controller) cycles the element through a small set of discrete preset sizes (e.g. 60/80/90/100/120/140%) rather than free resize handles. Community layouts routinely use graduated scales (hotbar 1 at 90%, bar 2 at 80%, bar 3 at 60%) to encode importance. Arrow keys move a selected panel one pixel at a time to avoid drag overshoot.",
+                "steal_for_studyloop": "Offer stepped size presets per pane (S/M/L cycling on a single key) instead of — or in addition to — free-form corner dragging. Discrete steps keep every layout looking intentional and make 'importance hierarchy via scale' trivially achievable; free resize is what produces ragged, slightly-off layouts."
+              },
+              {
+                "name": "Per-element settings sheet: opacity, visibility, layering from right-click",
+                "how_it_works": "Right-clicking any HUD element (or the cog) opens UI Element Settings: a transparency slider, a 'Display Element' checkbox, and layer order. Hidden elements do not disappear from the editor — they turn purple and stay draggable, so you always know what's off and can re-enable it in place. Shift-drag snaps elements to grid lines.",
+                "steal_for_studyloop": "Per-pane opacity slider is table stakes for text-over-footage — FFXIV proves users tune each element's transparency individually. Steal the purple-ghost pattern: a disabled pane stays visible in edit mode as a tinted ghost rather than vanishing into a hidden list."
+              },
+              {
+                "name": "Four numbered layout slots with copy-between-slots",
+                "how_it_works": "The editor header has 4 numbered tabs, each a complete independent HUD layout, switchable in-game via a text command (and therefore bindable/macroable). The HUD Layout Settings cog lets you copy any slot onto another as a starting point. Players keep e.g. a combat layout, a crafting layout, a screenshot-clean layout.",
+                "steal_for_studyloop": "A small fixed number of named layout slots (Watch / Drill / Review) beats an unbounded list. Make slot-switch a first-class hotkey during playback, and make 'duplicate this slot then diverge' the primary creation flow — nobody builds a second layout from scratch."
+              }
+            ],
+            "notable_states": [
+              "HUD Layout mode is a full modal screen state; the game world keeps rendering behind it as live preview",
+              "Selected element: gold outline; hidden element: purple tint but still present and movable",
+              "Element category pulldowns (Basic / System / Hotbars / Duty) let you select tiny or overlapping elements you cannot easily click"
+            ],
+            "traps": [
+              "No free-form pixel snapping guidance beyond hold-Shift grid snap — players resort to arrow-key pixel nudging for alignment, and 'more precise HUD' is a perennial official-forum request. Ship magnetism from day one; don't make pixel-nudging the primary precision tool.",
+              "Discrete size steps with no in-between caused its own complaint class (elements that are right at 80% but wrong at 100%). If StudyLoop uses stepped sizes, allow a fine-adjust escape hatch.",
+              "Layout slots are numbered, not named, so players keep external notes about which slot is which. Name the slots."
+            ]
+          },
+          {
+            "name": "RaceLab (sim-racing overlays; SimHub as comparison point)",
+            "url": "https://garage.racelab.app/docs/faq/layout-vs-overlay/",
+            "mechanisms": [
+              {
+                "name": "Lock toggle = the entire edit/play boundary",
+                "how_it_works": "Each overlay window has exactly two states flipped by a lock icon or Ctrl+Shift+L: unlocked (opaque-ish, draggable, resizable, catches the mouse) and locked (transparent chrome, completely click-through — mouse events pass to the game underneath). Position is remembered automatically the moment you drag; there is no explicit save step for placement.",
+                "steal_for_studyloop": "The click-through property is the key idea: in play mode, StudyLoop panes should be visually present but interaction-transparent by default (clicks reach the video/seek bar underneath), with hover re-arming their chrome. One global lock shortcut that flips all panes between editable and click-through is the effortless version of edit mode."
+              },
+              {
+                "name": "Layout as a single spanning canvas containing many overlays",
+                "how_it_works": "A RaceLab layout is one big window spanning all monitors into which you place, resize, and stack any number of overlays; it is saved as a profile, multiple exist, one active at a time. This contrasts with loose per-overlay windows, which each remember position independently — the layout bundles the whole arrangement into one switchable object.",
+                "steal_for_studyloop": "Treat the whole console arrangement as one persisted object (a layout), not per-pane saved positions. Per-pane persistence (SimHub-style) makes 'switch my whole setup' impossible; a layout object makes it one action and makes sharing/exporting trivial."
+              },
+              {
+                "name": "Auto-switching layouts by context selectors",
+                "how_it_works": "Layouts carry selectors (which car, which racing series, etc.); when the sim reports a matching context, RaceLab activates the right layout automatically — the driver never opens a menu mid-session.",
+                "steal_for_studyloop": "Bind layouts to content context: video source/type (lecture vs BJJ instructional), or player state (paused vs playing, quiz active). E.g. pausing could auto-activate the note-dense layout; entering spaced-review auto-activates the minimal quiz layout. Choreograph the switch, don't menu it."
+              }
+            ],
+            "notable_states": [
+              "Per-overlay locked (click-through, transparent) vs unlocked (draggable) — independently toggleable but usually flipped globally",
+              "Layout active vs inactive; only one layout live at a time, switched manually or by selector match",
+              "Overlays can auto-open on app start, so the 'session begins configured' state is the norm"
+            ],
+            "traps": [
+              "SimHub's equivalent has no per-game overlay profiles — overlays are globally on or off — and it is a top user complaint (GitHub issue #2144). Context-blind layouts force manual reconfiguration every session; StudyLoop must scope layouts to context from the start.",
+              "Racing overlays are unbounded in count and users pile them on until the track is invisible; RaceLab docs push restraint via setup tips instead of enforcing it. StudyLoop should cap simultaneous panes or degrade opacity as density rises — the video is the point.",
+              "Fully invisible-when-locked chrome means users forget an overlay exists and can't find how to unlock it (support docs exist for 'layout on wrong screen'). Always keep one discoverable affordance (a cabinet handle, a keyboard shortcut hint) for re-entering edit mode."
+            ]
+          },
+          {
+            "name": "Apple Vision Pro / visionOS window management (video apps)",
+            "url": "https://support.apple.com/guide/apple-vision-pro/move-resize-and-close-app-windows-dev009366408/visionos",
+            "mechanisms": [
+              {
+                "name": "Chrome appears only where you look: window bar and corner-radius resize",
+                "how_it_works": "A window shows no persistent manipulation chrome. Look at the bottom of a window and a horizontal 'window bar' materializes — pinch-drag it to move in 3D. Look at a bottom corner and a curved corner handle appears — pinch-drag it to resize. Look away and both fade. Controls are summoned by attention, scoped to the exact edge that owns the operation, and self-dismissing.",
+                "steal_for_studyloop": "This is the strongest precedent for StudyLoop's 'chrome appears on hover' principle: give each pane a single move affordance (a slim bottom bar) and a single resize affordance (one curved corner), both faded in by pointer proximity and gone otherwise. One handle per operation, always in the same place, beats eight resize handles and a title bar."
+              },
+              {
+                "name": "Lock to space / anchor to surface, persistent across sessions",
+                "how_it_works": "A window can be locked to a spot in the room or anchored to a vertical surface like a wall; it stays there as you move around and is still there when you leave and re-enter the room — placement is durable environmental state, not per-launch state.",
+                "steal_for_studyloop": "The analog of 'anchor to a wall' is StudyLoop's concept-parks-to-timestamp-tick: a pane anchored to a moment in the timeline rather than to screen space. Make anchoring a first-class alternative to floating — a note can be screen-anchored (follows you) or time-anchored (lives at its tick, surfaces when playback approaches). And persist all placement implicitly; visionOS has no 'save layout' button for this."
+              },
+              {
+                "name": "Global size preference instead of per-window fiddling",
+                "how_it_works": "Settings → Display → Appearance offers Small/Medium/Large/Extra Large, scaling default window and control sizes system-wide, so most users never resize individual windows at all.",
+                "steal_for_studyloop": "Ship a single global density/scale control (affecting default pane size, font size, tick hit-targets) so most learners never touch per-pane sizing. Per-element controls are the escape hatch, not the primary path."
+              }
+            ],
+            "notable_states": [
+              "Attention states: window idle (no chrome) → gazed (bar/corner visible) → grabbed (moving/resizing) — a three-stage escalation with no explicit mode switch",
+              "Immersive video (Environments/docked player) vs floating-window video are distinct modes with different control grammars",
+              "Spatial persistence: layouts survive leaving/re-entering the physical room"
+            ],
+            "traps": [
+              "visionOS has no save/restore of multi-window arrangements and no snapping or alignment between windows — a top developer-forum feedback item ('Improve windows management on Vision Pro'). Attention-summoned chrome is worth copying; the absence of layout persistence and magnetism is not.",
+              "Gaze-summoned controls fail when the affordance is where you aren't looking — users report hunting for the resize corner. In a 2D app, tie appearance to generous proximity zones, not exact hover on a 4px handle.",
+              "No numeric/precise placement exists at all; everything is freehand. Fine for ambient windows, fatal for a study console where a pane must clear the seek bar — keep the nudge/snap layer from the game-HUD lineage."
+            ]
+          }
+        ],
+        "niche_summary": "Mature HUD editors converge on one architecture StudyLoop should adopt wholesale: a hard edit/play boundary where play mode is click-through and chrome-free (RaceLab's lock, WoW's Edit Mode) and edit mode materializes EVERYTHING — including normally-hidden elements — as labeled, draggable ghosts (ElvUI movers, FFXIV's purple hidden-element tint). Effortlessness comes from layered precision that costs nothing up front: magnetic edge-snapping between elements by default, optional grid with adjustable spacing, then a nudge box with 1px arrows and numeric coordinates for the last mile (drag-only editors like FFXIV's are the ones users call fiddly). Layouts are single serializable objects — named slots, duplicated-then-diverged rather than built from scratch, exported as clipboard strings, and auto-switched by context (WoW's per-spec layouts, RaceLab's selectors) so the right arrangement appears without a menu. The spatial-computing branch adds the presentation grammar the game editors lack: attention-summoned single-purpose handles (visionOS window bar and corner) and anchoring panes to a place in the content rather than the screen — but visionOS also proves that gaze-summoned chrome without snapping, persistence, or numeric placement collapses into frustration, so the two lineages must be combined, not chosen between."
+      }
+    ],
+    "gaps": {
+      "products": [
+        {
+          "name": "Scrimba (interactive 'scrim' screencasts)",
+          "url": "https://scrimba.com",
+          "mechanisms": [
+            {
+              "name": "Pause-to-fork: the frozen frame is a live workspace",
+              "how_it_works": "A scrim is not pixels — it is a recorded event stream of editor state. Pressing spacebar pauses playback and the 'video frame' instantly becomes a fully editable, runnable code environment at exactly that point in the lesson. The learner edits, runs, breaks things, then presses play; the scrim discards (or optionally saves as a personal snapshot) their divergence and resumes the instructor's timeline from the pause point. There is zero mode-switch ceremony — pause IS edit mode.",
+              "steal_for_studyloop": "This is the strongest generate-first pattern in existence. On pause, StudyLoop's overlay panes should become 'hot': the attempt pane opens pre-seeded with the current timestamp's context, the learner writes their answer/drill-plan against the frozen frame, and pressing play folds their attempt into a parked tick on the seek bar and resumes footage. Pause = attempt state, play = instructor state, with the divergence saved as an artifact."
+            },
+            {
+              "name": "Timeline as event log, not media",
+              "how_it_works": "Because the recording is events, seeking is state reconstruction: scrubbing to any point rebuilds the exact editor state there. Learner edits are diffs against a timeline position, so 'my version at 12:40' is a first-class addressable object.",
+              "steal_for_studyloop": "Model learner artifacts (notes, attempts, drawings) as diffs anchored to timeline positions, so scrubbing to a tick reconstructs 'what I knew/tried at this moment' — the pane contents rehydrate per-timestamp rather than being one global notepad."
+            }
+          ],
+          "notable_states": [
+            "Playing (instructor timeline authoritative)",
+            "Paused-editing (learner authoritative, timeline frozen)",
+            "Resumed-after-edit (learner divergence discarded or snapshotted, instructor state restored)"
+          ],
+          "traps": [
+            "Only works because content is authored in-format; StudyLoop ingests arbitrary video, so do not promise 'edit the frame' — steal the pause-is-attempt-mode grammar, not the event-stream substrate.",
+            "Scrimba's blank-slate pause can strand beginners with no scaffold; StudyLoop's pause-attempt pane must always offer a prompt, never an empty void."
+          ]
+        },
+        {
+          "name": "Bilibili / Niconico danmaku (bullet comments)",
+          "url": "https://www.bilibili.com",
+          "mechanisms": [
+            {
+              "name": "Time-anchored comments rendered ON the footage, density as signal",
+              "how_it_works": "Every comment is bound to a video timestamp and flies right-to-left across the frame at that moment (or pins top/bottom). Density is the emotional/attention heatmap made visible: climactic moments produce a wall of text. Viewers get granular controls: an on/off master toggle on the player chrome, opacity slider, display-area limiter (e.g. restrict to top 25% of frame), speed, font size, and keyword/user filters. Hovering a flying comment pauses that comment (not the video) and reveals like/report/copy actions.",
+              "steal_for_studyloop": "Two steals: (1) render the learner's own past notes as ephemeral fly-bys or fade-ins at their anchored timestamp during rewatch — memory resurfacing choreographed by the timeline, honoring spaced review without opening a pane; (2) the display-area limiter and opacity slider are the right control vocabulary for StudyLoop's holographic overlays — a single 'overlay pressure' slider governing how much of the frame annotations may claim."
+            },
+            {
+              "name": "Comment-density curve as a second heatmap channel",
+              "how_it_works": "Danmaku density over time is effectively a crowd-attention histogram; Bilibili surfaces spikes ('high-energy moments') and some clients chart density under the seek bar.",
+              "steal_for_studyloop": "Overlay note-density (where the learner annotated most) as a second channel on the attention heatmap — 'where I engaged' vs 'where I replayed' are different curves and their divergence flags passively-rewatched-but-never-processed sections."
+            }
+          ],
+          "notable_states": [
+            "Danmaku on / off / area-limited (top-N% of frame reserved clear)",
+            "Individual comment hovered (comment frozen, video still playing)"
+          ],
+          "traps": [
+            "Unbounded density destroys the footage — danmaku regularly occludes the entire frame. StudyLoop must cap simultaneous on-frame text and never let resurfaced notes cover the region of instructional interest.",
+            "Constant motion of flying text steals attention from the video itself; for study (vs entertainment), prefer fade-in-place at the anchor over horizontal flight."
+          ]
+        },
+        {
+          "name": "Descript (transcript-first video editing)",
+          "url": "https://www.descript.com",
+          "mechanisms": [
+            {
+              "name": "Transcript IS the transport: word-level bidirectional cursor",
+              "how_it_works": "The transcript is the primary editing surface. Clicking any word seeks the video to that word; playing the video moves a highlight cursor through the text word-by-word. Selecting a text range selects the corresponding media range; deleting words deletes video. Every operation the timeline supports is expressible as a text operation.",
+              "steal_for_studyloop": "StudyLoop's transcript pane should be a full transport peer, not a read-along: click-word-to-seek, select-sentence-to-set-loop-range, and highlight-text-to-create-a-parked-concept (the tick lands at the first word's timestamp with the selection as its excerpt). Range selection in text is far more precise than drag handles on a seek bar for lecture content."
+            },
+            {
+              "name": "Composition markers / slash-commands inside the text stream",
+              "how_it_works": "Typing markers directly into the transcript (e.g. slash-commands) drops named markers that appear simultaneously in the timeline; the text document and timeline are two projections of one model.",
+              "steal_for_studyloop": "Let learners type an inline token in the notes pane (e.g. '@@drill') that instantly parks a typed tick on the seek bar at current time — annotation as a typing side-effect, no mouse trip, matching Frame.io's I/O-while-typing pattern but text-native."
+            }
+          ],
+          "notable_states": [
+            "Text-cursor-driven playback (video follows the caret)",
+            "Playback-driven text highlight (caret follows the video)"
+          ],
+          "traps": [
+            "Descript makes text so primary the footage becomes a preview thumbnail; StudyLoop's contract is edge-to-edge video, so the transcript must live in a cabinet/pane, never become the page.",
+            "Word-level sync depends on ASR quality; on noisy BJJ-gym audio the word cursor will jitter — degrade gracefully to sentence-level anchors rather than showing wrong-word highlighting."
+          ]
+        },
+        {
+          "name": "Amazon Prime Video X-Ray",
+          "url": "https://www.aboutamazon.com/news/entertainment/what-is-x-ray-on-prime-video",
+          "mechanisms": [
+            {
+              "name": "Pause as an information event",
+              "how_it_works": "Pausing (or summoning controls) slides in a contextual panel keyed to the current scene: who is on screen right now, what music is playing, trivia. It is scene-scoped, not video-scoped — the payload changes as the timestamp changes. Tapping an entry expands a side sheet (actor filmography, full soundtrack) without leaving the player; pressing play collapses everything and returns the clean frame. Zero manual lookup: the system pre-indexed the timeline against a knowledge base.",
+              "steal_for_studyloop": "Make pause a semantic event in StudyLoop: on pause, the overlay surfaces the concepts whose time-ranges cover the playhead — their names, the learner's prior notes on them, related ticks elsewhere in the video, and due review items. Play instantly retracts it. This gives the 'holographic' pane system a default, automatic content source with no user effort, and turns idle pauses into free review impressions."
+            }
+          ],
+          "notable_states": [
+            "Playing (clean frame, X-Ray hidden)",
+            "Paused (scene-scoped info panel, deep-dive side sheet available)"
+          ],
+          "traps": [
+            "X-Ray fires on every pause with no suppression, which trains users to disable it; StudyLoop's pause-context must be dismissible-per-session and must not animate in when the user paused merely to look at the frame (delay ~500ms before appearing).",
+            "It is read-only trivia — a dead end with no capture affordance. StudyLoop's version must let every surfaced item be acted on (open note, start review, jump to tick)."
+          ]
+        },
+        {
+          "name": "mpv (power-user transport grammar)",
+          "url": "https://mpv.io/manual/master/",
+          "mechanisms": [
+            {
+              "name": "Single-key cycling A-B loop",
+              "how_it_works": "One key ('l') cycles a tri-state: first press sets loop point A at the playhead, second press sets B and looping begins immediately, third press clears. No dialog, no drag handles, no mode — the loop is defined while watching, in rhythm with the footage. Loop points render as marks on the OSC seek bar.",
+              "steal_for_studyloop": "This is the correct drill-loop primitive for BJJ instructionals: one key taps A at the start of a movement, taps B at the end, and the segment loops for physical rehearsal; third tap releases. Persist the last N loops as faint bracket marks on the seek bar so a drilled segment can be re-summoned — a loop is a proto-concept and should be promotable to a parked tick."
+            },
+            {
+              "name": "Frame-step with held-key auto-repeat and precise back-step",
+              "how_it_works": "'.' and ',' step exactly one frame forward/back and pause; holding the key auto-repeats into a slow crawl, releasing stops. Combined with '[' ']' speed multipliers and backspace to reset speed, the transport is fully keyboard-resident.",
+              "steal_for_studyloop": "Adopt hold-to-crawl frame stepping for mechanics study (grip details, guard transitions). Speed changes must be single keystrokes with a one-key reset — never a settings menu."
+            },
+            {
+              "name": "Scriptable OSD layers and sub-seek",
+              "how_it_works": "Lua/JS scripts draw arbitrary OSD overlays (ASS-rendered text/shapes) above footage, keyed to properties like time-pos; 'sub-seek' jumps playback to the previous/next subtitle line, treating the annotation track as the navigation unit.",
+              "steal_for_studyloop": "Sub-seek generalizes to tick-seek: one key to jump playhead to previous/next parked concept, making the learner's own annotation layer the primary navigation lattice."
+            }
+          ],
+          "traps": [
+            "mpv's grammar is invisible — zero discoverability, learned only from the manual. StudyLoop must show a transient keycap hint the first times a mechanism is reachable, then go silent.",
+            "Everything is session-scoped (loops and settings evaporate on close); StudyLoop must persist loop marks and speed preferences per-video."
+          ]
+        },
+        {
+          "name": "Chessable video-sync (video + interactive board)",
+          "url": "https://support.chessable.com/en/articles/9038776-what-is-video-sync",
+          "mechanisms": [
+            {
+              "name": "Bidirectional sync between video and a parallel interactive artifact",
+              "how_it_works": "A chess board sits beside the video and plays moves in lockstep as the author discusses them; simultaneously the variation list filters to whatever line the video is currently covering. In reverse, any variation in the list has a 'Jump to video' affordance that seeks the video to where the author discusses exactly that line. The learner can pause, take over the board, explore their own moves (even with engine on), then resync to the video's line.",
+              "steal_for_studyloop": "The pattern is 'structured knowledge object with two-way timestamp bindings.' StudyLoop's concept cabinet should behave identically: as video plays, the concept list auto-filters/highlights to what is being taught now; every concept card carries a jump-to-video control; and during pause the learner can 'take over' a concept (edit, extend, attempt) before resyncing. For BJJ, the parallel artifact could be the position/technique tree instead of a chess board."
+            }
+          ],
+          "notable_states": [
+            "Synced (board and list follow video)",
+            "Diverged (learner exploring own variation, video paused, resync affordance visible)"
+          ],
+          "traps": [
+            "Sync only exists because authors hand-tag every variation's video range — expensive authoring. StudyLoop must derive concept↔range bindings from its analysis engine, with cheap learner correction, or the feature never populates.",
+            "Chessable splits screen 50/50, shrinking the video permanently; StudyLoop must keep the artifact in a summonable cabinet, not a fixed split."
+          ]
+        },
+        {
+          "name": "Apple Music Sing / modern synced-lyrics players",
+          "url": "https://www.apple.com/newsroom/2022/12/apple-introduces-apple-music-sing/",
+          "mechanisms": [
+            {
+              "name": "Sub-line (syllable/word) progressive highlighting as a time cursor",
+              "how_it_works": "Lyrics render as large text over a blurred artwork background; the current line is full-opacity while past/future lines recede in scale and opacity, and within the current line each syllable fills with highlight exactly on the beat. The lyric sheet auto-scrolls so the active line stays at a fixed focal position; tapping any line seeks audio to it. Duet/background vocal lines render on opposite sides or smaller, encoding structure typographically.",
+              "steal_for_studyloop": "For the bare-floating-text-over-footage mechanism: when a transcript line or instructor cue floats on the frame, animate a subtle progressive fill through it synced to speech — the text itself becomes the fine-grained playhead, and the learner's eye never drops to the seek bar. The recede-past/preview-next typographic stack (previous line ghosted above, next line ghosted below) is the right minimal chrome for a floating transcript."
+            },
+            {
+              "name": "Continuous stem slider (adjustable vocals)",
+              "how_it_works": "A vertical slider appears on tracks supporting vocal isolation; dragging it attenuates the vocal stem in real time from full to near-mute, letting the user take over the part while the rest keeps playing.",
+              "steal_for_studyloop": "The generalization is 'attenuate the expert layer continuously, not on/off': a slider that fades instructor overlay text/answers from fully shown to fully hidden supports graduated generate-first practice — the learner dials down the scaffold as recall improves, mirroring the blur-to-reveal pattern but continuous."
+            }
+          ],
+          "traps": [
+            "Full-screen lyric mode obliterates the visual; StudyLoop floats text over footage, so it must cap simultaneous lines at ~1-2 and keep fill-animation subtle or it competes with the demonstration.",
+            "Syllable timing is hand-authored by Apple's pipeline; with ASR-derived timing, downgrade to word- or phrase-level fill rather than showing wrong syllable sync."
+          ]
+        },
+        {
+          "name": "Twitch Extensions (overlay/component slot system)",
+          "url": "https://dev.twitch.tv/docs/extensions/",
+          "mechanisms": [
+            {
+              "name": "Slot taxonomy with viewer-side kill switches",
+              "how_it_works": "Extensions mount into declared slots: Overlay (a transparent full-player iframe stacked over video, exactly one allowed), Component (docked widgets along the video edge, launchable/hideable per-viewer via small edge icons), and Panel (below the player). Viewers can individually hide components by clicking their launch icon, and player settings can disable extensions wholesale. Overlay extensions are click-through except where they draw interactive regions, and Twitch's design guidelines require them to honor the player chrome's auto-hide: when controls fade, extension UI is expected to fade too.",
+              "steal_for_studyloop": "Formalize StudyLoop's pane system the same way: a single full-frame 'overlay' layer (holographic text, drawings) plus edge-docked 'components' (cabinets) each with an always-reachable per-pane collapse control on the frame edge, and one global kill switch that clears every overlay to bare video. Bind overlay opacity lifecycle to the same timer that hides player chrome so the whole HUD breathes as one organism."
+            }
+          ],
+          "notable_states": [
+            "Chrome-visible (overlay UI shown) vs chrome-hidden (overlay fades with controls)",
+            "Component collapsed to edge icon vs expanded"
+          ],
+          "traps": [
+            "Overlay extensions routinely intercept clicks meant for the player (pause becomes a misclick on an invisible hitbox) — StudyLoop overlays must be click-through by default, interactive only within visible bounds.",
+            "Streamer-installed clutter with no spatial coordination between extensions; StudyLoop's layout engine must own placement so panes never overlap each other or captions."
+          ]
+        },
+        {
+          "name": "TikTok / CapCut timed text-overlay conventions",
+          "url": "https://www.capcut.com",
+          "mechanisms": [
+            {
+              "name": "Per-element lifetime bars in the timeline editor",
+              "how_it_works": "In the CapCut/TikTok editor, every text sticker gets its own strip under the scrub bar; dragging the strip's end handles sets exactly when that text exists on screen. On the canvas, direct manipulation is the whole grammar: drag to move, pinch/corner-handle to scale-rotate as one gesture, tap to edit content, with snap guides to center/thirds. Playback then shows text entering and leaving at its set times.",
+              "steal_for_studyloop": "StudyLoop's floating annotations need a lifetime, not just a birth timestamp: when a learner parks a note on the frame, give its seek-bar tick a subtle draggable extent (default: current shot/sentence) controlling when the floating text is present during rewatch. Corner-handle unified scale-rotate is also the right resize grammar for holographic panes — no separate rotate mode."
+            },
+            {
+              "name": "Karaoke-style auto-captions with active-word emphasis",
+              "how_it_works": "Auto-captions render as bold outlined text with the currently-spoken word scaled up or color-popped, one short phrase at a time, positioned in the safe zone; viewers can tap captions to expand a full transcript sheet.",
+              "steal_for_studyloop": "Tap-the-floating-caption-to-open-full-transcript is a clean promotion path from ambient text layer to the transcript cabinet — the on-frame text is the handle for the deeper pane."
+            }
+          ],
+          "traps": [
+            "TikTok text conventions optimize for attention capture (constant scale-pulsing, emoji, hard colors) — hostile to sustained study; steal the timing/manipulation grammar, never the visual style.",
+            "Safe-zone chaos: platform UI regularly covers creator text; StudyLoop controls its own chrome, so define hard no-annotation reserves (captions region, seek bar strip) and enforce them at drop time."
+          ]
+        },
+        {
+          "name": "YouTube Ambient Mode (frame-sampled environmental glow)",
+          "url": "https://blog.youtube/news-and-events/new-look-and-features-for-youtube/",
+          "mechanisms": [
+            {
+              "name": "Chrome lit by the footage",
+              "how_it_works": "In dark theme, YouTube samples dominant colors from the current frames and diffuses them as a soft, slowly-animating gradient glow into the page background around the player, updating continuously as content changes. It is purely ambient — no interaction, subtle enough to miss consciously.",
+              "steal_for_studyloop": "For a holographic overlay system, derive pane tint/border glow from sampled frame colors so panes read as emitted by the footage rather than pasted over it — the cheapest possible route to the 'hologram' feel. Also usable semantically: warm the glow during flagged high-attention segments as a peripheral, non-textual cue."
+            }
+          ],
+          "traps": [
+            "Continuous canvas sampling costs GPU/battery and can jank scrubbing on low-end machines — sample at low frequency (1-2 Hz) with long cross-fades, and disable during drag-scrub.",
+            "Ambient tinting of interactive elements can crush text contrast; glow must apply to pane borders/backdrops only, never behind body text without a contrast guard."
+          ]
+        }
+      ],
+      "niche_summary": "The surveyed five niches covered annotation, coaching, mining, quizzing, and HUD editing, but missed the products that dissolve the boundary between the video and the study artifact itself. The biggest blind spots: Scrimba proves pause can BE attempt-mode (the frozen frame becomes a workspace, which is StudyLoop's generate-first pedagogy already industrialized); Descript and Chessable prove the transcript/knowledge-object can be a full bidirectional transport peer rather than a sidebar; and danmaku culture proves time-anchored text rendered on the footage — with density controls and area limiters — is a mature, viewer-governed medium, directly informing both the holographic text layer and a second heatmap channel. On the mechanics side, mpv's single-key cycling A-B loop and annotation-unit seeking is the correct drill grammar for physical-skill study, Prime X-Ray shows pause should be a semantic event that surfaces timestamp-scoped context automatically, and Twitch's overlay/component slot taxonomy plus Apple Music Sing's progressive text-fill and continuous scaffold-attenuation slider supply the missing choreography rules for a HUD that breathes with the player chrome instead of fighting the footage."
+    }
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Research"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Gap check"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "survey:review-tools",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "a56bd725425080062",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1785551075834,
+      "queuedAt": 1785551075823,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Professional video review tools have converged on one load-…",
+      "promptPreview": "CONTEXT — what this research feeds:\nStudyLoop is a local-first web app for deep study of long-form video (lectures, BJJ instructionals, tutorials).\nWe are designing a \"video console\": edge-to-edge video with a holographic overlay pane system.\nKey mechanisms already designed: bare floating text over footage (chrome appears on hover), draggable/resizable\npersistent panes, concepts that \"park\" onto t…",
+      "lastProgressAt": 1785551266366,
+      "tokens": 57197,
+      "toolCalls": 15,
+      "durationMs": 190532,
+      "resultPreview": "{\"products\":[{\"name\":\"Frame.io (V4)\",\"url\":\"https://help.frame.io/en/articles/9105251-commenting-on-your-media\",\"mechanisms\":[{\"name\":\"Comment bubbles parked on the playbar\",\"how_it_works\":\"Every comment renders as a small bubble/marker on the playbar at its exact timecode. Point comments are a plain bubble; range comments render as a bubble with a 'long tail' — a line extending along the bar for …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "survey:sports-coaching",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "a2458a644b1484a6f",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1785551075835,
+      "queuedAt": 1785551075823,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Sports video analysis converged on four ideas StudyLoop sho…",
+      "promptPreview": "CONTEXT — what this research feeds:\nStudyLoop is a local-first web app for deep study of long-form video (lectures, BJJ instructionals, tutorials).\nWe are designing a \"video console\": edge-to-edge video with a holographic overlay pane system.\nKey mechanisms already designed: bare floating text over footage (chrome appears on hover), draggable/resizable\npersistent panes, concepts that \"park\" onto t…",
+      "lastProgressAt": 1785551335482,
+      "tokens": 62407,
+      "toolCalls": 22,
+      "durationMs": 259647,
+      "resultPreview": "{\"products\":[{\"name\":\"Hudl (team platform + Sportscode Studio telestration)\",\"url\":\"https://www.hudl.com/products/hudl\",\"mechanisms\":[{\"name\":\"Range-scoped comments with drag handles\",\"how_it_works\":\"While watching film, the coach clicks Comment on the moment; a comment box opens and the comment gets an in/out range on the timeline that the coach adjusts by dragging two handles before saving. Comm…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "survey:language-learning",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "abaf15c9f5e7ddd7d",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1785551075835,
+      "queuedAt": 1785551075823,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "The language-learning overlay niche has solved the exact pr…",
+      "promptPreview": "CONTEXT — what this research feeds:\nStudyLoop is a local-first web app for deep study of long-form video (lectures, BJJ instructionals, tutorials).\nWe are designing a \"video console\": edge-to-edge video with a holographic overlay pane system.\nKey mechanisms already designed: bare floating text over footage (chrome appears on hover), draggable/resizable\npersistent panes, concepts that \"park\" onto t…",
+      "lastProgressAt": 1785551306867,
+      "tokens": 60378,
+      "toolCalls": 21,
+      "durationMs": 231032,
+      "resultPreview": "{\"niche_summary\":\"The language-learning overlay niche has solved the exact problem StudyLoop's console faces: putting interactive, information-dense UI directly over playing footage without ruining the viewing experience. Their core discovery is that intent is inferable from the cursor and the clock — hover-over-the-overlay means \\\"I'm studying now,\\\" so the video pauses itself and auto-resumes on…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "survey:learning-platforms",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "a1f82880cf395f8cc",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1785551075835,
+      "queuedAt": 1785551075824,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Mainstream platforms converge on one law StudyLoop should t…",
+      "promptPreview": "CONTEXT — what this research feeds:\nStudyLoop is a local-first web app for deep study of long-form video (lectures, BJJ instructionals, tutorials).\nWe are designing a \"video console\": edge-to-edge video with a holographic overlay pane system.\nKey mechanisms already designed: bare floating text over footage (chrome appears on hover), draggable/resizable\npersistent panes, concepts that \"park\" onto t…",
+      "lastProgressAt": 1785551308457,
+      "tokens": 69703,
+      "toolCalls": 17,
+      "durationMs": 232622,
+      "resultPreview": "{\"products\":[{\"name\":\"YouTube (Most Replayed heatmap, chapters, key moments)\",\"url\":\"https://support.google.com/youtube/answer/12825599\",\"mechanisms\":[{\"name\":\"Most Replayed heatmap (hover-revealed, normalized, spline-smoothed)\",\"how_it_works\":\"Video is bucketed into exactly 100 equal segments regardless of length; replay counts per segment are normalized 0-1 against the max segment so the tallest…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "survey:hud-editors",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "a0ecc836dff0797e8",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1785551075836,
+      "queuedAt": 1785551075824,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Mature HUD editors converge on one architecture StudyLoop s…",
+      "promptPreview": "CONTEXT — what this research feeds:\nStudyLoop is a local-first web app for deep study of long-form video (lectures, BJJ instructionals, tutorials).\nWe are designing a \"video console\": edge-to-edge video with a holographic overlay pane system.\nKey mechanisms already designed: bare floating text over footage (chrome appears on hover), draggable/resizable\npersistent panes, concepts that \"park\" onto t…",
+      "lastProgressAt": 1785551292066,
+      "tokens": 56861,
+      "toolCalls": 15,
+      "durationMs": 216230,
+      "resultPreview": "{\"products\":[{\"name\":\"World of Warcraft Edit Mode (Dragonflight, patch 10.0+)\",\"url\":\"https://www.wowhead.com/news/dragonflight-edit-mode-now-features-magnetic-snapping-and-align-to-grid-329112\",\"mechanisms\":[{\"name\":\"Hard-gated Edit Mode as a separate screen state\",\"how_it_works\":\"Edit Mode is entered deliberately from the Escape/Game Options menu, not by hovering or accidental drag. Inside it, e…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "gap-critic",
+      "phaseIndex": 2,
+      "phaseTitle": "Gap check",
+      "agentId": "a28603ce8d5dc0518",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1785551335495,
+      "queuedAt": 1785551335494,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "The surveyed five niches covered annotation, coaching, mini…",
+      "promptPreview": "CONTEXT — what this research feeds:\nStudyLoop is a local-first web app for deep study of long-form video (lectures, BJJ instructionals, tutorials).\nWe are designing a \"video console\": edge-to-edge video with a holographic overlay pane system.\nKey mechanisms already designed: bare floating text over footage (chrome appears on hover), draggable/resizable\npersistent panes, concepts that \"park\" onto t…",
+      "lastProgressAt": 1785551549844,
+      "tokens": 57707,
+      "toolCalls": 9,
+      "durationMs": 214349,
+      "resultPreview": "{\"products\":[{\"name\":\"Scrimba (interactive 'scrim' screencasts)\",\"url\":\"https://scrimba.com\",\"mechanisms\":[{\"name\":\"Pause-to-fork: the frozen frame is a live workspace\",\"how_it_works\":\"A scrim is not pixels — it is a recorded event stream of editor state. Pressing spacebar pauses playback and the 'video frame' instantly becomes a fully editable, runnable code environment at exactly that point in t…"
+    }
+  ],
+  "totalTokens": 364253,
+  "totalToolCalls": 99
+}
