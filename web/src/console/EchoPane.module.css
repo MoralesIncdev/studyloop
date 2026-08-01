@@ -1,0 +1,28 @@
+/* Console slice 8: echo-pane type styles — shell in Pane.module.css. */
+
+.body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #fff;
+  margin: 0 0 7px;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 75%), 0 0 14px rgb(0 0 0 / 45%);
+}
+
+.body b {
+  font-weight: 700;
+}
+
+.jump {
+  padding: 3px 12px;
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.jump:hover {
+  border-color: rgb(255 255 255 / 60%);
+}

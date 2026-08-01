@@ -1,0 +1,22 @@
+/* Console slice 8: drill-pane type styles — shell in Pane.module.css. */
+
+.label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 4px;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 75%), 0 0 14px rgb(0 0 0 / 45%);
+}
+
+.row {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #fff;
+  margin: 0 0 3px;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 75%), 0 0 14px rgb(0 0 0 / 45%);
+}
+
+.row b {
+  font-weight: 700;
+  color: rgb(255 255 255 / 92%);
+}
