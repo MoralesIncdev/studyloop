@@ -394,6 +394,11 @@ export interface StudyLoopStore {
    *  concept coverage (PlayerChrome owns the skip logic; this is just the mode). */
   condensedPlayback: boolean;
   toggleCondensedPlayback: () => void;
+  /** Console slice 8 scaffold (design/mockups/video-console/BUILD-BRIEF.md): the
+   *  pane-engine overlay — off by default. ConsoleLayer renders while this is
+   *  true; the "O" hotkey toggles it (see hotkeys.ts). */
+  consoleMode: boolean;
+  toggleConsoleMode: () => void;
 
   // --- transcript UX --------------------------------------------------------------
   lastUserScrollAt: number;
@@ -899,6 +904,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       loopA: null,
       loopB: null,
       condensedPlayback: false,
+      consoleMode: false,
       controller: null,
       bubbles: [],
       bubblesLoading: false,
@@ -1136,6 +1142,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       loopA: null,
       loopB: null,
       condensedPlayback: false,
+      consoleMode: false,
       bubbles: [],
       bubblesLoading: false,
       notes: "",
@@ -1413,6 +1420,15 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     set({ condensedPlayback: next });
     get().pushToast(
       next ? "Condensed playback — skipping stretches with no concepts" : "Condensed playback off",
+      "info"
+    );
+  },
+  consoleMode: false,
+  toggleConsoleMode: () => {
+    const next = !get().consoleMode;
+    set({ consoleMode: next });
+    get().pushToast(
+      next ? "Console overlay on — drag the pane; O toggles" : "Console overlay off",
       "info"
     );
   },

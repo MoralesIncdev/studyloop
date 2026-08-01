@@ -86,6 +86,10 @@ export function useHotkeys(enabled: boolean): void {
         case "c":
           store.toggleCcEnabled();
           break;
+        case "o":
+          // Console slice 8: toggle the pane-engine overlay scaffold.
+          store.toggleConsoleMode();
+          break;
         default:
           break;
       }

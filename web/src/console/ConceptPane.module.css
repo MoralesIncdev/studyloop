@@ -1,0 +1,66 @@
+/* Console slice 8 scaffold (design/mockups/video-console/BUILD-BRIEF.md): bare
+   mode from the v6 mock — text floats over the footage with no surface of its
+   own; the chrome strip is the only thing that ever gets a background or
+   backdrop-filter (perf: never blur a full-pane surface over video). */
+
+.pane {
+  position: absolute;
+  width: 340px;
+  pointer-events: auto;
+  cursor: default;
+  touch-action: none;
+  user-select: none;
+}
+
+.chrome {
+  display: flex;
+  align-items: center;
+  min-height: 22px;
+  margin: 0 0 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+  cursor: grab;
+  transition: opacity var(--duration-standard) var(--ease-standard),
+    background var(--duration-standard) var(--ease-standard);
+}
+
+.pane:hover .chrome,
+.pane.dragging .chrome {
+  background: rgb(0 0 0 / 65%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pane.dragging .chrome {
+  cursor: grabbing;
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 88%);
+  white-space: nowrap;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 4px;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 75%), 0 0 14px rgb(0 0 0 / 45%);
+}
+
+.body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #fff;
+  margin: 0;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 75%), 0 0 14px rgb(0 0 0 / 45%);
+}

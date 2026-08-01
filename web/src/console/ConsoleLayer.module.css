@@ -1,0 +1,10 @@
+/* Console slice 8 scaffold (design/mockups/video-console/BUILD-BRIEF.md): the
+   layer itself never intercepts pointer events (video/chrome underneath must
+   stay clickable) — only individual panes opt back in. */
+
+.layer {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+}

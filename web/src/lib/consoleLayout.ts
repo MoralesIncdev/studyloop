@@ -1,0 +1,57 @@
+// Console slice 8 scaffold (design/mockups/video-console/BUILD-BRIEF.md): pane
+// positions are fractional (0-1 of the player frame's width/height), not pixel
+// coordinates, so a pane restores to roughly the same spot on the footage
+// regardless of viewport size (v6 mock's `fx` pattern). Persisted per
+// project+pane in localStorage, like ccStorageKey/railSection elsewhere in
+// this app — client-side only, tolerant of a missing/corrupt value rather
+// than throwing (private browsing, a hand-edited key, a future schema
+// change).
+
+/** A pane's position as a fraction of the player frame's width (fx) and height (fy). */
+export interface PaneFraction {
+  fx: number;
+  fy: number;
+}
+
+/** Clamp a fraction into [0, 1]; NaN (e.g. from corrupt JSON) falls back to 0. */
+export function clampFraction(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(1, Math.max(0, n));
+}
+
+const STORAGE_PREFIX = "studyloop:console-layout:";
+
+function storageKey(projectId: string, paneId: string): string {
+  return `${STORAGE_PREFIX}${projectId}:${paneId}`;
+}
+
+function isPaneFraction(value: unknown): value is PaneFraction {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.fx === "number" && typeof v.fy === "number";
+}
+
+/** Returns null on a missing key, corrupt JSON, or an unrecognized shape — callers fall back to a default position. */
+export function loadPaneLayout(projectId: string, paneId: string): PaneFraction | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(storageKey(projectId, paneId));
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isPaneFraction(parsed)) return null;
+    return { fx: clampFraction(parsed.fx), fy: clampFraction(parsed.fy) };
+  } catch {
+    return null;
+  }
+}
+
+export function savePaneLayout(projectId: string, paneId: string, pos: PaneFraction): void {
+  if (typeof window === "undefined") return;
+  try {
+    const clamped: PaneFraction = { fx: clampFraction(pos.fx), fy: clampFraction(pos.fy) };
+    window.localStorage.setItem(storageKey(projectId, paneId), JSON.stringify(clamped));
+  } catch {
+    // Storage can throw (private browsing, quota) — the pane just won't
+    // remember its position across reloads. Not worth a toast.
+  }
+}
