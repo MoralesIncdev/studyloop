@@ -11,6 +11,7 @@ import { LocalVideoPlayer } from "../player/LocalVideoPlayer";
 import { YouTubePlayer } from "../player/YouTubePlayer";
 import { PlayerChrome } from "../player/PlayerChrome";
 import { CCOverlay } from "../player/CCOverlay";
+import { ConsoleLayer } from "../console/ConsoleLayer";
 import { RightRail } from "./RightRail";
 import { NotationModal } from "../notes/NotationModal";
 import { MergeQueuePanel } from "../concepts/MergeQueuePanel";
@@ -169,6 +170,7 @@ export function StudyView({ projectId }: Props): JSX.Element {
               <YouTubePlayer key={currentProject.id} videoId={currentProject.source.videoId} startAt={startAt} />
             )}
             {startAt !== undefined && <CCOverlay chromeVisible={chromeHovering} />}
+            {startAt !== undefined && <ConsoleLayer frameRef={frameRef} />}
             {startAt !== undefined && <PlayerChrome frameRef={frameRef} onVisibleChange={setChromeHovering} />}
           </div>
 

@@ -73,8 +73,22 @@ export function useHotkeys(enabled: boolean): void {
         case "s":
           void store.captureScreenshotOnly();
           break;
+        case "m":
+          // Console slice 4: mine the current moment — frame + transcript
+          // slice into a capture, no dialog, playback never stops.
+          void store.mineMoment();
+          break;
+        case "x":
+          // Console slice 6: condensed playback — skip the stretches with no
+          // concepts (the heatmap/tick layer becomes a playback program).
+          store.toggleCondensedPlayback();
+          break;
         case "c":
           store.toggleCcEnabled();
+          break;
+        case "o":
+          // Console slice 8: toggle the pane-engine overlay scaffold.
+          store.toggleConsoleMode();
           break;
         default:
           break;

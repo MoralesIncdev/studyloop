@@ -9,6 +9,14 @@
 // playback — V3-A review finding #2: a prior formula here only accounted
 // for the paused case and left CC showing alongside an override-expanded
 // transcript during playback).
+//
+// Console slice 2 "hover-pause" (design/mockups/video-console/SURVEY.md,
+// Language Reactor pattern): the cursor entering the caption text soft-pauses
+// playback — "reading" and "watching" become states the player manages —
+// and leaving resumes ONLY if this hover caused the pause. The hitbox is the
+// text span, not the overlay region, so a cursor drifting across the lower
+// third never misfires (SURVEY trap list).
+import { useEffect, useRef } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { activeSegmentIndex, isTranscriptVisuallyOpen } from "../lib/selectors";
 import styles from "./CCOverlay.module.css";
@@ -24,6 +32,19 @@ export function CCOverlay({ chromeVisible }: Props): JSX.Element | null {
   const railOpenSection = useStudyLoopStore((s) => s.railOpenSection);
   const playbackFocus = useStudyLoopStore((s) => s.playbackFocus);
   const focusOverride = useStudyLoopStore((s) => s.focusOverride);
+  const hoverPausedRef = useRef(false);
+
+  // If the overlay unmounts mid-hover (CC toggled off, segment gap), release
+  // the soft-pause rather than leaving the player stuck paused.
+  useEffect(
+    () => () => {
+      if (hoverPausedRef.current) {
+        hoverPausedRef.current = false;
+        useStudyLoopStore.getState().controller?.play();
+      }
+    },
+    []
+  );
 
   if (!ccEnabled) return null;
   if (isTranscriptVisuallyOpen(railOpenSection, playbackFocus, focusOverride)) return null;
@@ -32,9 +53,24 @@ export function CCOverlay({ chromeVisible }: Props): JSX.Element | null {
   const text = segments[idx].text;
   if (!text) return null;
 
+  const handleEnter = (): void => {
+    const store = useStudyLoopStore.getState();
+    if (store.isPlaying && store.controller) {
+      hoverPausedRef.current = true;
+      store.controller.pause();
+    }
+  };
+  const handleLeave = (): void => {
+    if (!hoverPausedRef.current) return;
+    hoverPausedRef.current = false;
+    useStudyLoopStore.getState().controller?.play();
+  };
+
   return (
     <div className={`${styles.wrap} ${chromeVisible ? styles.raised : ""}`}>
-      <span className={styles.text}>{text}</span>
+      <span className={styles.text} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
+        {text}
+      </span>
     </div>
   );
 }

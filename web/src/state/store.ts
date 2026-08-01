@@ -6,6 +6,7 @@ import { api, ApiError } from "../lib/api";
 import { parseHash, routeToHash, type Route } from "../lib/router";
 import { activeConcepts, activeSegmentIndex } from "../lib/selectors";
 import { formatTimestamp } from "../lib/time";
+import { buildMinedText } from "../lib/mining";
 import { pickPrompt, promptPoolFor } from "../lib/notationPrompts";
 import type {
   Analysis,
@@ -389,6 +390,15 @@ export interface StudyLoopStore {
   setLoopA: (t: number | null) => void;
   setLoopB: (t: number | null) => void;
   clearLoop: () => void;
+  /** Console slice 6: condensed playback — the playhead skips stretches with no
+   *  concept coverage (PlayerChrome owns the skip logic; this is just the mode). */
+  condensedPlayback: boolean;
+  toggleCondensedPlayback: () => void;
+  /** Console slice 8 scaffold (design/mockups/video-console/BUILD-BRIEF.md): the
+   *  pane-engine overlay — off by default. ConsoleLayer renders while this is
+   *  true; the "O" hotkey toggles it (see hotkeys.ts). */
+  consoleMode: boolean;
+  toggleConsoleMode: () => void;
 
   // --- transcript UX --------------------------------------------------------------
   lastUserScrollAt: number;
@@ -433,6 +443,8 @@ export interface StudyLoopStore {
 
   // --- F5 screenshot-only ---------------------------------------------------------------
   captureScreenshotOnly: () => Promise<void>;
+  /** Console slice 4: one-key mining — frame + transcript slice around the playhead, zero dialog. */
+  mineMoment: () => Promise<void>;
 
   // --- F10 compile ------------------------------------------------------------------
   compiling: boolean;
@@ -891,6 +903,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       ccEnabled: false,
       loopA: null,
       loopB: null,
+      condensedPlayback: false,
+      consoleMode: false,
       controller: null,
       bubbles: [],
       bubblesLoading: false,
@@ -1127,6 +1141,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       ccEnabled: false,
       loopA: null,
       loopB: null,
+      condensedPlayback: false,
+      consoleMode: false,
       bubbles: [],
       bubblesLoading: false,
       notes: "",
@@ -1398,6 +1414,24 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       return { loopB: t };
     }),
   clearLoop: () => set({ loopA: null, loopB: null }),
+  condensedPlayback: false,
+  toggleCondensedPlayback: () => {
+    const next = !get().condensedPlayback;
+    set({ condensedPlayback: next });
+    get().pushToast(
+      next ? "Condensed playback — skipping stretches with no concepts" : "Condensed playback off",
+      "info"
+    );
+  },
+  consoleMode: false,
+  toggleConsoleMode: () => {
+    const next = !get().consoleMode;
+    set({ consoleMode: next });
+    get().pushToast(
+      next ? "Console overlay on — drag the pane; O toggles" : "Console overlay off",
+      "info"
+    );
+  },
 
   // --- transcript UX --------------------------------------------------------------
   lastUserScrollAt: 0,
@@ -1579,8 +1613,15 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   removeNotationConcept: () =>
     set((state) => (state.notationModal ? { notationModal: { ...state.notationModal, conceptTitle: null } } : {})),
   cancelNotation: () => {
+    const anchorT = get().notationModal?.t ?? null;
     set((state) => ({ notationGeneration: state.notationGeneration + 1, notationModal: null }));
-    get().controller?.play();
+    // Console slice 3 "note-rewind" (SURVEY.md, Frame.io choreography): resume
+    // 3s before the note's anchor so the moment that prompted it replays.
+    const controller = get().controller;
+    if (controller) {
+      if (anchorT != null) controller.seek(Math.max(0, anchorT - 3));
+      controller.play();
+    }
   },
   saveNotation: async (text) => {
     const state = get();
@@ -1602,7 +1643,12 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
         notationGeneration: s.notationGeneration + 1,
         notationModal: null,
       }));
-      get().controller?.play();
+      // Console slice 3 "note-rewind": resume 3s before the anchor (see cancelNotation).
+      const controller = get().controller;
+      if (controller) {
+        controller.seek(Math.max(0, modal.t - 3));
+        controller.play();
+      }
     } catch (err) {
       get().pushToast(`Could not save note: ${errorMessage(err)}`, "error");
       set((s) => ({ notationModal: s.notationModal ? { ...s.notationModal, saving: false } : null }));
@@ -1633,6 +1679,30 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       }
     } catch (err) {
       get().pushToast(`Could not capture: ${errorMessage(err)}`, "error");
+    }
+  },
+
+  // --- Console slice 4: one-key mining (SURVEY.md, asbplayer's dialogless capture) ------
+  mineMoment: async () => {
+    const controller = get().controller;
+    const project = get().currentProject;
+    if (!controller || !project) return;
+    const t = controller.getCurrentTime();
+    const text = buildMinedText(get().transcriptSegments, t, get().duration);
+    // Playback never stops and no dialog opens — the whole point. The frame
+    // grab respects the ffmpeg health gate; without it the capture still
+    // lands, just without an image (degrade visibly, never silently skip).
+    try {
+      let shot: string | null = null;
+      if (get().health?.ffmpeg !== false) {
+        const res = await api.captureShot(project.id, t);
+        shot = res.shot ?? null;
+      }
+      const bubble = await api.createBubble(project.id, { t, text, shot });
+      set((state) => ({ bubbles: sortBubbles([...state.bubbles, bubble]) }));
+      get().pushToast(`Mined ${formatTimestamp(t)} — frame + transcript slice`, "success");
+    } catch (err) {
+      get().pushToast(`Could not mine: ${errorMessage(err)}`, "error");
     }
   },
 
