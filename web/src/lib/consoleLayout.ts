@@ -17,21 +17,28 @@ export interface PaneFraction {
  *  glass surface) — the pane-level toggle in the chrome strip (Pane.tsx). */
 export type PaneMode = "bare" | "glassy";
 
-/** Console slice D: the resize grip's clamp (Pane.module.css/.tsx). */
+/** Console slice D: the resize grip's width clamp (Pane.module.css/.tsx). */
 export const PANE_MIN_WIDTH_PX = 210;
 export const PANE_MAX_WIDTH_PX = 640;
 
+/** The grip's vertical clamp — height is content-driven (auto) until the
+ *  first grip drag, after which it's fixed and the pane scrolls internally. */
+export const PANE_MIN_HEIGHT_PX = 96;
+export const PANE_MAX_HEIGHT_PX = 720;
+
 /**
  * Console slice D: extends the slice-8 fx/fy-only shape with the pane's
- * resized width, bare/glassy mode, and hidden flag (the chrome's × button —
- * mock's hidePane, index.html line 1082), all optional so a pane that never
- * touched its grip, mode toggle, or hide still round-trips cleanly. Backward
- * compatible with everything slice 8 already wrote to localStorage — those
- * entries simply have `width`/`mode`/`hidden` come back `undefined`, and
- * callers fall back to their own defaults exactly like a missing key would.
+ * resized width/height, bare/glassy mode, and hidden flag (the chrome's ×
+ * button — mock's hidePane, index.html line 1082), all optional so a pane
+ * that never touched its grip, mode toggle, or hide still round-trips
+ * cleanly. Backward compatible with everything slice 8 already wrote to
+ * localStorage — those entries simply have `width`/`height`/`mode`/`hidden`
+ * come back `undefined`, and callers fall back to their own defaults exactly
+ * like a missing key would.
  */
 export interface PaneLayout extends PaneFraction {
   width?: number;
+  height?: number;
   mode?: PaneMode;
   hidden?: boolean;
 }
@@ -46,6 +53,12 @@ export function clampFraction(n: number): number {
 export function clampPaneWidth(n: number): number {
   if (!Number.isFinite(n)) return PANE_MIN_WIDTH_PX;
   return Math.min(PANE_MAX_WIDTH_PX, Math.max(PANE_MIN_WIDTH_PX, n));
+}
+
+/** Clamp a pane height into the grip's [96, 720] range; NaN falls back to the minimum. */
+export function clampPaneHeight(n: number): number {
+  if (!Number.isFinite(n)) return PANE_MIN_HEIGHT_PX;
+  return Math.min(PANE_MAX_HEIGHT_PX, Math.max(PANE_MIN_HEIGHT_PX, n));
 }
 
 const STORAGE_PREFIX = "studyloop:console-layout:";
@@ -70,6 +83,7 @@ function readRaw(projectId: string, paneId: string): PaneLayout | null {
     const v = parsed as unknown as Record<string, unknown>;
     const layout: PaneLayout = { fx: clampFraction(v.fx as number), fy: clampFraction(v.fy as number) };
     if (typeof v.width === "number") layout.width = clampPaneWidth(v.width);
+    if (typeof v.height === "number") layout.height = clampPaneHeight(v.height);
     if (v.mode === "bare" || v.mode === "glassy") layout.mode = v.mode;
     if (v.hidden === true) layout.hidden = true;
     return layout;
@@ -110,7 +124,15 @@ export function savePaneLayout(projectId: string, paneId: string, pos: PaneFract
 export function savePaneWidth(projectId: string, paneId: string, currentPos: PaneFraction, width: number): void {
   const existing = readRaw(projectId, paneId);
   const base = existing ?? currentPos;
-  writeRaw(projectId, paneId, { fx: clampFraction(base.fx), fy: clampFraction(base.fy), mode: existing?.mode, hidden: existing?.hidden, width: clampPaneWidth(width) });
+  writeRaw(projectId, paneId, { fx: clampFraction(base.fx), fy: clampFraction(base.fy), mode: existing?.mode, hidden: existing?.hidden, height: existing?.height, width: clampPaneWidth(width) });
+}
+
+/** Persists the grip-resized height — same read-modify-write and currentPos
+ *  requirement as savePaneWidth. */
+export function savePaneHeight(projectId: string, paneId: string, currentPos: PaneFraction, height: number): void {
+  const existing = readRaw(projectId, paneId);
+  const base = existing ?? currentPos;
+  writeRaw(projectId, paneId, { fx: clampFraction(base.fx), fy: clampFraction(base.fy), mode: existing?.mode, hidden: existing?.hidden, width: existing?.width, height: clampPaneHeight(height) });
 }
 
 /** Console slice D: persists the bare/glassy toggle — same currentPos
@@ -118,7 +140,7 @@ export function savePaneWidth(projectId: string, paneId: string, currentPos: Pan
 export function savePaneMode(projectId: string, paneId: string, currentPos: PaneFraction, mode: PaneMode): void {
   const existing = readRaw(projectId, paneId);
   const base = existing ?? currentPos;
-  writeRaw(projectId, paneId, { fx: clampFraction(base.fx), fy: clampFraction(base.fy), width: existing?.width, hidden: existing?.hidden, mode });
+  writeRaw(projectId, paneId, { fx: clampFraction(base.fx), fy: clampFraction(base.fy), width: existing?.width, height: existing?.height, hidden: existing?.hidden, mode });
 }
 
 /** Console slice D: persists the chrome × button's hidden flag (mock's
@@ -128,7 +150,7 @@ export function savePaneMode(projectId: string, paneId: string, currentPos: Pane
 export function savePaneHidden(projectId: string, paneId: string, currentPos: PaneFraction, hidden: boolean): void {
   const existing = readRaw(projectId, paneId);
   const base = existing ?? currentPos;
-  writeRaw(projectId, paneId, { fx: clampFraction(base.fx), fy: clampFraction(base.fy), width: existing?.width, mode: existing?.mode, hidden: hidden ? true : undefined });
+  writeRaw(projectId, paneId, { fx: clampFraction(base.fx), fy: clampFraction(base.fy), width: existing?.width, height: existing?.height, mode: existing?.mode, hidden: hidden ? true : undefined });
 }
 
 /** Edit mode's per-pane reset — forget the stored position so the pane returns

@@ -3,9 +3,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   clampFraction,
+  clampPaneHeight,
   clampPaneWidth,
   clearPaneLayout,
   loadPaneLayout,
+  savePaneHeight,
   savePaneHidden,
   savePaneLayout,
   savePaneMode,
@@ -136,6 +138,36 @@ describe("clampPaneWidth", () => {
 
   it("falls back to the minimum for non-finite input", () => {
     expect(clampPaneWidth(NaN)).toBe(210);
+  });
+});
+
+describe("clampPaneHeight / savePaneHeight (vertical grip)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("clamps to [96, 720] and falls back to the minimum for NaN", () => {
+    expect(clampPaneHeight(300)).toBe(300);
+    expect(clampPaneHeight(10)).toBe(96);
+    expect(clampPaneHeight(9999)).toBe(720);
+    expect(clampPaneHeight(NaN)).toBe(96);
+  });
+
+  it("persists height without disturbing position/width/mode/hidden", () => {
+    vi.stubGlobal("window", fakeWindow());
+    savePaneLayout("p1", "p-note", { fx: 0.2, fy: 0.3 });
+    savePaneWidth("p1", "p-note", { fx: 0.2, fy: 0.3 }, 400);
+    savePaneMode("p1", "p-note", { fx: 0.2, fy: 0.3 }, "glassy");
+    savePaneHidden("p1", "p-note", { fx: 0.2, fy: 0.3 }, true);
+    savePaneHeight("p1", "p-note", { fx: 0.2, fy: 0.3 }, 240);
+    expect(loadPaneLayout("p1", "p-note")).toEqual({ fx: 0.2, fy: 0.3, width: 400, height: 240, mode: "glassy", hidden: true });
+  });
+
+  it("width writes preserve an existing height", () => {
+    vi.stubGlobal("window", fakeWindow());
+    savePaneHeight("p1", "p-note", { fx: 0.2, fy: 0.3 }, 240);
+    savePaneWidth("p1", "p-note", { fx: 0.2, fy: 0.3 }, 400);
+    expect(loadPaneLayout("p1", "p-note")).toEqual({ fx: 0.2, fy: 0.3, width: 400, height: 240 });
   });
 });
 
