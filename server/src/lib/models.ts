@@ -94,6 +94,17 @@ export const LensSchema = z.object({
   masteryNotes: z.string().optional(),
   /** Unit types (lib/analysis.ts's UnitTypeSchema values) this lens flags as safety-critical — see the schema-level doc comment above. */
   safetyTier: z.array(z.string()).optional(),
+  /**
+   * Phase 9 "Lens autogeneration for unknown subjects": set when this lens
+   * was written by lib/lenses.ts's `generateAndPersistLens` (the router's
+   * "none of the loaded lenses fit" path), as opposed to a repo-shipped or
+   * hand-authored user lens. Purely informational (drives the web app's
+   * "auto-created lens — review it" note, see DomainRow.tsx) — it changes no
+   * pipeline behavior. A generated lens can never carry `safetyTier`
+   * (code-level guardrail enforced in lib/lenses.ts, not by this schema
+   * alone — see generateAndPersistLens's doc comment).
+   */
+  origin: z.literal("generated").optional(),
 });
 export type Lens = z.infer<typeof LensSchema>;
 

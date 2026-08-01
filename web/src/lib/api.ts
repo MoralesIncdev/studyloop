@@ -14,6 +14,7 @@ import type {
   GetSlidesResponse,
   HealthResponse,
   HeatmapResponse,
+  LensesResponse,
   LibraryResponse,
   MergeCandidatesResponse,
   MergedConceptsResponse,
@@ -214,6 +215,9 @@ export const api = {
       body: JSON.stringify({ action }),
     }),
   getMergedConcepts: (id: string) => request<MergedConceptsResponse>(`/api/projects/${encodeURIComponent(id)}/merged-concepts`),
+
+  // --- Phase 9: lens registry summary (label + generated-lens note) ---------------
+  getLenses: () => request<LensesResponse>("/api/lenses"),
 
   // --- Phase 2: terminology corrections ---------------------------------------
   getTerms: (id: string) => request<TermsResponse>(`/api/projects/${encodeURIComponent(id)}/terms`),

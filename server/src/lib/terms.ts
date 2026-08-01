@@ -18,7 +18,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { TermsFileSchema, type TermsFile } from "./models.js";
-import { getLens } from "./lenses.js";
+import { getLens, lensGlossaryFilePath } from "./lenses.js";
 import { analysisJsonPath, readJsonIfExists, termCorrectionsJsonPath, termsJsonPath, writeJsonAtomic } from "./store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -203,16 +203,80 @@ export function __resetNursingGlossaryCacheForTests(): void {
   cachedNursingGlossary = null;
 }
 
+let cachedGeneratedGlossaries = new Map<string, TermsFile>();
+
+/**
+ * Phase 9 "Lens autogeneration for unknown subjects": a generated lens's
+ * optional starter glossary is persisted at
+ * `<dataDir>/lenses/glossary/<ref>.json` by lib/lenses.ts's
+ * `generateAndPersistLens` — same on-disk shape as lib/glossary/nursing.json
+ * ([{correct, variants}]). Loaded (and memoized per dataDir+ref pair) the
+ * same way `loadNursingGlossary` loads its own seed file; a missing or
+ * corrupt file degrades to `{}` rather than throwing (this is read on every
+ * `loadEffectiveTerms` call for a project on this lens, so it must never
+ * blow up a transcript read).
+ */
+function loadGeneratedGlossary(dataDir: string, ref: string): TermsFile {
+  const cacheKey = `${dataDir}::${ref}`;
+  const cached = cachedGeneratedGlossaries.get(cacheKey);
+  if (cached) return cached;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(fs.readFileSync(lensGlossaryFilePath(dataDir, ref), "utf8"));
+  } catch {
+    return {};
+  }
+  const parsed = GlossaryFileSchema.safeParse(raw);
+  if (!parsed.success) return {};
+  const out: TermsFile = {};
+  for (const { correct, variants } of parsed.data) {
+    for (const variant of variants) {
+      if (out[variant]) continue;
+      out[variant] = { correct, source: "glossary", createdAt: GLOSSARY_SEED_CREATED_AT };
+    }
+  }
+  cachedGeneratedGlossaries.set(cacheKey, out);
+  return out;
+}
+
+/** Test-only hook to reset the memoized generated-glossary cache between fixture runs — mirrors `__resetNursingGlossaryCacheForTests`. */
+export function __resetGeneratedGlossaryCacheForTests(): void {
+  cachedGeneratedGlossaries = new Map();
+}
+
+/**
+ * Resolves whichever glossary (if any) the active lens's `glossaryRef`
+ * points to. "nursing" is the repo-shipped seed (`loadNursingGlossary`,
+ * above — `isClinicalDomain` stays specifically about this one ref, unchanged
+ * from Phase 5); any OTHER ref is a Phase-9-generated lens's own starter
+ * glossary (`loadGeneratedGlossary`, above). Returns `{}` for a domain with
+ * no lens, a lens with no `glossaryRef`, or a ref that doesn't resolve to any
+ * file — `mergeGlossaryDefaults` below treats that identically to "this
+ * domain has no glossary at all".
+ */
+function resolveGlossaryDefaults(domain: string | undefined | null, dataDir: string): TermsFile {
+  if (!domain) return {};
+  const ref = getLens(dataDir, domain)?.glossaryRef;
+  if (!ref) return {};
+  if (ref === NURSING_GLOSSARY_REF) return loadNursingGlossary();
+  return loadGeneratedGlossary(dataDir, ref);
+}
+
 /**
  * Merges glossary defaults *under* the project's own terms.json — a user
  * entry for a given garbled key always wins over a glossary entry for the
  * same key (SPEC: "user overrides glossary"). Inert (returns `userTerms`
- * unchanged) unless the active lens declares `glossaryRef: "nursing"` — see
- * `isClinicalDomain` above.
+ * unchanged) when the active lens declares no `glossaryRef` at all.
+ *
+ * Phase 9 "Lens autogeneration": generalized beyond `isClinicalDomain`'s
+ * nursing-only check — ANY `glossaryRef` the active lens declares now
+ * activates here (nursing's repo-shipped seed, or a Phase-9-generated lens's
+ * own starter glossary), via `resolveGlossaryDefaults` above.
  */
 export function mergeGlossaryDefaults(userTerms: TermsFile, domain: string | undefined | null, dataDir: string = ""): TermsFile {
-  if (!isClinicalDomain(domain, dataDir)) return userTerms;
-  return { ...loadNursingGlossary(), ...userTerms };
+  const defaults = resolveGlossaryDefaults(domain, dataDir);
+  if (Object.keys(defaults).length === 0) return userTerms;
+  return { ...defaults, ...userTerms };
 }
 
 /** The project's terms.json merged with glossary defaults (if applicable) — this is what the rewrite pass should actually apply. */

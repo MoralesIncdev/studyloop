@@ -35,6 +35,26 @@ export type ConceptProfile = "bjj-curriculum" | "headings";
  */
 export type Domain = "biology" | "history" | "music" | "physical_skill" | "generic" | "clinical" | (string & {});
 
+/**
+ * Phase 9 "Lens autogeneration for unknown subjects": one entry from
+ * GET /api/lenses (server/src/routes/lenses.ts) — a thin summary of the
+ * loaded lens registry (server/src/lib/lenses.ts), not the full lens shape
+ * (prompt text stays server-only). `origin`/`path` are only present for a
+ * lens the router auto-generated on the fly (server/src/lib/lenses.ts's
+ * generateAndPersistLens) — DomainRow.tsx uses them for the
+ * "auto-created lens — review it" note.
+ */
+export interface LensSummary {
+  id: string;
+  label: string;
+  origin?: "generated";
+  path?: string;
+}
+
+export interface LensesResponse {
+  lenses: LensSummary[];
+}
+
 export interface ConceptDocRef {
   path?: string;
   profile?: ConceptProfile;

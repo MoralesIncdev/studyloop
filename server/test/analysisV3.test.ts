@@ -31,7 +31,7 @@ import {
   type ChunkV3Result,
   type MergeV3Result,
 } from "../src/lib/analysis.js";
-import { __resetLensRegistryCacheForTests } from "../src/lib/lenses.js";
+import { FakeLensGenerationClient, __resetLensRegistryCacheForTests, type LensGenerationLLMClient } from "../src/lib/lenses.js";
 import type { StructuredLLMCaller, StructuredLLMRequest, StructuredCallResult } from "../src/lib/providers.js";
 import type { TranscriptSegment } from "../src/lib/transcripts.js";
 
@@ -1054,5 +1054,141 @@ describe("LLMAnalysisClient — Phase 5 prompt assembly from the lens registry",
         }),
       })
     );
+  });
+});
+
+// --- Phase 9 "Lens autogeneration for unknown subjects" ---------------------
+// (design/EXECUTION-PLAN-post-review-v1.md).
+
+describe("FakeAnalysisClient.runRouter — Phase 9 none-fits trigger", () => {
+  it("a recognizable fake-subject marker in the sample text triggers noneFit + the parsed subject label, without a real LLM", async () => {
+    const client = new FakeAnalysisClient();
+    const outcome = await client.runRouter(`some lecture text ${FakeAnalysisClient.FAKE_UNKNOWN_SUBJECT_TRIGGER}astrology`, "claude-opus-5");
+    expect(outcome.kind).toBe("ok");
+    if (outcome.kind === "ok") {
+      expect(outcome.data.noneFit).toBe(true);
+      expect(outcome.data.subject).toBe("astrology");
+    }
+  });
+
+  it("ordinary sample text (no trigger) never sets noneFit", async () => {
+    const client = new FakeAnalysisClient();
+    const outcome = await client.runRouter("posture control passing the guard", "claude-opus-5");
+    expect(outcome.kind).toBe("ok");
+    if (outcome.kind === "ok") expect(outcome.data.noneFit).toBeFalsy();
+  });
+});
+
+describe("runAnalysisJobV3 — Phase 9 lens autogeneration wiring", () => {
+  let dataDir: string;
+
+  beforeEach(async () => {
+    __resetLensRegistryCacheForTests();
+    dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "studyloop-analysis-lens-gen-"));
+  });
+
+  afterEach(async () => {
+    __resetLensRegistryCacheForTests();
+    await fs.rm(dataDir, { recursive: true, force: true });
+  });
+
+  /** A router double that always reports noneFit — reuses FakeAnalysisClient for the chunk/merge calls (same "flaky"-style delegation pattern as the router-skip test above). */
+  function routerNoneFits(subject: string, fallbackDomain: string = "generic"): AnalysisLLMClientV3 {
+    const fake = new FakeAnalysisClient();
+    return {
+      runRouter: async () => ({ kind: "ok", data: { domain: fallbackDomain, noneFit: true, subject } }),
+      runChunkV3: (chunk, domain) => fake.runChunkV3(chunk, domain, "claude-opus-5"),
+      runMergeV3: (pearls) => fake.runMergeV3(pearls, "claude-opus-5"),
+    };
+  }
+
+  it("round-trip with the fake: router none-fits + a generation client produces a new lens and routes THIS run to it, calling generation exactly once", async () => {
+    const segments = [segment(0, 10, "some lecture text")];
+    let calls = 0;
+    const countingClient: LensGenerationLLMClient = {
+      generateLensMeta: async (subject, model) => {
+        calls++;
+        return new FakeLensGenerationClient().generateLensMeta(subject, model);
+      },
+    };
+    const analysis = await runAnalysisJobV3({
+      segments,
+      model: "claude-opus-5",
+      client: routerNoneFits("astrology"),
+      dataDir,
+      lensGenerationClient: countingClient,
+    });
+    expect(analysis.domain).toBe("astrology");
+    expect(calls).toBe(1);
+    const onDisk = JSON.parse(await fs.readFile(path.join(dataDir, "lenses", "astrology.json"), "utf8"));
+    expect(onDisk.origin).toBe("generated");
+  });
+
+  it("no lens-generation client available: falls back to 'generic', NOT the router's own best-guess domain", async () => {
+    const segments = [segment(0, 10, "some lecture text")];
+    const analysis = await runAnalysisJobV3({
+      segments,
+      model: "claude-opus-5",
+      client: routerNoneFits("astrology", "biology"),
+      dataDir,
+      // lensGenerationClient intentionally omitted — must not fall back to "biology".
+    });
+    expect(analysis.domain).toBe("generic");
+  });
+
+  it("generation call fails (LLM refusal): falls back to 'generic' and the analyze run still succeeds (never fails because generation failed)", async () => {
+    const segments = [segment(0, 10, "some lecture text")];
+    const flaky: LensGenerationLLMClient = {
+      generateLensMeta: async () => ({ kind: "skipped", reason: "refusal", detail: "declined" }),
+    };
+    const analysis = await runAnalysisJobV3({
+      segments,
+      model: "claude-opus-5",
+      client: routerNoneFits("astrology"),
+      dataDir,
+      lensGenerationClient: flaky,
+    });
+    expect(analysis.domain).toBe("generic");
+    expect(analysis.version).toBe(3);
+  });
+
+  it("noneFit true but an empty subject label never even calls the generation client", async () => {
+    const segments = [segment(0, 10, "some lecture text")];
+    let calls = 0;
+    const counting: LensGenerationLLMClient = {
+      generateLensMeta: async (subject, model) => {
+        calls++;
+        return new FakeLensGenerationClient().generateLensMeta(subject, model);
+      },
+    };
+    const analysis = await runAnalysisJobV3({
+      segments,
+      model: "claude-opus-5",
+      client: routerNoneFits(""),
+      dataDir,
+      lensGenerationClient: counting,
+    });
+    expect(analysis.domain).toBe("generic");
+    expect(calls).toBe(0);
+  });
+
+  it("noneFit false (an ordinary router result) never touches lens generation at all — at most one attempt per run means zero when none is needed", async () => {
+    const segments = [segment(0, 10, "some lecture text")];
+    let calls = 0;
+    const counting: LensGenerationLLMClient = {
+      generateLensMeta: async (subject, model) => {
+        calls++;
+        return new FakeLensGenerationClient().generateLensMeta(subject, model);
+      },
+    };
+    const analysis = await runAnalysisJobV3({
+      segments,
+      model: "claude-opus-5",
+      client: new FakeAnalysisClient(),
+      dataDir,
+      lensGenerationClient: counting,
+    });
+    expect(calls).toBe(0);
+    expect(["biology", "history", "music", "physical_skill", "generic"]).toContain(analysis.domain);
   });
 });

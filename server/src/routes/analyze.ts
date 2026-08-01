@@ -14,7 +14,7 @@ import { AnalysisJobManager, evaluateAnalyzeGuard } from "../lib/analysisJobs.js
 import { missingCredentialMessage, resolveAnalysisModel, resolveProviderAuth } from "../lib/providers.js";
 import { updateRegistryForProject } from "../lib/conceptRegistry.js";
 import { readConceptRegistry, withConceptRegistryLock, writeConceptRegistry } from "../lib/conceptRegistryStore.js";
-import { getLens } from "../lib/lenses.js";
+import { getLens, resolveLensGenerationClient } from "../lib/lenses.js";
 import { correctTranscriptSegments } from "../lib/terms.js";
 import { readSlides } from "../lib/slides.js";
 import { resolveTranscriptPath } from "../lib/transcriptResolve.js";
@@ -123,6 +123,13 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
           source: fakeMode ? "stub" : "model",
           onProgress: (pct) => analysisJobs.progress(projectId, pct),
           slidePages: slidesFile?.pages,
+          // Phase 9 "Lens autogeneration": same providerAuth already gating
+          // this whole route (evaluateAnalyzeGuard already required either
+          // fakeMode or a real credential to get this far) — resolved
+          // separately from `client` because generation is its own smaller
+          // LLM call (lib/lenses.ts), not part of AnalysisLLMClientV3.
+          dataDir,
+          lensGenerationClient: resolveLensGenerationClient(providerAuth),
         });
         await writeJsonAtomic(analysisPath, analysis);
         // V3-B B1: "domain ... stored on the project (editable chip near the
