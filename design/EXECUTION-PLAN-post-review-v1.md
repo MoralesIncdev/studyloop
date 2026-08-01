@@ -14,13 +14,14 @@
 | # | Phase | Status |
 |---|-------|--------|
 | 1 | Playwright smoke harness | TODO |
-| 2 | Terminology layer v1 | TODO |
+| 2 | Terminology layer v1 | DONE (667 server tests green; double-click a transcript word to correct; glossary inert until Phase 5) |
 | 3 | Integrity fixes (streak / heatmap / claimed-vs-restated) | TODO |
 | 4 | Cluster unit type | TODO |
 | 5 | Clinical domain lens | TODO |
 | 6 | Slide-text channel (PDF slice) | TODO |
 | 7 | Cheap retention wins (front door + export) | TODO |
 | 8 | Document mode (stretch — likely Kimi) | TODO |
+| 9 | Lens autogeneration for unknown subjects | TODO |
 
 ---
 
@@ -93,18 +94,20 @@
 
 ---
 
-## Phase 5 — Clinical domain lens
+## Phase 5 — Lens registry + clinical as first data-driven lens
 
-**Why (all four; DeepSeek's spec adopted):** nursing routes to `biology`/`generic` today; a lens must be schema + questions + safety, not just prompt text.
+**Why (all four; DeepSeek's spec adopted, plus Ryan's directive 2026-08-01):** nursing routes to `biology`/`generic` today, AND the app must facilitate *any* YouTube subject — not just the builder's two. So: dissolve the hardcoded enum/DOMAIN_MODULES into a data-driven lens registry, with clinical as the first (and proving) lens file. AMENDED — supersedes the original hardcoded-clinical spec.
 
 **What:**
-1. models.ts: DomainSchema gains `"clinical"`. UnitTypeSchema gains `DOSAGE`, `CONTRAINDICATION`, `LAB_VALUE`, `PRIORITIZATION`. Overlay fields (optional, clinical-only): `drugClass`, `genericName`, `brandName`, `route`, `normalRange`, `nclexCategory`.
-2. analysis.ts: `DOMAIN_MODULES.clinical` — prompt module emphasizing: extract dosages/contraindications/lab values as their own units with verbatim source quotes; prioritization framing; slide-language awareness. Router description so lecture content classifies as clinical.
-3. **Safety tier**: units of type DOSAGE/CONTRAINDICATION/LAB_VALUE render with their verbatim transcript quote *always visible* (never paraphrase-only), and are excluded from any auto-merge in the concept registry (follow the existing BOUNDARY never-auto-merge rule in conceptRegistry — extend that list).
-4. cardTransform.ts (or wherever self-test/question generation lives): clinical domain gets an NCLEX-style question mode for PRIORITIZATION/synthesis — scenario stem + 4 options + rationale, generated only from attested material. Other clinical types keep recall-style cards but require exact-value answers for DOSAGE/LAB_VALUE (show "verbatim matters" framing).
-5. Phase 2's nursing glossary activates by default for clinical projects.
+1. **Lens registry**: lenses become data files in `server/lenses/*.json` (repo-shipped) merged with a user dir (`<dataDir>/lenses/*.json`, user wins on id collision). LensSchema in models.ts: `{ id, label, routerDescription, unitTypeEmphasis, overlayFields: [{key, label, hint}], questionStyle, glossaryRef?, masteryNotes?, safetyTier?: string[] }`. Loader in a new `server/src/lib/lenses.ts`, loaded at startup, hot-reload not required.
+2. **Migrate the existing five**: DomainSchema becomes a validated string (validated against the loaded registry at the boundaries, not a z.enum — keep a legacy enum check only where old stored projects need to parse). The five current DOMAIN_MODULES prompt texts move verbatim into five lens files. Router prompt is assembled from the registry's routerDescriptions. Stored projects with old enum values must keep working (ids identical).
+3. **Clinical lens file**: routerDescription for lecture/clinical content; unit-type emphasis; overlay fields `drugClass`, `genericName`, `brandName`, `route`, `normalRange`, `nclexCategory`; questionStyle "nclex"; glossaryRef "nursing" (Phase 2's glossary); safetyTier: ["DOSAGE", "CONTRAINDICATION", "LAB_VALUE"].
+4. models.ts: UnitTypeSchema gains `DOSAGE`, `CONTRAINDICATION`, `LAB_VALUE`, `PRIORITIZATION` (spine-level — usable by any lens). Overlay fields on units become a generic `overlay: Record<string,string>` validated loosely (lens declares which keys it emits; prompt tells the model).
+5. **Safety tier (code, not data)**: unit types listed in a lens's `safetyTier` render with their verbatim transcript quote *always visible* (never paraphrase-only) and are excluded from auto-merge in the concept registry (extend the existing BOUNDARY never-auto-merge rule). This is the one lens capability that stays a code path — lenses *reference* it, they can't redefine it.
+6. cardTransform.ts (or wherever self-test/question generation lives): questionStyle dispatch — "nclex" produces scenario stem + 4 options + rationale for PRIORITIZATION/synthesis, generated only from attested material; DOSAGE/LAB_VALUE cards require exact-value answers ("verbatim matters" framing). Default questionStyle keeps current behavior for the migrated five.
+7. Phase 2's nursing glossary activates via the clinical lens's glossaryRef.
 
-**Files:** models.ts, analysis.ts, conceptRegistry lib, cardTransform, minor web rendering for overlay fields + safety-quote display. Tests: schema, never-auto-merge extension, question-mode selection.
+**Files:** models.ts, new lenses.ts + server/lenses/*.json, analysis.ts (DOMAIN_MODULES deleted in favor of registry), conceptRegistry lib, cardTransform, minor web rendering for overlay fields + safety-quote display. Tests: lens loading/merge precedence, legacy project id compat, never-auto-merge extension, question-mode dispatch.
 
 **Verify:** typecheck + tests + e2e.
 
@@ -145,6 +148,23 @@
 **Why (GLM move 2):** dense declarative domains need a transcript-anchored document surface — prenotes the learner *claims* (attests inline), video demoted to side panel. Read-and-claim, not read-and-annotate.
 
 **What (spec only, build when 1–7 landed):** a `document` render of the same units for `clinical` projects: scrollable transcript-ordered list of proposed/attested units (clusters collapsed), inline attest controls reusing existing attestation flow, video as PiP/side panel seeking to anchors on click. Domain-driven default surface: clinical → document, physical_skill → console. Route-level switch, no pane-engine changes.
+
+---
+
+## Phase 9 — Lens autogeneration for unknown subjects
+
+**Why (Ryan's directive 2026-08-01):** the app must handle any subject on YouTube on first contact, not just subjects someone wrote a lens for. `generic` ("leave every overlay field empty") is not a lens.
+
+**What (build after Phase 5's registry exists):**
+1. Router change: instead of forcing a fixed-list classification, the router may answer "none of the loaded lenses fit; subject is X" (X = a short free-text subject label).
+2. On that answer, one LLM call against a **lens meta-schema** generates a new lens file: routerDescription, unitTypeEmphasis over the spine (CLAIM/MECHANISM/PROCEDURE/EXAMPLE/BOUNDARY/CLUSTER + the Phase 5 additions where sensible), overlayFields (≤6, subject-appropriate), questionStyle (choose from the implemented dispatch set — generated lenses cannot invent new code paths, and cannot set safetyTier), optional starter glossary of ~30 subject terms with ASR-mangle variants.
+3. The generated lens is validated against LensSchema, written to `<dataDir>/lenses/<id>.json`, marked `origin: "generated"`, and used for the current analysis run. It is a normal file thereafter: reused by the router for future videos, hand-editable, deletable.
+4. UI: project meta shows which lens was used; a generated lens gets a one-line "auto-created lens for <subject> — review it" note (link to the file path is enough for v1).
+5. Guardrails: generation happens at most once per analyze run; on validation failure fall back to `generic` and log; never overwrite an existing lens file.
+
+**Files:** lenses.ts (generation + meta-schema prompt), analysis.ts router, models.ts (origin field), tiny web touch. Tests: meta-schema validation, fallback path, no-overwrite, router round-trip with a synthetic generated lens.
+
+**Verify:** typecheck + tests + e2e.
 
 ---
 

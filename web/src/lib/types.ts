@@ -368,6 +368,37 @@ export interface Analysis {
   domain?: Domain;
   units?: AnalysisUnit[];
   edges?: AnalysisEdge[];
+  /** Phase 2 "Terminology layer v1": set when a term mapping changed since this analysis ran (PATCH /api/projects/:id/terms) — the web app's cue for a future "re-analyze" banner. `null`/absent means not stale. */
+  staleReason?: "terms-changed" | null;
+}
+
+// --- Phase 2 "Terminology layer v1" (design/EXECUTION-PLAN-post-review-v1.md) ---
+// Mirrors server/src/lib/models.ts's TermEntrySchema/TermsFileSchema/PatchTermsBodySchema.
+
+/** One garbled->correct mapping entry — `source` distinguishes a learner's own correction from a domain-glossary default (merged in server-side for clinical projects, Phase 5). */
+export interface TermEntry {
+  correct: string;
+  source: "user" | "glossary";
+  createdAt: string;
+}
+
+/** GET /api/projects/:id/terms's `terms` field, and PATCH's request/response shape — `{[garbledText]: TermEntry}`. */
+export type TermsFile = Record<string, TermEntry>;
+
+export interface TermsResponse {
+  terms: TermsFile;
+}
+
+/** PATCH /api/projects/:id/terms body — `upsert` adds/edits mappings (always persisted as `source: "user"`), `remove` deletes by garbled key. */
+export interface PatchTermsBody {
+  upsert?: Record<string, string>;
+  remove?: string[];
+}
+
+export interface PatchTermsResponse {
+  terms: TermsFile;
+  /** True when this project already had an analysis that just got flagged stale (see Analysis.staleReason). */
+  analysisMarkedStale: boolean;
 }
 
 export type AnalyzeStatus =

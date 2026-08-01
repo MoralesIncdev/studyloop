@@ -110,6 +110,19 @@
   overflow: hidden;
 }
 
+/* Phase 2 "Terminology layer v1": no visual change at rest (this stays a
+   plain transcript row) — the dotted underline only appears on hover, as a
+   light discovery hint for "double-click to correct this term". */
+.word {
+  border-radius: 2px;
+}
+
+.word:hover {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  background: rgb(255 255 255 / 8%);
+}
+
 .skeletonList {
   display: flex;
   flex-direction: column;

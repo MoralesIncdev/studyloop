@@ -18,6 +18,8 @@ import type {
   MergeResolveAction,
   OverlayMeta,
   PatchProjectBody,
+  PatchTermsBody,
+  PatchTermsResponse,
   PearlReviewAddsResponse,
   Project,
   RevealResponse,
@@ -29,6 +31,7 @@ import type {
   ShareBundle,
   StudyLoopConfig,
   StudyLoopConfigPatch,
+  TermsResponse,
   TranscriptResponse,
   YoutubeResolveResponse,
 } from "./types";
@@ -206,6 +209,14 @@ export const api = {
       body: JSON.stringify({ action }),
     }),
   getMergedConcepts: (id: string) => request<MergedConceptsResponse>(`/api/projects/${encodeURIComponent(id)}/merged-concepts`),
+
+  // --- Phase 2: terminology corrections ---------------------------------------
+  getTerms: (id: string) => request<TermsResponse>(`/api/projects/${encodeURIComponent(id)}/terms`),
+  patchTerms: (id: string, body: PatchTermsBody) =>
+    request<PatchTermsResponse>(`/api/projects/${encodeURIComponent(id)}/terms`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
 
   // --- V3-D D4: domain-routed card transformation — "improve this card" -----------
   improveReviewCard: (cardId: string) =>

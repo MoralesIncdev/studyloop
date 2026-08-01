@@ -153,6 +153,39 @@ export const PatchProjectBodySchema = z.object({
 });
 export type PatchProjectBody = z.infer<typeof PatchProjectBodySchema>;
 
+/**
+ * Phase 2 "Terminology layer v1" (design/EXECUTION-PLAN-post-review-v1.md):
+ * one garbled->correct mapping entry persisted in a project's `terms.json`
+ * (see lib/terms.ts). `source` distinguishes a learner-authored correction
+ * (via PATCH /api/projects/:id/terms) from a domain-glossary default merged
+ * in at read time (lib/glossary/nursing.json, for `domain === "clinical"`
+ * projects — that domain value ships in Phase 5) — a "user" entry for a
+ * given garbled key always wins over a "glossary" entry for the same key
+ * (see lib/terms.ts's mergeGlossaryDefaults).
+ */
+export const TermEntrySchema = z.object({
+  correct: z.string().min(1),
+  source: z.enum(["user", "glossary"]),
+  createdAt: z.string(),
+});
+export type TermEntry = z.infer<typeof TermEntrySchema>;
+
+/** Per-project `terms.json` — `{[garbledText]: TermEntry}` (see lib/terms.ts). */
+export const TermsFileSchema = z.record(TermEntrySchema);
+export type TermsFile = z.infer<typeof TermsFileSchema>;
+
+/**
+ * Body for PATCH /api/projects/:id/terms. `upsert` adds or edits mappings
+ * (keyed by the garbled string, valued by the correct term — always
+ * persisted with `source: "user"`, see routes/terms.ts); `remove` deletes
+ * mappings by garbled key. Both may be sent in the same request.
+ */
+export const PatchTermsBodySchema = z.object({
+  upsert: z.record(z.string().min(1)).optional(),
+  remove: z.array(z.string().min(1)).optional(),
+});
+export type PatchTermsBody = z.infer<typeof PatchTermsBodySchema>;
+
 export const BubbleSchema = z.object({
   id: z.string(),
   t: z.number().nonnegative(),

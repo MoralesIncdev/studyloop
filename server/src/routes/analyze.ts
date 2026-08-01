@@ -14,6 +14,7 @@ import { AnalysisJobManager, evaluateAnalyzeGuard } from "../lib/analysisJobs.js
 import { missingCredentialMessage, resolveAnalysisModel, resolveProviderAuth } from "../lib/providers.js";
 import { updateRegistryForProject } from "../lib/conceptRegistry.js";
 import { readConceptRegistry, withConceptRegistryLock, writeConceptRegistry } from "../lib/conceptRegistryStore.js";
+import { correctTranscriptSegments } from "../lib/terms.js";
 import { resolveTranscriptPath } from "../lib/transcriptResolve.js";
 import { loadTranscriptFromText, type TranscriptSegment } from "../lib/transcripts.js";
 import { ProjectIdParamSchema } from "../lib/models.js";
@@ -29,7 +30,8 @@ async function loadProjectTranscriptSegments(
   dataDir: string,
   roots: ReturnType<typeof resolveRoots>,
   projectId: string,
-  transcript: { type: "file"; path: string } | { type: "none" }
+  transcript: { type: "file"; path: string } | { type: "none" },
+  domain: string | undefined
 ): Promise<TranscriptSegment[]> {
   if (transcript.type !== "file") return [];
   const resolved = await resolveTranscriptPath(dataDir, roots, transcript.path, projectId);
@@ -41,7 +43,12 @@ async function loadProjectTranscriptSegments(
     return [];
   }
   try {
-    return loadTranscriptFromText(resolved.filePath, raw).segments;
+    const segments = loadTranscriptFromText(resolved.filePath, raw).segments;
+    // Phase 2 "Terminology layer v1": corrections must apply before the
+    // transcript ever reaches the chunk/extract pipeline — this is the exact
+    // read site the four reviews called out ("ASR-mangled terms poison
+    // extraction"). The transcript file read above is untouched on disk.
+    return await correctTranscriptSegments(dataDir, projectId, segments, domain);
   } catch {
     return [];
   }
@@ -87,7 +94,7 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const roots = resolveRoots(config);
-    const segments = await loadProjectTranscriptSegments(dataDir, roots, params.data.id, project.transcript);
+    const segments = await loadProjectTranscriptSegments(dataDir, roots, params.data.id, project.transcript, project.domain);
     if (segments.length === 0) {
       return reply.status(400).send({ error: "This project has no transcript to analyze", code: "no_transcript" });
     }

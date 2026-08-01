@@ -183,6 +183,18 @@ export const AnalysisSchema = z.object({
   units: z.array(AnalysisUnitSchema).optional(),
   /** V3-B B1: typed spine edges — present on v3 analyses only. */
   edges: z.array(AnalysisEdgeSchema).optional(),
+  /**
+   * Phase 2 "Terminology layer v1" downstream invalidation: set by
+   * PATCH /api/projects/:id/terms (see routes/terms.ts) whenever a term
+   * mapping changes for a project that already has an analysis — "this
+   * transcript was corrected since the last analyze run" — so the web app
+   * can surface a re-analyze banner. Deliberately the smallest honest
+   * mechanism: nothing here ever *triggers* a re-run; a fresh
+   * POST /api/projects/:id/analyze naturally clears this by writing a whole
+   * new analysis.json (via writeJsonAtomic in routes/analyze.ts) that simply
+   * doesn't carry the field forward. `null`/absent means "not stale".
+   */
+  staleReason: z.enum(["terms-changed"]).nullable().optional(),
 });
 export type Analysis = z.infer<typeof AnalysisSchema>;
 

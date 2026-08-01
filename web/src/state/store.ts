@@ -294,6 +294,14 @@ export interface StudyLoopStore {
   loadProjectSession: (id: string) => Promise<void>;
   clearProjectSession: () => void;
   /**
+   * Phase 2 "Terminology layer v1": TranscriptPane's "correct this term…"
+   * affordance — PATCHes the one mapping, then refetches the transcript so
+   * the corrected reading applies immediately (read-time rewrite; the raw
+   * transcript file itself never changes). A toast reports success/failure,
+   * and notes when the project's existing analysis was just marked stale.
+   */
+  correctTranscriptTerm: (garbled: string, correct: string) => Promise<void>;
+  /**
    * Returns `true` on success, `false` on failure (a toast is already pushed
    * either way) — never throws. Callers that must not proceed past a failed
    * save (e.g. CompileFlow's synthesis checkpoint, which would otherwise
@@ -1310,6 +1318,30 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       continuityCandidates: [],
       continuityLoading: false,
     }));
+  },
+  correctTranscriptTerm: async (garbled, correct) => {
+    const project = get().currentProject;
+    if (!project || project.transcript.type !== "file") return;
+    try {
+      const res = await api.patchTerms(project.id, { upsert: { [garbled]: correct } });
+      // Refetch (not a local rewrite) — the server is the source of truth
+      // for how corrections apply (case/word-boundary/longest-match, plus
+      // any glossary defaults merged in), same as every other "save then
+      // reload" flow in this store.
+      if (project.transcript.type === "file") {
+        const transcript = await api.getTranscript(project.transcript.path, project.id);
+        if (get().currentProject?.id === project.id) {
+          set({ transcriptSegments: transcript.segments });
+        }
+      }
+      get().pushToast(
+        res.analysisMarkedStale
+          ? `Corrected "${garbled}" → "${correct}" — existing analysis is now stale.`
+          : `Corrected "${garbled}" → "${correct}".`
+      );
+    } catch (err) {
+      get().pushToast(`Could not save term correction: ${errorMessage(err)}`, "error");
+    }
   },
   patchCurrentProject: async (patch) => {
     const project = get().currentProject;
