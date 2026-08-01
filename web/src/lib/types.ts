@@ -296,12 +296,20 @@ export interface AnalysisTheme {
 
 // --- V3-B B1: typed spine (units/edges) — see PEDAGOGY.md §2 ---------------
 
-export type UnitType = "CLAIM" | "MECHANISM" | "PROCEDURE" | "EXAMPLE" | "BOUNDARY";
+/** Phase 4 "Cluster unit type" (design/EXECUTION-PLAN-post-review-v1.md) adds "CLUSTER" — see AnalysisUnit's `members` field below. */
+export type UnitType = "CLAIM" | "MECHANISM" | "PROCEDURE" | "EXAMPLE" | "BOUNDARY" | "CLUSTER";
 export type EdgeType = "REQUIRES" | "PART_OF" | "EXAMPLE_OF" | "PROCEDURE_STEP";
 
 export interface UnitAnchor {
   t: number;
   quote: string;
+}
+
+/** Phase 4: one atomic fact within a CLUSTER unit's `members` array — mirrors server/src/lib/analysis.ts's ClusterMemberSchema. */
+export interface ClusterMember {
+  label: string;
+  body: string;
+  anchorSec?: number;
 }
 
 /**
@@ -343,6 +351,8 @@ export interface AnalysisUnit {
   overlay?: UnitOverlay;
   /** V3-D D2 "Threshold-concept tagging": true when this unit "unlocks later material" (PEDAGOGY). */
   threshold: boolean;
+  /** Phase 4: present iff `type === "CLUSTER"` — 2..12 atomic facts sharing this unit's parent concept. Absent on every other unit type. */
+  members?: ClusterMember[];
 }
 
 export interface AnalysisEdge {
@@ -551,10 +561,10 @@ export interface ReviewPearlCard extends ReviewCardBase {
   importance: 1 | 2 | 3;
 }
 
-/** V3-B B4: "Attested units become reviewable as generation cards: front = 'your take' prompt for the unit, back = unit summary + user's own take." */
+/** V3-B B4: "Attested units become reviewable as generation cards: front = 'your take' prompt for the unit, back = unit summary + user's own take." A CLUSTER unit never produces this card kind — it fans out to ReviewClusterMemberCard instead (see below), so "CLUSTER" is deliberately excluded here. */
 export interface ReviewUnitCard extends ReviewCardBase {
   kind: "unit";
-  unitType: UnitType;
+  unitType: Exclude<UnitType, "CLUSTER">;
   label: string;
   summary: string;
   userTake: string | null;
@@ -562,7 +572,22 @@ export interface ReviewUnitCard extends ReviewCardBase {
   threshold: boolean;
 }
 
-export type ReviewCard = ReviewBubbleCard | ReviewPearlCard | ReviewUnitCard;
+/**
+ * Phase 4 "Cluster unit type": one member of a feedable CLUSTER unit, fanned
+ * out into its own review card — cloze-style, member `label` as the prompt,
+ * member `body` as the sealed answer. Mirrors server/src/lib/review.ts's
+ * ReviewClusterMemberCard. Card ids are `${unitId}::m${index}`.
+ */
+export interface ReviewClusterMemberCard extends ReviewCardBase {
+  kind: "clusterMember";
+  unitId: string;
+  memberIndex: number;
+  clusterLabel: string;
+  label: string;
+  body: string;
+}
+
+export type ReviewCard = ReviewBubbleCard | ReviewPearlCard | ReviewUnitCard | ReviewClusterMemberCard;
 
 export interface ReviewQueueCounts {
   due: number;

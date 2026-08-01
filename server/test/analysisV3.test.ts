@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   __setAnalysisClientV3ForTests,
   AnalysisSchema,
+  AnalysisUnitSchema,
+  CLUSTER_MAX_MEMBERS,
   FakeAnalysisClient,
   isFakeAnalysisMode,
   mergeEdgesByFingerprint,
@@ -145,6 +147,196 @@ describe("mergeUnitsByFingerprint — V3-D D2 threshold merging", () => {
   it("is true if ANY unit in the fingerprint group was flagged threshold", () => {
     const merged = mergeUnitsByFingerprint([{ ...base, threshold: false }, { ...base, threshold: true }]);
     expect(merged[0].threshold).toBe(true);
+  });
+});
+
+// --- Phase 4 "Cluster unit type" (design/EXECUTION-PLAN-post-review-v1.md):
+// attest-once, fan-out-to-N-cards — see AnalysisUnitSchema's members bound
+// and review.ts's per-member card derivation. ---------------------------
+
+describe("mergeUnitsByFingerprint — Phase 4 CLUSTER merging", () => {
+  const member = (label: string, body: string) => ({ label, body });
+  const clusterRaw = (overrides: Partial<{ label: string; summary: string; body: string; confidence: number; members: { label: string; body: string }[] }> = {}) => ({
+    type: "CLUSTER" as const,
+    label: "Side effects of metoprolol",
+    summary: "s",
+    body: "b",
+    anchors: [],
+    confidence: 0.8,
+    members: [member("Bradycardia", "Slow heart rate."), member("Hypotension", "Low blood pressure.")],
+    ...overrides,
+  });
+
+  it("keeps a CLUSTER unit's members when it's the sole occurrence in its fingerprint group", () => {
+    const merged = mergeUnitsByFingerprint([clusterRaw()]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].type).toBe("CLUSTER");
+    expect(merged[0].members).toEqual([
+      { label: "Bradycardia", body: "Slow heart rate." },
+      { label: "Hypotension", body: "Low blood pressure." },
+    ]);
+  });
+
+  it("unions members across duplicate/overlapping chunks of the same cluster, deduping by (case-insensitive) label", () => {
+    const merged = mergeUnitsByFingerprint([
+      clusterRaw({ confidence: 0.7 }),
+      clusterRaw({
+        label: "side effects of metoprolol",
+        confidence: 0.9,
+        members: [member("bradycardia", "duplicate — should be dropped"), member("Fatigue", "Tiredness.")],
+      }),
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].members?.map((m) => m.label)).toEqual(["Bradycardia", "Hypotension", "Fatigue"]);
+  });
+
+  it("caps merged members at CLUSTER_MAX_MEMBERS", () => {
+    const members = Array.from({ length: CLUSTER_MAX_MEMBERS + 5 }, (_, i) => member(`Effect ${i}`, `Body ${i}`));
+    const merged = mergeUnitsByFingerprint([clusterRaw({ members })]);
+    expect(merged[0].members).toHaveLength(CLUSTER_MAX_MEMBERS);
+  });
+
+  it("demotes to the group's most-common non-CLUSTER type when the merged member set collapses below the minimum", () => {
+    const merged = mergeUnitsByFingerprint([
+      clusterRaw({ label: "Weird cluster", members: [member("Only one", "b")] }),
+      { type: "CLAIM" as const, label: "weird cluster", summary: "s2", body: "b2", anchors: [], confidence: 0.6 },
+      { type: "CLAIM" as const, label: "Weird Cluster", summary: "s3", body: "b3", anchors: [], confidence: 0.5 },
+    ]);
+    expect(merged[0].type).toBe("CLAIM");
+    expect(merged[0].members).toBeUndefined();
+  });
+
+  it("demotes to CLAIM as the ultimate fallback when the group has no non-CLUSTER type to demote to", () => {
+    const merged = mergeUnitsByFingerprint([clusterRaw({ label: "Weird cluster", members: [member("Only one", "b")] })]);
+    expect(merged[0].type).toBe("CLAIM");
+    expect(merged[0].members).toBeUndefined();
+  });
+
+  it("drops members entirely when CLUSTER loses the majority-type vote within its fingerprint group", () => {
+    const merged = mergeUnitsByFingerprint([
+      { type: "CLAIM" as const, label: "Mixed group", summary: "s", body: "b", anchors: [], confidence: 0.6 },
+      { type: "CLAIM" as const, label: "mixed group", summary: "s2", body: "b2", anchors: [], confidence: 0.7 },
+      clusterRaw({ label: "Mixed Group", confidence: 0.5 }),
+    ]);
+    expect(merged[0].type).toBe("CLAIM");
+    expect(merged[0].members).toBeUndefined();
+  });
+});
+
+describe("AnalysisUnitSchema — Phase 4 CLUSTER members bound", () => {
+  const base = {
+    id: "u1",
+    type: "CLUSTER" as const,
+    label: "Side effects of metoprolol",
+    summary: "Common adverse effects to watch for.",
+    body: "Longer body.",
+    anchors: [{ t: 10, quote: "side effects include" }],
+    confidence: 0.8,
+    threshold: false,
+  };
+
+  it("accepts a CLUSTER unit at the minimum bound (2 members)", () => {
+    const result = AnalysisUnitSchema.safeParse({ ...base, members: [{ label: "A", body: "a" }, { label: "B", body: "b" }] });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a CLUSTER unit at the maximum bound (12 members)", () => {
+    const members = Array.from({ length: 12 }, (_, i) => ({ label: `Effect ${i}`, body: `Body ${i}` }));
+    expect(AnalysisUnitSchema.safeParse({ ...base, members }).success).toBe(true);
+  });
+
+  it("rejects a CLUSTER unit with fewer than 2 members", () => {
+    expect(AnalysisUnitSchema.safeParse({ ...base, members: [{ label: "Only one", body: "b" }] }).success).toBe(false);
+  });
+
+  it("rejects a CLUSTER unit with more than 12 members", () => {
+    const members = Array.from({ length: 13 }, (_, i) => ({ label: `Effect ${i}`, body: `Body ${i}` }));
+    expect(AnalysisUnitSchema.safeParse({ ...base, members }).success).toBe(false);
+  });
+
+  it("rejects a CLUSTER unit with members entirely absent", () => {
+    expect(AnalysisUnitSchema.safeParse(base).success).toBe(false);
+  });
+
+  it("rejects a non-CLUSTER unit that carries members", () => {
+    const claim = { ...base, type: "CLAIM" as const, members: [{ label: "a", body: "b" }, { label: "c", body: "d" }] };
+    expect(AnalysisUnitSchema.safeParse(claim).success).toBe(false);
+  });
+
+  it("accepts a non-CLUSTER unit with no members field at all", () => {
+    expect(AnalysisUnitSchema.safeParse({ ...base, type: "CLAIM" as const }).success).toBe(true);
+  });
+
+  it("member anchorSec is optional — present on some members, absent on others", () => {
+    const result = AnalysisUnitSchema.safeParse({
+      ...base,
+      members: [{ label: "a", body: "b" }, { label: "c", body: "d", anchorSec: 42 }],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.members?.[0].anchorSec).toBeUndefined();
+      expect(result.data.members?.[1].anchorSec).toBe(42);
+    }
+  });
+});
+
+describe("AnalysisSchema — Phase 4 CLUSTER round-trip through a full analysis document", () => {
+  it("round-trips a version:3 analysis containing a feedable CLUSTER unit", () => {
+    const parsed = AnalysisSchema.parse({
+      generatedAt: "2026-01-01T00:00:00Z",
+      model: "claude-opus-5",
+      version: 3,
+      source: "model",
+      domain: "generic",
+      pearls: [],
+      concepts: [],
+      themes: [],
+      units: [
+        {
+          id: "cluster1",
+          type: "CLUSTER",
+          label: "Side effects of metoprolol",
+          summary: "Common adverse effects.",
+          body: "Bradycardia, hypotension, fatigue.",
+          anchors: [{ t: 100, quote: "side effects include" }],
+          confidence: 0.85,
+          members: [
+            { label: "Bradycardia", body: "Slow heart rate." },
+            { label: "Hypotension", body: "Low blood pressure." },
+            { label: "Fatigue", body: "Tiredness.", anchorSec: 120 },
+          ],
+        },
+      ],
+      edges: [],
+    });
+    expect(parsed.units![0].type).toBe("CLUSTER");
+    expect(parsed.units![0].members).toHaveLength(3);
+    expect(parsed.units![0].members?.[2].anchorSec).toBe(120);
+  });
+
+  it("rejects a whole analysis document if one of its CLUSTER units breaks the members bound (one bad unit invalidates the file)", () => {
+    const result = AnalysisSchema.safeParse({
+      generatedAt: "2026-01-01T00:00:00Z",
+      model: "claude-opus-5",
+      version: 3,
+      pearls: [],
+      concepts: [],
+      themes: [],
+      units: [
+        {
+          id: "cluster1",
+          type: "CLUSTER",
+          label: "Broken cluster",
+          summary: "s",
+          body: "b",
+          anchors: [],
+          confidence: 0.5,
+          members: [{ label: "Only one", body: "b" }],
+        },
+      ],
+      edges: [],
+    });
+    expect(result.success).toBe(false);
   });
 });
 

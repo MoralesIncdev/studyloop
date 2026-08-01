@@ -17,7 +17,7 @@ import {
   type ReviewCardState,
   type ReviewState,
 } from "../src/lib/review.js";
-import type { Analysis, AnalysisUnit } from "../src/lib/analysis.js";
+import { CLUSTER_MAX_MEMBERS, type Analysis, type AnalysisUnit } from "../src/lib/analysis.js";
 import type { AttestationsFile } from "../src/lib/attestation.js";
 import type { Bubble, Project } from "../src/lib/models.js";
 
@@ -549,5 +549,150 @@ describe("masteryCount", () => {
 
   it("is 0 for an empty card set", () => {
     expect(masteryCount({})).toBe(0);
+  });
+});
+
+// --- Phase 4 "Cluster unit type": attest-once, fan-out-to-N-cards ---------
+// (design/EXECUTION-PLAN-post-review-v1.md) -------------------------------
+
+function clusterUnit(overrides: Partial<AnalysisUnit> = {}): AnalysisUnit {
+  return {
+    id: "cluster1",
+    type: "CLUSTER",
+    label: "Side effects of metoprolol",
+    summary: "Common adverse effects.",
+    body: "Bradycardia, hypotension, fatigue.",
+    anchors: [{ t: 100, quote: "side effects include" }],
+    confidence: 0.8,
+    threshold: false,
+    members: [
+      { label: "Bradycardia", body: "Slow heart rate." },
+      { label: "Hypotension", body: "Low blood pressure." },
+      { label: "Fatigue", body: "Tiredness.", anchorSec: 120 },
+    ],
+    ...overrides,
+  };
+}
+
+describe("deriveLiveCards — Phase 4 CLUSTER fan-out", () => {
+  it("derives nothing from an unattested cluster (feedability gating — same isUnitFeedable rule as any other unit)", () => {
+    const cards = deriveLiveCards(baseProject(), [], v3Analysis({ units: [clusterUnit()] }), false, {});
+    expect(cards.some((c) => c.kind === "clusterMember")).toBe(false);
+  });
+
+  it("derives one review card per member once the cluster's own unit id is attested", () => {
+    const attestations: AttestationsFile = { cluster1: { status: "attested", at: "t" } };
+    const cards = deriveLiveCards(baseProject(), [], v3Analysis({ units: [clusterUnit()] }), false, attestations);
+    expect(cards.filter((c) => c.kind === "clusterMember")).toHaveLength(3);
+  });
+
+  it("never also produces a plain 'unit' kind card for a CLUSTER unit", () => {
+    const attestations: AttestationsFile = { cluster1: { status: "attested", at: "t" } };
+    const cards = deriveLiveCards(baseProject(), [], v3Analysis({ units: [clusterUnit()] }), false, attestations);
+    expect(cards.some((c) => c.kind === "unit")).toBe(false);
+  });
+
+  it("uses stable `${unitId}::m${index}` card ids", () => {
+    const attestations: AttestationsFile = { cluster1: { status: "attested", at: "t" } };
+    const cards = deriveLiveCards(baseProject(), [], v3Analysis({ units: [clusterUnit()] }), false, attestations);
+    const ids = cards.filter((c) => c.kind === "clusterMember").map((c) => c.id);
+    expect(ids).toEqual(["cluster1::m0", "cluster1::m1", "cluster1::m2"]);
+  });
+
+  it("fan-out is deterministic across repeat calls with the same input", () => {
+    const analysis = v3Analysis({ units: [clusterUnit()] });
+    const attestations: AttestationsFile = { cluster1: { status: "attested", at: "t" } };
+    const first = deriveLiveCards(baseProject(), [], analysis, false, attestations);
+    const second = deriveLiveCards(baseProject(), [], analysis, false, attestations);
+    expect(first).toEqual(second);
+  });
+
+  it("carries member label/body/clusterLabel/unitId/memberIndex through onto each derived card", () => {
+    const attestations: AttestationsFile = { cluster1: { status: "attested", at: "t" } };
+    const cards = deriveLiveCards(baseProject(), [], v3Analysis({ units: [clusterUnit()] }), false, attestations);
+    const first = cards.find((c) => c.id === "cluster1::m0");
+    expect(first).toMatchObject({
+      kind: "clusterMember",
+      unitId: "cluster1",
+      memberIndex: 0,
+      clusterLabel: "Side effects of metoprolol",
+      label: "Bradycardia",
+      body: "Slow heart rate.",
+      // no anchorSec on this member — falls back to the cluster unit's own anchor.
+      t: 100,
+    });
+  });
+
+  it("uses a member's own anchorSec for `t` when the member carries one", () => {
+    const attestations: AttestationsFile = { cluster1: { status: "attested", at: "t" } };
+    const cards = deriveLiveCards(baseProject(), [], v3Analysis({ units: [clusterUnit()] }), false, attestations);
+    const fatigue = cards.find((c) => c.id === "cluster1::m2");
+    expect(fatigue?.t).toBe(120);
+  });
+
+  it("caps fan-out at CLUSTER_MAX_MEMBERS defensively even if the stored unit somehow carries more", () => {
+    const oversized = clusterUnit({ members: Array.from({ length: 20 }, (_, i) => ({ label: `M${i}`, body: `B${i}` })) });
+    const attestations: AttestationsFile = { cluster1: { status: "attested", at: "t" } };
+    const cards = deriveLiveCards(baseProject(), [], v3Analysis({ units: [oversized] }), false, attestations);
+    expect(cards.filter((c) => c.kind === "clusterMember")).toHaveLength(CLUSTER_MAX_MEMBERS);
+  });
+
+  it("a dismissed cluster derives nothing, same as any other dismissed unit", () => {
+    const attestations: AttestationsFile = { cluster1: { status: "dismissed", at: "t" } };
+    const cards = deriveLiveCards(baseProject(), [], v3Analysis({ units: [clusterUnit()] }), false, attestations);
+    expect(cards.some((c) => c.kind === "clusterMember")).toBe(false);
+  });
+
+  it("a cluster with only a userTake (never formally attested) still fans out — same generation-attempt-only rule as any unit", () => {
+    const attestations: AttestationsFile = { cluster1: { userTake: "typed something", at: "t" } };
+    const cards = deriveLiveCards(baseProject(), [], v3Analysis({ units: [clusterUnit()] }), false, attestations);
+    expect(cards.filter((c) => c.kind === "clusterMember")).toHaveLength(3);
+  });
+});
+
+function clusterMemberCard(unitId: string, index: number, overrides: Partial<ReviewCard> = {}): ReviewCard {
+  return {
+    id: `${unitId}::m${index}`,
+    kind: "clusterMember",
+    projectId: "p1",
+    projectTitle: "P1",
+    sourceType: "local",
+    sourcePath: "/videos/p1.mp4",
+    t: index,
+    unitId,
+    memberIndex: index,
+    clusterLabel: "Cluster",
+    label: `M${index}`,
+    body: `B${index}`,
+    ...overrides,
+  } as ReviewCard;
+}
+
+describe("buildReviewQueue — Phase 4: daily-cap accounting counts derived cards individually", () => {
+  it("a 5-member cluster consumes 5 of the daily cap, mixed with an unrelated bubble card", () => {
+    const clusterCards = Array.from({ length: 5 }, (_, i) => clusterMemberCard("cluster1", i));
+    const result = buildReviewQueue([...clusterCards, card({ id: "bubble:p1:extra", t: 99 })], emptyReviewState(), NOW, 20);
+    expect(result.counts.new).toBe(6);
+    expect(Object.keys(result.state.cards)).toHaveLength(6);
+  });
+
+  it("cluster-derived cards count individually against a tight cap rather than as one slot for the whole cluster", () => {
+    const clusterCards = Array.from({ length: 5 }, (_, i) => clusterMemberCard("cluster1", i));
+    const result = buildReviewQueue(clusterCards, emptyReviewState(), NOW, 3);
+    expect(Object.keys(result.state.cards)).toHaveLength(3);
+    expect(result.counts.due).toBe(3);
+    expect(result.counts.total).toBe(5);
+  });
+
+  it("grading one derived card doesn't affect its siblings' scheduling state (per-card machinery, no new scheduling)", () => {
+    const clusterCards = Array.from({ length: 3 }, (_, i) => clusterMemberCard("cluster1", i));
+    const introduced = buildReviewQueue(clusterCards, emptyReviewState(), NOW, 20);
+    const siblingBefore = introduced.state.cards["cluster1::m1"];
+    const graded = gradeCardState(introduced.state.cards["cluster1::m0"], "good", NOW);
+    expect(graded.interval).toBe(1);
+    // gradeCardState is pure (takes/returns one card's state) — the sibling's
+    // own tracked state is untouched, exactly like grading any two unrelated
+    // bubble/pearl/unit cards would be.
+    expect(introduced.state.cards["cluster1::m1"]).toBe(siblingBefore);
   });
 });

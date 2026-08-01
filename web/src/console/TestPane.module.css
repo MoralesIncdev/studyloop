@@ -25,6 +25,18 @@
   user-select: auto;
 }
 
+/* Phase 4 "Cluster unit type": a CLUSTER's members, each reusing .answer
+   directly (so they seal/reveal together via the rules above) — just the
+   list-layout reset lives here. */
+.memberList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .sealLabel {
   position: absolute;
   inset: 0;

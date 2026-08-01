@@ -13,10 +13,10 @@
 
 | # | Phase | Status |
 |---|-------|--------|
-| 1 | Playwright smoke harness | TODO |
+| 1 | Playwright smoke harness | DONE (`npm run e2e`; ports 4610/4611; zero testids — pre-existing selectors only; known issue: PlayerChrome bottom scrim can swallow pane clicks in bottom ~20%, tracked separately) |
 | 2 | Terminology layer v1 | DONE (667 server tests green; double-click a transcript word to correct; glossary inert until Phase 5) |
 | 3 | Integrity fixes (streak / heatmap / claimed-vs-restated) | TODO |
-| 4 | Cluster unit type | TODO |
+| 4 | Cluster unit type | DONE (server: 696 tests green, `CLUSTER` unit type + `members` in analysis.ts/review.ts fan-out; web: ConceptPane/TestPane render members, ReviewView handles `clusterMember` cards; 308 web tests green) |
 | 5 | Clinical domain lens | TODO |
 | 6 | Slide-text channel (PDF slice) | TODO |
 | 7 | Cheap retention wins (front door + export) | TODO |

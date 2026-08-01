@@ -101,6 +101,17 @@ function CardFront({ card }: { card: ReviewCard }): JSX.Element {
       </>
     );
   }
+  // Phase 4 "Cluster unit type": one derived card per cluster member —
+  // cloze-style, the member's own label as the prompt, the cluster's parent
+  // label as context (mirrors the pearl branch's projectTitle line).
+  if (card.kind === "clusterMember") {
+    return (
+      <>
+        <p className={styles.pearlLabel}>{card.clusterLabel}</p>
+        <p className={styles.prompt}>{card.label}</p>
+      </>
+    );
+  }
   return (
     <>
       <div className={styles.media}>
@@ -123,12 +134,14 @@ function CardFront({ card }: { card: ReviewCard }): JSX.Element {
  * (state/store.ts improveCurrentReviewCard applies the same gate
  * startAnalyze uses). Unit cards have nothing to regenerate (their front is
  * a client-composed "your take" prompt, not an LLM transform), so this
- * never renders for them.
+ * never renders for them — same reasoning for a cluster-member card (Phase
+ * 4): its front/back are the member's own label/body, not an LLM transform,
+ * so routes/review.ts's transformCandidates never has an entry for it.
  */
 function ImproveCardButton({ card }: { card: ReviewCard }): JSX.Element | null {
   const improving = useStudyLoopStore((s) => s.reviewImproving);
   const improveCurrentReviewCard = useStudyLoopStore((s) => s.improveCurrentReviewCard);
-  if (card.kind === "unit") return null;
+  if (card.kind === "unit" || card.kind === "clusterMember") return null;
   return (
     <button type="button" className={styles.improveButton} disabled={improving} onClick={() => void improveCurrentReviewCard()}>
       {improving ? "Improving…" : "Improve this card"}
@@ -142,6 +155,17 @@ function CardBack({ card }: { card: ReviewCard }): JSX.Element {
       <>
         <p className={styles.backText}>{card.summary}</p>
         {card.userTake && <p className={styles.whyText}>Your take: {card.userTake}</p>}
+        <LapseMediaAction card={card} />
+      </>
+    );
+  }
+  // Phase 4: the member's own body is the sealed answer — no LLM transform,
+  // no "your take" (attestation lives on the parent cluster unit, not per
+  // member).
+  if (card.kind === "clusterMember") {
+    return (
+      <>
+        <p className={styles.backText}>{card.body}</p>
         <LapseMediaAction card={card} />
       </>
     );

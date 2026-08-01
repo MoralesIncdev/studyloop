@@ -12,7 +12,7 @@
 // streak counter are all deterministically testable against a fake clock.
 import { z } from "zod";
 import type { Bubble, Project } from "./models.js";
-import type { Analysis } from "./analysis.js";
+import { CLUSTER_MAX_MEMBERS, type Analysis } from "./analysis.js";
 import { isUnitFeedable, type AttestationsFile } from "./attestation.js";
 
 // --- Scheduling constants (SPEC "Scheduling (hidden SM-2-lite)") -----------
@@ -206,7 +206,27 @@ export interface ReviewUnitCard extends ReviewCardBase {
   threshold: boolean;
 }
 
-export type ReviewCard = ReviewBubbleCard | ReviewPearlCard | ReviewUnitCard;
+/**
+ * Phase 4 "Cluster unit type": one member of a feedable CLUSTER unit, fanned
+ * out into its own review card (see deriveLiveCards below) — cloze-style,
+ * member "label" as the prompt, member "body" as the sealed answer. Card ids
+ * are `${unitId}::m${index}` (stable across sessions, independent of the
+ * cluster's own `unit:<projectId>:<unitId>` id shape) so review.json's
+ * per-card scheduling state survives re-derivation exactly like a bubble/
+ * pearl/unit card's id does. `unitId`/`clusterLabel` are carried through so
+ * the UI can show which parent concept a member belongs to without a second
+ * lookup.
+ */
+export interface ReviewClusterMemberCard extends ReviewCardBase {
+  kind: "clusterMember";
+  unitId: string;
+  memberIndex: number;
+  clusterLabel: string;
+  label: string;
+  body: string;
+}
+
+export type ReviewCard = ReviewBubbleCard | ReviewPearlCard | ReviewUnitCard | ReviewClusterMemberCard;
 
 /** Stable key for a pearl within its project, used both for review card ids (`pearl:<projectId>:<key>`) and lib/pearlReviewStore.ts's explicit "Add to review" set — kept as its own function so both call sites can never drift apart on how a pearl is identified. */
 export function pearlReviewKey(t: number): string {
@@ -218,10 +238,11 @@ export function pearlReviewKey(t: number): string {
  * project (SPEC "Cards": bubble cards from bubbles that carry text, pearl
  * cards from analysis pearls — stub analyses excluded outside dev). Never
  * touches disk; the route assembles `bubbles`/`analysis` first. Ids are
- * stable (`bubble:<projectId>:<bubbleId>`, `pearl:<projectId>:<t>`) so
- * scheduling state in review.json survives across calls, and orphan-dropping
- * falls straight out of comparing this output against review.json's tracked
- * card ids (see `buildReviewQueue`).
+ * stable (`bubble:<projectId>:<bubbleId>`, `pearl:<projectId>:<t>`,
+ * `unit:<projectId>:<unitId>`, and — Phase 4 — `<unitId>::m<index>` per
+ * cluster member) so scheduling state in review.json survives across calls,
+ * and orphan-dropping falls straight out of comparing this output against
+ * review.json's tracked card ids (see `buildReviewQueue`).
  */
 export function deriveLiveCards(
   project: Project,
@@ -294,6 +315,43 @@ export function deriveLiveCards(
     // unit never reaches the review queue.
     for (const u of analysis.units ?? []) {
       if (!isUnitFeedable(attestations[u.id])) continue;
+      if (u.type === "CLUSTER") {
+        // Phase 4 "Cluster unit type": one review card per member (member
+        // "label" as the prompt, member "body" as the sealed cloze answer)
+        // instead of one card for the whole cluster — the single
+        // attestation on the cluster's own unit id (via isUnitFeedable
+        // above) is what unlocks every member at once. Re-capped at
+        // CLUSTER_MAX_MEMBERS defensively even though AnalysisUnitSchema
+        // already bounds `members` to 2..12 (belt-and-braces against a
+        // hand-edited analysis.json).
+        //
+        // Daily new-card cap accounting (SPEC "capped at 20 new/day"): each
+        // derived member becomes its own entry in the `cards` array below,
+        // so buildReviewQueue's per-card introduction logic counts them
+        // individually — a 5-member cluster consumes 5 of the day's 20
+        // new-card slots. This is the simplest honest accounting: one
+        // restatement act unlocked all 5, but the learner still reviews 5
+        // distinct facts, so 5 slots is what actually gets studied today.
+        const members = (u.members ?? []).slice(0, CLUSTER_MAX_MEMBERS);
+        members.forEach((m, i) => {
+          cards.push({
+            id: `${u.id}::m${i}`,
+            kind: "clusterMember",
+            projectId: project.id,
+            projectTitle: project.title,
+            sourceType,
+            sourcePath,
+            sourceVideoId,
+            t: m.anchorSec ?? u.anchors[0]?.t ?? 0,
+            unitId: u.id,
+            memberIndex: i,
+            clusterLabel: u.label,
+            label: m.label,
+            body: m.body,
+          });
+        });
+        continue;
+      }
       cards.push({
         id: `unit:${project.id}:${u.id}`,
         kind: "unit",

@@ -64,7 +64,18 @@ export type AnalysisSource = z.infer<typeof AnalysisSourceSchema>;
 
 // --- V3-B B1: typed spine (units/edges) — see PEDAGOGY.md §2 ---------------
 
-export const UnitTypeSchema = z.enum(["CLAIM", "MECHANISM", "PROCEDURE", "EXAMPLE", "BOUNDARY"]);
+/**
+ * Phase 4 "Cluster unit type" (design/EXECUTION-PLAN-post-review-v1.md):
+ * `CLUSTER` added alongside the original five — answers the unanimous
+ * attestation-fatigue finding (30-50 atoms/nursing-lecture makes
+ * one-restatement-per-atom untenable). A CLUSTER unit is attested exactly
+ * like any other unit (attestation.ts's isUnitFeedable is untouched — the
+ * cluster's own id is what gets attested), but carries `members` (see
+ * AnalysisUnitSchema below) instead of standing for one atomic fact, and
+ * review.ts fans a feedable CLUSTER out into one review card per member
+ * rather than one card for the whole unit.
+ */
+export const UnitTypeSchema = z.enum(["CLAIM", "MECHANISM", "PROCEDURE", "EXAMPLE", "BOUNDARY", "CLUSTER"]);
 export type UnitType = z.infer<typeof UnitTypeSchema>;
 
 export const EdgeTypeSchema = z.enum(["REQUIRES", "PART_OF", "EXAMPLE_OF", "PROCEDURE_STEP"]);
@@ -72,6 +83,25 @@ export type EdgeType = z.infer<typeof EdgeTypeSchema>;
 
 export const UnitAnchorSchema = z.object({ t: z.number().nonnegative(), quote: z.string() });
 export type UnitAnchor = z.infer<typeof UnitAnchorSchema>;
+
+/**
+ * Phase 4 "Cluster unit type": one atomic fact within a CLUSTER unit's
+ * `members` array (e.g. one side effect within a "side effects of
+ * metoprolol" cluster). `anchorSec` is optional — a member usually inherits
+ * its parent unit's anchors for seek/provenance purposes; it's only set when
+ * the model (or a hand-authored cluster) can point to a more precise moment
+ * for that specific member.
+ */
+export const ClusterMemberSchema = z.object({
+  label: z.string(),
+  body: z.string(),
+  anchorSec: z.number().nonnegative().optional(),
+});
+export type ClusterMember = z.infer<typeof ClusterMemberSchema>;
+
+/** SPEC: "2..12 members" — small enough that attest-once still fans out to a legible review set, large enough to cover a real nursing side-effect list. */
+export const CLUSTER_MIN_MEMBERS = 2;
+export const CLUSTER_MAX_MEMBERS = 12;
 
 // --- V3-D D1: domain overlay fields — PEDAGOGY §2 "domain lenses are prompt
 // modules + optional overlay fields, not separate engines" ------------------
@@ -140,6 +170,38 @@ export const AnalysisUnitSchema = z.object({
    * call site — legacy analysis.json files simply backfill to false on read.
    */
   threshold: z.boolean().default(false),
+  /**
+   * Phase 4 "Cluster unit type": present iff `type === "CLUSTER"` — 2..12
+   * atomic facts sharing this unit's parent concept (canonical example:
+   * "side effects of metoprolol"). Kept as a plain optional field on the
+   * SAME flat object shape every other unit type already uses (not a
+   * discriminated union keyed on `type`) so every existing caller that
+   * treats `AnalysisUnit` uniformly (mergeUnitsByFingerprint,
+   * unitsToConceptsMirror, deriveLiveCards, every web pane that reads
+   * `analysis.units`) keeps compiling and iterating unchanged — members are
+   * an extra field on a unit, not a second kind of top-level array entry, so
+   * nothing that counts/lists `analysis.units` needs to know about them.
+   * Cross-field bounds (present+2..12 iff CLUSTER, absent otherwise) are
+   * enforced below via `.superRefine` rather than a union, for the same
+   * reason.
+   */
+  members: z.array(ClusterMemberSchema).optional(),
+}).superRefine((unit, ctx) => {
+  if (unit.type === "CLUSTER") {
+    if (!unit.members || unit.members.length < CLUSTER_MIN_MEMBERS || unit.members.length > CLUSTER_MAX_MEMBERS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `CLUSTER units must carry between ${CLUSTER_MIN_MEMBERS} and ${CLUSTER_MAX_MEMBERS} members`,
+        path: ["members"],
+      });
+    }
+  } else if (unit.members !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Only CLUSTER units may carry members",
+      path: ["members"],
+    });
+  }
 });
 export type AnalysisUnit = z.infer<typeof AnalysisUnitSchema>;
 
@@ -375,6 +437,16 @@ const ChunkUnitRawSchema = z.object({
   overlay: UnitOverlaySchema.optional(),
   /** V3-D D2 — optional (absent treated as false, see mergeUnitsByFingerprint) for the same reason. */
   threshold: z.boolean().optional(),
+  /**
+   * Phase 4 "Cluster unit type" — raw member list at the wire level. Kept
+   * loosely bounded here (no 2..12 check — that's AnalysisUnitSchema's job on
+   * the FINAL merged unit); mergeUnitsByFingerprint's mergeClusterMembers
+   * dedups/caps across a fingerprint group before the result ever reaches
+   * AnalysisUnitSchema's stricter check, and demotes a CLUSTER whose members
+   * collapse below the minimum after dedup rather than emitting an invalid
+   * one (see resolveClusterType).
+   */
+  members: z.array(ClusterMemberSchema).optional(),
 });
 type ChunkUnitRaw = z.infer<typeof ChunkUnitRawSchema>;
 
@@ -416,6 +488,24 @@ const UNIT_ANCHOR_JSON_SCHEMA = {
   type: "object",
   properties: { t: { type: "number" }, quote: { type: "string" } },
   required: ["t", "quote"],
+  additionalProperties: false,
+} as const;
+
+/**
+ * Phase 4 "Cluster unit type": one member of a CLUSTER unit's `members`
+ * array. `anchorSec` is required at the wire level (structured-output mode
+ * wants every property present — same convention as every other "genuinely
+ * optional" field in this file); the model should repeat the parent unit's
+ * own anchor second when it has nothing more precise for this member.
+ */
+const CLUSTER_MEMBER_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    label: { type: "string" },
+    body: { type: "string" },
+    anchorSec: { type: "number" },
+  },
+  required: ["label", "body", "anchorSec"],
   additionalProperties: false,
 } as const;
 
@@ -484,7 +574,7 @@ const CHUNK_V3_JSON_SCHEMA = {
       items: {
         type: "object",
         properties: {
-          type: { type: "string", enum: ["CLAIM", "MECHANISM", "PROCEDURE", "EXAMPLE", "BOUNDARY"] },
+          type: { type: "string", enum: ["CLAIM", "MECHANISM", "PROCEDURE", "EXAMPLE", "BOUNDARY", "CLUSTER"] },
           label: { type: "string" },
           summary: { type: "string" },
           body: { type: "string" },
@@ -492,8 +582,12 @@ const CHUNK_V3_JSON_SCHEMA = {
           confidence: { type: "number" },
           overlay: OVERLAY_JSON_SCHEMA,
           threshold: { type: "boolean" },
+          // Phase 4: required at the wire level, empty when type !== "CLUSTER"
+          // (same []/"" sentinel convention overlay/unitLabel already use) —
+          // mergeUnitsByFingerprint enforces the real 2..12 bound post-merge.
+          members: { type: "array", items: CLUSTER_MEMBER_JSON_SCHEMA },
         },
-        required: ["type", "label", "summary", "body", "anchors", "confidence", "overlay", "threshold"],
+        required: ["type", "label", "summary", "body", "anchors", "confidence", "overlay", "threshold", "members"],
         additionalProperties: false,
       },
     },
@@ -598,7 +692,7 @@ function buildChunkV3SystemPrompt(domain: Domain): string {
 
 Extract:
 - "pearls": specific, memorable insights worth remembering, each anchored to the timestamp (in seconds) where it's said. A label under 60 characters, a 1-3 sentence insight, an importance rating (3 = critical/central point, 2 = useful supporting point, 1 = minor/incidental detail), and "unitLabel": the exact label of the unit below this pearl illustrates, or "" if none fits.
-- "units": typed knowledge units on a universal spine — each is exactly one of CLAIM (an assertion), MECHANISM (how/why something works), PROCEDURE (an ordered how-to), EXAMPLE (a concrete instance), or BOUNDARY (a limit, exception, or "this doesn't apply when…"). Each unit has a short "label" (used to link edges/pearls to it — keep it stable and specific, not a generic phrase), a 1-2 sentence "summary", a longer markdown "body", one or more "anchors" (each an exact "quote" from the transcript plus its timestamp "t" in seconds), a "confidence" 0-1 for how clearly the transcript supports this unit as extracted, an "overlay" object of domain-specific structured fields (which ones to fill in is named by the domain lens below — leave the rest as "" or []), and "threshold": true only when this unit is a transformative/integrative/troublesome idea — one that later material genuinely depends on understanding, a concept that "unlocks" the rest of the video once grasped (most units are NOT threshold — false otherwise).
+- "units": typed knowledge units on a universal spine — each is exactly one of CLAIM (an assertion), MECHANISM (how/why something works), PROCEDURE (an ordered how-to), EXAMPLE (a concrete instance), BOUNDARY (a limit, exception, or "this doesn't apply when…"), or CLUSTER (a parent concept covering 3 or more closely-related atomic facts — e.g. "side effects of metoprolol" listing bradycardia, hypotension, fatigue, etc. as separate facts). Each unit has a short "label" (used to link edges/pearls to it — keep it stable and specific, not a generic phrase), a 1-2 sentence "summary", a longer markdown "body", one or more "anchors" (each an exact "quote" from the transcript plus its timestamp "t" in seconds), a "confidence" 0-1 for how clearly the transcript supports this unit as extracted, an "overlay" object of domain-specific structured fields (which ones to fill in is named by the domain lens below — leave the rest as "" or []), "threshold": true only when this unit is a transformative/integrative/troublesome idea — one that later material genuinely depends on understanding, a concept that "unlocks" the rest of the video once grasped (most units are NOT threshold — false otherwise), and "members": for a CLUSTER unit ONLY, 2 to 12 objects each with its own short "label" (the specific fact, e.g. "Bradycardia"), a 1-2 sentence "body" (that fact alone, phrased so it stands on its own as a flashcard answer), and "anchorSec" (seconds — reuse this unit's own anchor time if you have nothing more precise); for every non-CLUSTER unit, "members" MUST be an empty array. IMPORTANT: whenever the transcript states 3 or more closely-related atomic facts under one shared parent concept, emit ONE CLUSTER unit with those facts as members rather than 3+ separate CLAIM units for the same facts — this is what lets a learner attest the parent concept once instead of restating every fact individually. Use individual CLAIM (or other) units as usual for anything that isn't part of such a group.
 - "edges": relationships between two units you extracted THIS segment — "sourceLabel"/"targetLabel" must exactly match "label" fields above, "type" is one of REQUIRES (source requires target as a prerequisite), PART_OF (source is part of target), EXAMPLE_OF (source is an example of target), or PROCEDURE_STEP (source is the step before target in the same procedure), plus the supporting "quote" and a "confidence" 0-1. Only emit edges between two units both present in this same segment's "units" list.
 
 ${DOMAIN_MODULES[domain]}
@@ -1152,6 +1246,56 @@ function mergeOverlayFields(group: readonly ChunkUnitRaw[]): UnitOverlay {
   return result;
 }
 
+/**
+ * Phase 4 "Cluster unit type": unions a fingerprint-group's raw `members`
+ * arrays, deduped by (case/whitespace-insensitive) label — first occurrence
+ * wins, same "identify duplicates, keep the first" rule the rest of this
+ * merge already applies to anchors. Capped at CLUSTER_MAX_MEMBERS
+ * defensively (schema enforces 2..12 on the final unit; this keeps the
+ * pre-schema value from ever exceeding it in the first place).
+ */
+function mergeClusterMembers(group: readonly ChunkUnitRaw[]): ClusterMember[] {
+  const seen = new Map<string, ClusterMember>();
+  for (const g of group) {
+    for (const m of g.members ?? []) {
+      const key = m.label.trim().toLowerCase();
+      if (key && !seen.has(key)) seen.set(key, m);
+    }
+  }
+  return [...seen.values()].slice(0, CLUSTER_MAX_MEMBERS);
+}
+
+/**
+ * Phase 4: resolves the final (type, members) pair for a fingerprint group
+ * whose majority-vote type is CLUSTER. The common case just merges members
+ * and keeps CLUSTER; the rare edge case — overlapping/duplicate chunks whose
+ * combined, deduped member set collapses below CLUSTER_MIN_MEMBERS — demotes
+ * the unit to the group's next most-common NON-cluster type (CLAIM if the
+ * group has none) rather than ever persisting a CLUSTER unit that would fail
+ * AnalysisUnitSchema's members bound the next time analysis.json is read
+ * (routes/review.ts, routes/analyze.ts, etc. all `AnalysisSchema.safeParse`
+ * the whole file — one malformed unit would make the ENTIRE analysis
+ * unreadable, not just that one unit).
+ */
+function resolveClusterType(group: readonly ChunkUnitRaw[]): { type: UnitType; members: ClusterMember[] | undefined } {
+  const merged = mergeClusterMembers(group);
+  if (merged.length >= CLUSTER_MIN_MEMBERS) return { type: "CLUSTER", members: merged };
+
+  const nonClusterCounts = new Map<UnitType, number>();
+  for (const g of group) {
+    if (g.type !== "CLUSTER") nonClusterCounts.set(g.type, (nonClusterCounts.get(g.type) ?? 0) + 1);
+  }
+  let bestType: UnitType = "CLAIM";
+  let bestCount = 0;
+  for (const [type, count] of nonClusterCounts) {
+    if (count > bestCount) {
+      bestType = type;
+      bestCount = count;
+    }
+  }
+  return { type: bestType, members: undefined };
+}
+
 export function mergeUnitsByFingerprint(units: readonly ChunkUnitRaw[]): AnalysisUnit[] {
   const order: string[] = [];
   const groups = new Map<string, ChunkUnitRaw[]>();
@@ -1183,9 +1327,14 @@ export function mergeUnitsByFingerprint(units: readonly ChunkUnitRaw[]): Analysi
     for (const g of group) for (const a of g.anchors) if (!anchorByT.has(a.t)) anchorByT.set(a.t, a.quote);
     const anchors = [...anchorByT.entries()].sort((a, b) => a[0] - b[0]).map(([t, quote]) => ({ t, quote }));
     const mergedOverlay = mergeOverlayFields(group);
+    // Phase 4: only resolve cluster members when the majority-vote type is
+    // actually CLUSTER — a group where CLUSTER lost the vote just drops any
+    // stray `members` a minority raw unit carried, same as any other field
+    // that only makes sense on the winning type.
+    const { type: finalType, members } = bestType === "CLUSTER" ? resolveClusterType(group) : { type: bestType, members: undefined };
     return {
       id: fp,
-      type: bestType,
+      type: finalType,
       label: group[0].label,
       summary,
       body,
@@ -1196,6 +1345,8 @@ export function mergeUnitsByFingerprint(units: readonly ChunkUnitRaw[]): Analysi
       // group was flagged (never "average away" a threshold signal).
       overlay: Object.keys(mergedOverlay).length > 0 ? mergedOverlay : undefined,
       threshold: group.some((g) => g.threshold === true),
+      // Phase 4: present only when finalType === "CLUSTER" (see resolveClusterType).
+      members,
     };
   });
 }

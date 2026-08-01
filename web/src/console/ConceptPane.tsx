@@ -31,6 +31,7 @@ const UNIT_TYPE_LABEL: Record<UnitType, string> = {
   PROCEDURE: "Procedure",
   EXAMPLE: "Example",
   BOUNDARY: "Boundary",
+  CLUSTER: "Cluster",
 };
 
 interface Props {
@@ -153,6 +154,21 @@ export function ConceptPane({ frameRef }: Props): JSX.Element | null {
     >
       {hidden || !active ? (
         <p className={paneStyles.ghostText}>Appears while a concept is being taught.</p>
+      ) : unit && unit.type === "CLUSTER" && unit.members && unit.members.length > 0 ? (
+        // Phase 4 "Cluster unit type": the pane's bare-text look, but a
+        // member per line instead of one body preview — the parent concept
+        // is attested once (same chip/status above), and each member fans
+        // out to its own review card later (review.ts's deriveLiveCards).
+        <>
+          <div className={styles.title}>{active.card.title}</div>
+          <ul className={styles.memberList}>
+            {unit.members.map((m, i) => (
+              <li key={i} className={`${styles.memberItem} ${styles.ai}`}>
+                {m.label}
+              </li>
+            ))}
+          </ul>
+        </>
       ) : (
         <>
           <div className={styles.title}>{active.card.title}</div>

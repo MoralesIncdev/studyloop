@@ -25,6 +25,11 @@ const UNIT_TYPE_LABEL: Record<AnalysisUnit["type"], string> = {
   PROCEDURE: "Procedure",
   EXAMPLE: "Example",
   BOUNDARY: "Boundary",
+  // Phase 4 "Cluster unit type": a CLUSTER's own proposal card still renders
+  // through this same rail component (attest/dismiss are unit-id-level,
+  // unchanged) — its members list renders below, see the CLUSTER branch in
+  // the body section.
+  CLUSTER: "Cluster",
 };
 
 /** V3-D D1 "Advanced fold" — human labels for UnitOverlaySchema's flat field set. */
