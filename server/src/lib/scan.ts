@@ -1,16 +1,37 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { deriveYoutubeVideoId, findSidecarTranscript } from "./sidecar.js";
 import { pathExists } from "./store.js";
 import { humanizeVideoTitle } from "./titleHumanize.js";
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mkv", ".mov", ".webm", ".m4v", ".avi"]);
 const TRANSCRIPT_EXTENSIONS = new Set([".json"]);
 
+/**
+ * Phase 10 "Transcript source chain": which of the resolution chain's steps
+ * produced this item's `transcriptPath`. "youtube" never appears here — that
+ * step is a lazy, on-request pull (lib/transcriptChain.ts), never attempted
+ * during a scan (no network calls here). Absent entirely for an item with no
+ * transcriptPath at all.
+ */
+export type LibraryTranscriptSource = "pipeline" | "sidecar";
+
 export interface LibraryItem {
   videoPath: string;
   title: string;
   durationSeconds?: number;
   transcriptPath?: string;
+  transcriptSource?: LibraryTranscriptSource;
+  /**
+   * True when none of the scan-time chain steps (pipeline JSON, same-dir
+   * sidecar) matched AND no YouTube video id could be derived from the
+   * filename — i.e. the only way this item could ever get a transcript is
+   * Phase 11's bring-your-own ASR. An item with a derivable YouTube id but no
+   * transcriptPath yet is *not* flagged transcribable: the lazy pull step
+   * will very likely resolve it on first request, so it isn't stuck waiting
+   * on ASR the way this marker implies.
+   */
+  transcribable?: boolean;
   instructor?: string;
   series?: string;
 }
@@ -155,26 +176,48 @@ export async function scanLibrary(config: ScanConfig): Promise<ScanResult> {
     }
   }
 
-  const items: LibraryItem[] = videoEntries.map(({ videoPath, libraryRoot }) => {
-    const resolved = path.resolve(videoPath);
-    const transcript = transcriptBySourceVideo.get(resolved);
-    const { instructor, series } = deriveInstructorSeries(videoPath, libraryRoot);
-    // codex P1-2: humanize the raw filename-derived title (see
-    // lib/titleHumanize.ts) — strips a redundant series-name prefix too,
-    // when the series folder's own name is just repeated verbatim in every
-    // video's filename plus a volume index.
-    const item: LibraryItem = {
-      videoPath,
-      title: humanizeVideoTitle(titleFromFilename(videoPath), series),
-      instructor,
-      series,
-    };
-    if (transcript) {
-      item.transcriptPath = transcript.transcriptPath;
-      if (transcript.durationSeconds !== undefined) item.durationSeconds = transcript.durationSeconds;
-    }
-    return item;
-  });
+  const items: LibraryItem[] = await Promise.all(
+    videoEntries.map(async ({ videoPath, libraryRoot }) => {
+      const resolved = path.resolve(videoPath);
+      const transcript = transcriptBySourceVideo.get(resolved);
+      const { instructor, series } = deriveInstructorSeries(videoPath, libraryRoot);
+      // codex P1-2: humanize the raw filename-derived title (see
+      // lib/titleHumanize.ts) — strips a redundant series-name prefix too,
+      // when the series folder's own name is just repeated verbatim in every
+      // video's filename plus a volume index.
+      const item: LibraryItem = {
+        videoPath,
+        title: humanizeVideoTitle(titleFromFilename(videoPath), series),
+        instructor,
+        series,
+      };
+      if (transcript) {
+        item.transcriptPath = transcript.transcriptPath;
+        item.transcriptSource = "pipeline";
+        if (transcript.durationSeconds !== undefined) item.durationSeconds = transcript.durationSeconds;
+        return item;
+      }
+
+      // Phase 10 "Transcript source chain", step 2: no pipeline JSON matched
+      // this video — look for a same-dir sidecar (.srt/.vtt, yt-dlp naming
+      // variants) before giving up. Step 3 (YouTube pull) is deliberately NOT
+      // attempted here — it's a network call, and a scan must stay a pure
+      // filesystem walk (see lib/transcriptChain.ts for the lazy pull, done
+      // at first transcript request instead).
+      const sidecar = await findSidecarTranscript(videoPath);
+      if (sidecar) {
+        item.transcriptPath = sidecar.path;
+        item.transcriptSource = "sidecar";
+        return item;
+      }
+
+      // Nothing matched at scan time. Still not "transcribable" (Phase 11's
+      // ASR marker) if a YouTube id is derivable — the lazy pull step is very
+      // likely to resolve it on first request, so it isn't actually stuck.
+      if (!deriveYoutubeVideoId(videoPath)) item.transcribable = true;
+      return item;
+    })
+  );
 
   items.sort((a, b) => a.videoPath.localeCompare(b.videoPath));
 

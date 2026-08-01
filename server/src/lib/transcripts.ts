@@ -1,5 +1,6 @@
 import path from "node:path";
 import { z } from "zod";
+import { parseSrtCaptions, parseVttCaptions } from "./captionParse.js";
 
 export interface TranscriptSegment {
   start: number;
@@ -81,75 +82,23 @@ export function parseTranscriptJson(raw: string): NormalizedTranscript {
   return parseWhisperJson(raw);
 }
 
-function srtTimeToSeconds(t: string): number {
-  // 00:01:02,345
-  const m = /^(\d+):(\d{2}):(\d{2})[.,](\d{1,3})$/.exec(t.trim());
-  if (!m) return 0;
-  const [, h, mm, ss, ms] = m;
-  return Number(h) * 3600 + Number(mm) * 60 + Number(ss) + Number(ms.padEnd(3, "0")) / 1000;
-}
-
-function vttTimeToSeconds(t: string): number {
-  // 00:01:02.345  or  01:02.345
-  const m = /^(?:(\d+):)?(\d{2}):(\d{2})[.,](\d{1,3})$/.exec(t.trim());
-  if (!m) return 0;
-  const [, h, mm, ss, ms] = m;
-  return (h ? Number(h) * 3600 : 0) + Number(mm) * 60 + Number(ss) + Number(ms.padEnd(3, "0")) / 1000;
-}
-
-/** Parses SubRip (.srt) subtitle text into normalized segments. */
+/**
+ * Parses SubRip (.srt) subtitle text into normalized segments. Thin wrapper
+ * over lib/captionParse.ts's `parseSrtCaptions` (Phase 10 "Transcript source
+ * chain") — kept here, under this name, because every existing call site
+ * (this module's own `loadTranscriptFromText` dispatch, lib/ytdlp.ts, and
+ * this file's tests) already imports it from `transcripts.ts`. Malformed-cue
+ * counting is available from captionParse.ts directly for callers that need
+ * it (the scan/sidecar/youtube-pull paths) — this wrapper's callers only
+ * ever wanted the segments.
+ */
 export function parseSrt(raw: string): NormalizedTranscript {
-  const normalized = raw.replace(/\r\n/g, "\n");
-  const blocks = normalized.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
-  const segments: TranscriptSegment[] = [];
-  const timeLine = /(\d{2}:\d{2}:\d{2}[.,]\d{1,3})\s*-->\s*(\d{2}:\d{2}:\d{2}[.,]\d{1,3})/;
-  for (const block of blocks) {
-    const lines = block.split("\n");
-    const timeLineIdx = lines.findIndex((l) => timeLine.test(l));
-    if (timeLineIdx === -1) continue;
-    const match = timeLine.exec(lines[timeLineIdx]);
-    if (!match) continue;
-    const text = lines
-      .slice(timeLineIdx + 1)
-      .join(" ")
-      .replace(/<[^>]+>/g, "")
-      .trim();
-    if (!text) continue;
-    segments.push({
-      start: srtTimeToSeconds(match[1]),
-      end: srtTimeToSeconds(match[2]),
-      text,
-    });
-  }
-  return { segments: segments.sort((a, b) => a.start - b.start) };
+  return { segments: parseSrtCaptions(raw).segments };
 }
 
-/** Parses WebVTT (.vtt) subtitle text into normalized segments. */
+/** Parses WebVTT (.vtt) subtitle text into normalized segments — see parseSrt's doc comment. */
 export function parseVtt(raw: string): NormalizedTranscript {
-  const normalized = raw.replace(/\r\n/g, "\n");
-  const blocks = normalized.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
-  const segments: TranscriptSegment[] = [];
-  const timeLine = /((?:\d+:)?\d{2}:\d{2}[.,]\d{1,3})\s*-->\s*((?:\d+:)?\d{2}:\d{2}[.,]\d{1,3})/;
-  for (const block of blocks) {
-    if (/^WEBVTT/i.test(block)) continue;
-    const lines = block.split("\n");
-    const timeLineIdx = lines.findIndex((l) => timeLine.test(l));
-    if (timeLineIdx === -1) continue;
-    const match = timeLine.exec(lines[timeLineIdx]);
-    if (!match) continue;
-    const text = lines
-      .slice(timeLineIdx + 1)
-      .join(" ")
-      .replace(/<[^>]+>/g, "")
-      .trim();
-    if (!text) continue;
-    segments.push({
-      start: vttTimeToSeconds(match[1]),
-      end: vttTimeToSeconds(match[2]),
-      text,
-    });
-  }
-  return { segments: segments.sort((a, b) => a.start - b.start) };
+  return { segments: parseVttCaptions(raw).segments };
 }
 
 /** Dispatches to the right loader based on file extension. */

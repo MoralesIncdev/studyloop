@@ -87,9 +87,14 @@ export const api = {
   putConfig: (patch: StudyLoopConfigPatch) =>
     request<StudyLoopConfig>("/api/config", { method: "PUT", body: JSON.stringify(patch) }),
 
-  getTranscript: (path: string, projectId?: string) =>
+  // Phase 10 "Transcript source chain": `path` is now optional — omit it
+  // (passing `projectId` alone) to resolve via the full chain (same-dir
+  // sidecar, or a lazy YouTube caption pull) for a project whose
+  // `transcript.type` is "none". Passing `path` keeps the exact pre-Phase-10
+  // behavior (an explicit file lookup).
+  getTranscript: (path: string | undefined, projectId?: string) =>
     request<TranscriptResponse>(
-      `/api/transcript?path=${encodeURIComponent(path)}${projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""}`
+      `/api/transcript?${path ? `path=${encodeURIComponent(path)}` : ""}${projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""}`
     ),
 
   getHealth: () => request<HealthResponse>("/api/health"),

@@ -2,11 +2,17 @@
 // Kept as plain interfaces here rather than importing across the workspace boundary —
 // the two packages build independently and the API is the real contract between them.
 
+/** Phase 10 "Transcript source chain": which scan-time step matched this item's `transcriptPath`. Never "youtube" here — that step is a lazy, on-request pull (see TranscriptResponse.transcriptSource), never attempted during a scan. */
+export type LibraryTranscriptSource = "pipeline" | "sidecar";
+
 export interface LibraryItem {
   videoPath: string;
   title: string;
   durationSeconds?: number;
   transcriptPath?: string;
+  transcriptSource?: LibraryTranscriptSource;
+  /** True when nothing in the scan-time chain matched AND no YouTube id could be derived from the filename — i.e. this item's only remaining path to a transcript is Phase 11's bring-your-own ASR. */
+  transcribable?: boolean;
   instructor?: string;
   series?: string;
 }
@@ -130,8 +136,14 @@ export interface TranscriptSegment {
   text: string;
 }
 
+/** Phase 10 "Transcript source chain": absent means "pipeline" (backward compat with responses from before this phase). */
+export type TranscriptSource = "pipeline" | "sidecar" | "youtube";
+
 export interface TranscriptResponse {
   segments: TranscriptSegment[];
+  transcriptSource?: TranscriptSource;
+  /** True only when GET /api/transcript resolved via the chain (no explicit `path`) and nothing in it matched — Phase 11's ASR slot. */
+  transcribable?: boolean;
 }
 
 export interface ConceptAnchor {

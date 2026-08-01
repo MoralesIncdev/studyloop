@@ -35,6 +35,17 @@
 .scrimVisible {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* Same rule as .chromeLayer above, one level down: the scrim's box spans the
+   full frame width and (at 1280×720) ~177px tall — but its top 72px is pure
+   padding and the legend row is mostly empty width, so `pointer-events: auto`
+   on the box itself made ~the top 100px an invisible click-eater over the
+   bottom quarter of the frame. A console pane dragged (or defaulted, like
+   NotePane at fy 0.6) into that band lost its own grip/chrome clicks to the
+   scrim whenever the video was paused. Only the actual content rows opt in,
+   and only while visible — hidden chrome stays click-through as before. */
+.scrimVisible > * {
   pointer-events: auto;
 }
 

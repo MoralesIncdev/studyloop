@@ -696,6 +696,74 @@ describe("loadProjectSession — persisted rail-section restore (V3-A review fin
   });
 });
 
+describe("loadProjectSession — Phase 10 'Transcript source chain'", () => {
+  function stubFetchFor(project: Project, transcriptBody: unknown) {
+    return vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes(`/api/projects/${project.id}`)) return Promise.resolve(jsonResponse(project));
+      if (url.includes("/api/transcript")) return Promise.resolve(jsonResponse(transcriptBody));
+      if (url.endsWith("/bubbles")) return Promise.resolve(jsonResponse({ bubbles: [] }));
+      if (url.endsWith("/notes")) {
+        return Promise.resolve(new Response("", { status: 200, headers: { "content-type": "text/markdown" } }));
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+  }
+
+  beforeEach(() => {
+    useStudyLoopStore.setState({
+      currentProject: null,
+      currentProjectLoading: false,
+      sessionRequestId: 0,
+      bubbles: [],
+      bubblesLoading: false,
+      notes: "",
+      notesLoaded: false,
+      transcriptSegments: [],
+      transcriptLoading: false,
+      toasts: [],
+    });
+  });
+
+  it('still fetches a transcript when transcript.type is "none" (no declared path — chain-resolved by projectId alone), and shows no error toast when the chain finds nothing', async () => {
+    const project = makeProject("chain-none", "Chain none");
+    const fetchMock = stubFetchFor(project, { segments: [], transcribable: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().loadProjectSession("chain-none");
+
+    const transcriptCalls = fetchMock.mock.calls.filter(([input]) => String(input).includes("/api/transcript"));
+    expect(transcriptCalls).toHaveLength(1);
+    // No `path=` — the chain branch resolves purely from projectId.
+    expect(String(transcriptCalls[0][0])).not.toContain("path=");
+    expect(useStudyLoopStore.getState().transcriptSegments).toEqual([]);
+    expect(useStudyLoopStore.getState().toasts.some((t) => /transcript/i.test(t.message))).toBe(false);
+  });
+
+  it('surfaces a sidecar/youtube-resolved transcript from the chain branch when transcript.type is "none"', async () => {
+    const project = makeProject("chain-sidecar", "Chain sidecar");
+    const segments = [{ start: 0, end: 1, text: "resolved via sidecar" }];
+    const fetchMock = stubFetchFor(project, { segments, transcriptSource: "sidecar" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().loadProjectSession("chain-sidecar");
+
+    expect(useStudyLoopStore.getState().transcriptSegments).toEqual(segments);
+  });
+
+  it('still passes an explicit path when transcript.type is "file" (pre-Phase-10 behavior unchanged)', async () => {
+    const project: Project = { ...makeProject("chain-file", "Chain file"), transcript: { type: "file", path: "lesson.srt" } };
+    const fetchMock = stubFetchFor(project, { segments: [{ start: 0, end: 1, text: "hi" }], transcriptSource: "sidecar" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().loadProjectSession("chain-file");
+
+    const transcriptCalls = fetchMock.mock.calls.filter(([input]) => String(input).includes("/api/transcript"));
+    expect(transcriptCalls).toHaveLength(1);
+    expect(String(transcriptCalls[0][0])).toContain(`path=${encodeURIComponent("lesson.srt")}`);
+  });
+});
+
 describe("openOrCreateYoutubeProject (V2-B — search/up-next click target)", () => {
   beforeEach(() => {
     useStudyLoopStore.setState({ projects: [], projectsLoaded: true, toasts: [] });

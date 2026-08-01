@@ -22,6 +22,32 @@
 | 7 | Cheap retention wins (front door + export) | DONE (720 server tests; front-door redirect once/session with ?noredirect escape; GET /api/review/export.csv Anki-importable) |
 | 8 | Document mode | DONE (331 web tests + 2 e2e; read-and-claim document surface, clinical defaults to it, console/document toggle in Session cabinet, video PiP, UnitProposalCard reused unchanged + cluster member fold) |
 | 9 | Lens autogeneration for unknown subjects | DONE (827 server tests; none-fits router → meta-schema draft → create-only write to user lens dir, origin:generated; safetyTier structurally impossible; generic fallback never fails analysis) |
+| 10 | Transcript source chain (sidecars + YouTube pull) | TODO |
+| 11 | Bring-your-own local ASR adapters | TODO |
+
+---
+
+## Phase 10 — Transcript source chain (Ryan's directive 2026-08-01)
+
+**Why:** ~105 library videos are YouTube rips with `.srt` sidecars on disk and `[videoId]` filenames — StudyLoop only matches pipeline JSONs, so they show "no transcript" despite captions sitting right next to them.
+
+**What:** a per-video resolution chain, first hit wins, provenance recorded on the project (`transcriptSource: "pipeline" | "sidecar" | "youtube" | "asr"`):
+1. Pipeline JSON via transcriptRoots (existing behavior, unchanged, highest priority).
+2. Sidecar captions: same-dir files matching `<basename>.srt|.vtt` plus yt-dlp variants (`<basename>.en.srt`, `.en-orig.srt` — prefer `.en` over `.en-orig`). Parse to the canonical segment schema (a small dependency-free srt/vtt parser lib with tests).
+3. YouTube captions: derive video id from the yt-dlp `[ID]` filename suffix; pull through the existing youtubei caption path used by YouTube projects; cache result as canonical transcript JSON under `<dataDir>/transcripts/` so it never re-fetches.
+4. (Phase 11's ASR slot — chain just leaves a "transcribable" marker when nothing hit.)
+Scan/library surfaces show which source matched. Normalization means terms layer, analysis, search all work identically regardless of source.
+
+---
+
+## Phase 11 — Bring-your-own local ASR (Ryan's directive 2026-08-01)
+
+**Why:** general-audience GitHub story — any video, any language, no cloud dependency, no bundled model.
+
+**What:** two adapter styles (mirroring the LLM provider registry philosophy):
+1. **Command adapter**: config `asr.command` template with `{input}`/`{output}` placeholders (works with whisper.cpp, faster-whisper, mlx-whisper…); expects SRT/VTT/JSON at `{output}`, parsed by Phase 10's parsers.
+2. **Endpoint adapter**: `asr.endpoint` + optional `asr.apiKey` against an OpenAI-compatible `/v1/audio/transcriptions` (speaches, LocalAI, hosted Whisper — one code path).
+Transcription runs as a durable job (queue + status like analysis jobs; one at a time; cancellable), output cached as canonical transcript JSON in `<dataDir>/transcripts/`, never re-run when cached. Settings UI gets an ASR section; transcript-less projects get a "Transcribe" affordance showing job progress. Config validated; command adapter refuses shell metacharacters in the template beyond placeholders (execFile, not shell).
 
 ---
 

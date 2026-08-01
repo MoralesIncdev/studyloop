@@ -1279,16 +1279,29 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       }
     })();
 
-    if (project.transcript.type === "file") {
+    // Phase 10 "Transcript source chain": always ask the server, even when
+    // `transcript.type` is "none" — a same-dir sidecar or a lazily-pulled
+    // YouTube caption track can still resolve via GET /api/transcript's
+    // chain fallback (lib/transcriptChain.ts) when only `projectId` is
+    // given. A project that genuinely has nothing (server returns
+    // `transcribable: true`, empty segments) degrades silently — that's the
+    // normal "no transcript yet" state, not an error worth a toast.
+    {
+      const transcriptPath = project.transcript.type === "file" ? project.transcript.path : undefined;
       set({ transcriptLoading: true });
       try {
-        const res = await api.getTranscript(project.transcript.path, project.id);
+        const res = await api.getTranscript(transcriptPath, project.id);
         if (!isCurrent()) return;
         set({ transcriptSegments: res.segments, transcriptLoading: false });
       } catch (err) {
         if (!isCurrent()) return;
         set({ transcriptLoading: false });
-        get().pushToast(`Could not load transcript: ${errorMessage(err)}`, "error");
+        if (transcriptPath) {
+          get().pushToast(`Could not load transcript: ${errorMessage(err)}`, "error");
+        }
+        // No declared transcript path: a chain-resolution failure (network
+        // blocked, no sidecar, no derivable id) is the ordinary "no
+        // transcript" case, not something worth surfacing as an error toast.
       }
     }
 
