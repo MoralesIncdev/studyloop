@@ -2,6 +2,13 @@
   position: absolute;
   inset: 0;
   z-index: 8;
+  /* Never a hit target itself: it blankets the whole frame ABOVE the console
+     pane layer (z-7), so pointer-events:auto here would swallow every
+     hover/drag/click aimed at a pane. It exists only to paint the scrim and
+     position children — interactive children opt back in (.scrimVisible,
+     StatusChips' chips, KeymapOverlay's backdrop), and the show-on-hover
+     hotspot is a native mousemove listener on the player frame (PlayerChrome). */
+  pointer-events: none;
 }
 
 .scrim {

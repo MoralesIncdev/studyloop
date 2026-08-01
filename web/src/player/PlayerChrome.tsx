@@ -108,6 +108,22 @@ export function PlayerChrome({ frameRef, onVisibleChange }: Props): JSX.Element 
 
   useEffect(() => () => clearHideTimer(), []);
 
+  // The show-on-hover hotspot lives on the player FRAME (native listeners),
+  // not on chromeLayer — the layer is pointer-events:none now (see
+  // PlayerChrome.module.css) so the console panes beneath it stay draggable.
+  // Mouse moving over a pane bubbles up to the frame, which matches the
+  // YouTube-style "any movement over the video reveals the transport" feel.
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    frame.addEventListener("mousemove", handleMouseMove);
+    frame.addEventListener("mouseleave", handleMouseLeave);
+    return () => {
+      frame.removeEventListener("mousemove", handleMouseMove);
+      frame.removeEventListener("mouseleave", handleMouseLeave);
+    };
+  }, [frameRef, handleMouseMove, handleMouseLeave]);
+
   // V2-C: server-side heatmap (SPEC "refetch after analyze completes / bubble
   // changes, debounced" — the debounce itself lives in the store's
   // loadHeatmap). analyze completion is handled by the store directly
@@ -295,11 +311,7 @@ export function PlayerChrome({ frameRef, onVisibleChange }: Props): JSX.Element 
   const zoomFactor = viewport ? duration / (viewport.e - viewport.s) : null;
 
   return (
-    <div
-      className={styles.chromeLayer}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-    >
+    <div className={styles.chromeLayer}>
       <StatusChips
         isPlaying={isPlaying}
         autoPaused={autoPaused}
