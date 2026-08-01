@@ -164,4 +164,68 @@ test.describe("console smoke", () => {
     await modalityGroup.getByRole("button", { name: "Watch", exact: true }).click();
     await expect(consoleRootAfterReload, "switching back to Watch should drop the .review modality class").not.toHaveClass(/\breview\b/);
   });
+
+  // Phase 8 (design/EXECUTION-PLAN-post-review-v1.md) "Document mode": the
+  // fixture project's domain is physical_skill (not clinical), so console
+  // stays the default surface on load — this test drives the explicit
+  // toggle. Covers: toggle to document mode -> units listed -> click an
+  // anchor -> video seeks -> toggle back to console.
+  test("document mode: toggle -> units listed -> anchor click seeks -> toggle back to console", async ({ page }) => {
+    await page.goto("/#/library");
+    await page.getByRole("button", { name: /Study Loop Smoke Fixture/ }).click();
+    await expect(page).toHaveURL(/#\/study\//);
+
+    const video = page.locator("video");
+    await expect(video).toBeVisible();
+
+    // Console is the domain default for this fixture (physical_skill) — the
+    // pane-engine-only "Edit layout" corner control is present.
+    const editLayoutBtn = page.getByRole("button", { name: "Edit layout" });
+    await expect(editLayoutBtn).toBeVisible();
+    await expect(page.getByRole("region", { name: "Document" })).toHaveCount(0);
+
+    // --- Toggle to Document via the Session cabinet's Surface group ---------
+    await page.getByRole("button", { name: "Session cabinet" }).click();
+    const surfaceGroup = page.getByRole("group", { name: "Surface" });
+    await expect(surfaceGroup).toBeVisible();
+    await surfaceGroup.getByRole("button", { name: "Document", exact: true }).click();
+    // Close via the panel's own Close button (not the edge handle — the open
+    // panel is pinned over the top of the stage and intercepts clicks on the
+    // handle underneath it) so it doesn't sit over the document list below.
+    await page.getByRole("button", { name: "Close" }).click();
+
+    // --- Document mode: pane engine gone, the document region lists every unit ---
+    await expect(editLayoutBtn, "no pane engine in document mode — the corner Edit-layout control isn't rendered").toBeHidden();
+    const documentRegion = page.getByRole("region", { name: "Document" });
+    await expect(documentRegion).toBeVisible();
+    await expect(documentRegion.getByText("Underhook controls the far hip")).toBeVisible();
+    await expect(documentRegion.getByText("Frame prevents hip escape")).toBeVisible();
+    await expect(documentRegion.getByText("Step through to mount")).toBeVisible();
+    // 3 fixture units, none attested yet.
+    await expect(documentRegion.getByText("0 / 3 attested")).toBeVisible();
+
+    // The video is still mounted and playable, just demoted to a corner PiP.
+    await expect(video).toBeVisible();
+
+    // --- Click the "Frame" unit's timestamp anchor (t=6s) — seeks to t-3 = 3s ---
+    const beforeSeek = await video.evaluate((v: HTMLVideoElement) => v.currentTime);
+    expect(beforeSeek).toBeLessThan(2);
+    await documentRegion.getByRole("button", { name: "0:06" }).click();
+    await expect
+      .poll(async () => video.evaluate((v: HTMLVideoElement) => v.currentTime), {
+        message: "clicking the unit's timestamp anchor should seek the (still-mounted, PiP'd) video",
+      })
+      .toBeGreaterThan(2.5);
+
+    // --- Toggle back to Console: document region gone, pane engine back ------
+    await page.getByRole("button", { name: "Session cabinet" }).click();
+    await surfaceGroup.getByRole("button", { name: "Console", exact: true }).click();
+    await page.getByRole("button", { name: "Close" }).click();
+
+    await expect(page.getByRole("region", { name: "Document" })).toHaveCount(0);
+    await expect(editLayoutBtn, "toggling back to console restores the pane-engine corner control").toBeVisible();
+    const conceptPane = page.locator('[data-pane="concept"]');
+    await editLayoutBtn.click();
+    await expect(conceptPane, "console mode's pane engine is fully functional again after the round trip").toBeVisible();
+  });
 });

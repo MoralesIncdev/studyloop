@@ -1,0 +1,51 @@
+/* Phase 8 "Document mode": the primary page surface once toggled on — a
+   wide, transcript-ordered reading column. Same design tokens as
+   concepts/UnitProposalCard.module.css and study/StudyPathSection.module.css
+   (both already used inside .consoleRoot elsewhere, e.g. RightRail's Path
+   tab) — no new palette introduced. */
+.wrap {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+}
+
+.empty {
+  color: var(--text-tertiary);
+  font-size: var(--type-13);
+  text-align: center;
+  padding: 48px 0;
+}
+
+.progress {
+  font-size: var(--type-11);
+  font-weight: var(--weight-medium);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 16px;
+}
+
+.doc {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.chapter {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chapterTitle {
+  margin: 0;
+  font-size: var(--type-15, 15px);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

@@ -18,6 +18,7 @@ import { PlayerChrome } from "../player/PlayerChrome";
 import { CCOverlay } from "../player/CCOverlay";
 import { ConsoleLayer } from "../console/ConsoleLayer";
 import { Cabinets } from "../console/cabinets/Cabinets";
+import { DocumentView } from "./DocumentView";
 import { RightRail } from "./RightRail";
 import { NotationModal } from "../notes/NotationModal";
 import { MergeQueuePanel } from "../concepts/MergeQueuePanel";
@@ -69,6 +70,14 @@ export function StudyView({ projectId }: Props): JSX.Element {
   const modality = useStudyLoopStore((s) => s.modality);
   const scaffold = useStudyLoopStore((s) => s.scaffold);
   const pressure = useStudyLoopStore((s) => s.pressure);
+  // Phase 8 "Document mode": the read-and-claim document surface — video
+  // demoted to a corner PiP, the pane engine (ConsoleLayer) not mounted at
+  // all (there's nothing for it to do once the document list already shows
+  // every unit), Cabinets/PlayerChrome kept exactly as they are so the
+  // Session cabinet's Console/Document toggle (SessionCabinet.tsx) stays
+  // reachable and playback controls stay usable. See lib/documentSurface.ts.
+  const studySurface = useStudyLoopStore((s) => s.studySurface);
+  const documentMode = studySurface === "document";
 
   // `undefined` = not yet decided (show resume prompt if applicable), a number =
   // the position the player should start at.
@@ -188,7 +197,14 @@ export function StudyView({ projectId }: Props): JSX.Element {
 
   return (
     <div className={`${styles.consoleRoot} ${modalityClass}`} style={consoleRootStyle}>
-      <section className={styles.console}>
+      {/* Phase 8 "Document mode": in document mode the stage is demoted to a
+          fixed-corner PiP (styles.consolePip overrides the full-bleed
+          .console rule below it in the stylesheet — see StudyView.module.css)
+          rather than unmounting the player — it's still the same
+          LocalVideoPlayer/YouTubePlayer instance, still playable, a unit's
+          timestamp anchor still seeks it (DocumentView reuses
+          UnitProposalCard's own seek button unchanged). */}
+      <section className={`${styles.console} ${documentMode ? styles.consolePip : ""}`}>
         <div className={styles.playerFrame} ref={frameRef}>
           {showResumePrompt && (
             <div className={styles.resumeOverlay}>
@@ -217,9 +233,15 @@ export function StudyView({ projectId }: Props): JSX.Element {
               <YouTubePlayer key={currentProject.id} videoId={currentProject.source.videoId} startAt={startAt} />
             )}
           </div>
-          {startAt !== undefined && <CCOverlay chromeVisible={chromeHovering} />}
-          {startAt !== undefined && <ConsoleLayer frameRef={frameRef} />}
-          {startAt !== undefined && <Cabinets />}
+          {/* Captions overlay is dropped in document mode — the transcript's
+              text is already the document itself, and there's no room for it
+              in a corner PiP. Nothing else about CCOverlay changes. */}
+          {startAt !== undefined && !documentMode && <CCOverlay chromeVisible={chromeHovering} />}
+          {/* Phase 8: the pane engine simply isn't mounted in document mode —
+              "no pane-engine changes, no new panes" (SPEC item 2/5). Every
+              unit the panes would have surfaced is already listed in
+              DocumentView below. */}
+          {startAt !== undefined && !documentMode && <ConsoleLayer frameRef={frameRef} />}
           {startAt !== undefined && <PlayerChrome frameRef={frameRef} onVisibleChange={setChromeHovering} />}
           {/* Console slice B: mock's `.focus-frame` (lines 59-62) — inset
               rounded border + soft glow, pointer-events:none so it never
@@ -232,7 +254,10 @@ export function StudyView({ projectId }: Props): JSX.Element {
             itself (perf law, mock comment at line 66). Fades toward the
             player chrome's idle state; never fully hidden/unreachable.
             Console slice B: dims further in focus mode (mock's edge-handle
-            equivalent — "dim non-essential floating UI"). */}
+            equivalent — "dim non-essential floating UI"). Hidden entirely in
+            document mode — Edit layout/Overlay layer are pane-engine
+            controls and the pane engine isn't mounted there (above). */}
+        {!documentMode && (
         <div
           className={`${styles.cornerButtons} ${chromeHovering ? styles.cornerButtonsVisible : ""} ${focusMode ? styles.cornerButtonsDimmed : ""}`}
         >
@@ -266,7 +291,31 @@ export function StudyView({ projectId }: Props): JSX.Element {
             </svg>
           </button>
         </div>
+        )}
       </section>
+
+      {/* Cabinets (edge handles + Concepts/Session/Captures panels) render in
+          their own always-full-viewport wrapper, deliberately OUTSIDE
+          .console/.playerFrame — Cabinets.module.css's own .wrap is
+          `position:absolute;inset:0`, sized to whatever positioned ancestor
+          contains it. In console mode .console already fills the viewport,
+          so this wrapper is visually identical to the old nesting; the
+          decoupling only matters in document mode, where .console shrinks to
+          a small PiP (above) and Cabinets must NOT shrink with it — the
+          Session cabinet's Console/Document toggle (SessionCabinet.tsx) has
+          to stay reachable at full size regardless of which surface is
+          showing. */}
+      {startAt !== undefined && (
+        <div className={styles.cabinetsLayer}>
+          <Cabinets />
+        </div>
+      )}
+
+      {/* Phase 8 "Document mode": the primary surface once toggled on — a
+          transcript-ordered, attest-in-place list of the project's units.
+          Rendered here (not inside .belowFold) so it reads as the page's
+          main content, with the demoted video floating over it as a PiP. */}
+      {documentMode && <DocumentView />}
 
       <div className={styles.belowFold}>
         {/* V3-A A4: slim chip strip below the player, outside the video frame — replaces the old slide-over ticker. */}

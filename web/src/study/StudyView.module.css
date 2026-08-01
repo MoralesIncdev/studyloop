@@ -63,6 +63,28 @@
   overflow: hidden;
 }
 
+/* Phase 8 "Document mode": video demoted to a fixed-corner PiP rather than
+   unmounted — same section, same playerFrame/video instance, just a much
+   smaller box that no longer reserves any flow space (position: fixed), so
+   DocumentView reads as the page's main content instead of everything
+   sitting below a phantom full-height gap. Declared after `.console` (same
+   specificity — a single class each — so source order decides: this wins).
+   `.consolePip` never applies at the same time as `.console` shows its full
+   100vh rules — StudyView.tsx only adds this class in document mode. */
+.consolePip {
+  position: fixed;
+  top: auto;
+  left: auto;
+  width: min(360px, 42vw);
+  height: min(202px, 23.6vw);
+  bottom: 20px;
+  right: 20px;
+  border-radius: 14px;
+  border: 1px solid var(--glass-line);
+  box-shadow: 0 10px 34px oklch(0.03 0.01 245 / 55%);
+  z-index: 30;
+}
+
 /* Video edge-to-edge: no max-width container, no rounded corners, no
    aspect-ratio box — the frame IS the stage. LocalVideoPlayer/YouTubePlayer
    already render their video/iframe at width/height 100% with object-fit:
@@ -173,6 +195,26 @@
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 9%),
     0 0 22px oklch(0.8 0.09 215 / 30%);
+}
+
+/* Phase 8 "Document mode": Cabinets' own wrap (console/cabinets/Cabinets.
+   module.css) is `position:absolute;inset:0` — sized to whatever positioned
+   ancestor contains it. This wrapper gives it a full-viewport ancestor that
+   never shrinks with `.consolePip`, so the edge handles (and the Session
+   cabinet's Console/Document toggle) stay reachable at full size regardless
+   of which surface is showing. In console mode `.console` already fills the
+   viewport, so moving Cabinets here changes nothing visually. */
+.cabinetsLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  /* Harmless belt-and-suspenders: Cabinets' own .wrap (Cabinets.module.css)
+     already sets pointer-events:none on itself and re-enables :auto on its
+     own interactive descendants (handles/panels) — that's the real
+     mechanism, unaffected by whatever this ancestor declares. This just
+     keeps the wrapper itself from ever becoming an accidental full-viewport
+     click-blocker if that inner rule ever changes. */
+  pointer-events: none;
 }
 
 /* ============ BELOW FOLD ============

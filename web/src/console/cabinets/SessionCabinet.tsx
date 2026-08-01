@@ -25,6 +25,11 @@ export function SessionCabinet(): JSX.Element {
   const setPressure = useStudyLoopStore((s) => s.setPressure);
   const modality = useStudyLoopStore((s) => s.modality);
   const setModality = useStudyLoopStore((s) => s.setModality);
+  // Phase 8 "Document mode": the Console/Document surface toggle lives here
+  // (near the modality switch), not in DomainRow.tsx — see
+  // lib/documentSurface.ts for the persistence + domain-default logic.
+  const studySurface = useStudyLoopStore((s) => s.studySurface);
+  const setStudySurface = useStudyLoopStore((s) => s.setStudySurface);
   const unitCount = useStudyLoopStore((s) => s.analysis?.units?.length ?? 0);
   const attestedCount = useStudyLoopStore(
     (s) => Object.values(s.attestations).filter((a) => a.status === "attested").length
@@ -77,6 +82,29 @@ export function SessionCabinet(): JSX.Element {
               {m.label}
             </button>
           ))}
+        </div>
+        {/* Phase 8 "Document mode": Console (pane engine + demoted-video
+            document surface) vs Document (transcript-ordered attest list,
+            video demoted to a corner PiP) — see study/DocumentView.tsx.
+            Defaults per-project by domain (clinical -> document) unless the
+            learner already made an explicit choice, which persists. */}
+        <div className={styles.modality} role="group" aria-label="Surface">
+          <button
+            type="button"
+            className={studySurface === "console" ? styles.modalityOn : undefined}
+            aria-pressed={studySurface === "console"}
+            onClick={() => setStudySurface("console")}
+          >
+            Console
+          </button>
+          <button
+            type="button"
+            className={studySurface === "document" ? styles.modalityOn : undefined}
+            aria-pressed={studySurface === "document"}
+            onClick={() => setStudySurface("document")}
+          >
+            Document
+          </button>
         </div>
         <div className={styles.sessCounts}>
           <div>

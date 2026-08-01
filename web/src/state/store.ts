@@ -39,7 +39,10 @@ import type {
 import { llmConfigured } from "../lib/types";
 import { hasSeenAttentionLegend, markAttentionLegendSeen } from "../lib/attentionHeatmap";
 import { resetAllPaneLayouts as clearStoredPaneLayouts } from "../lib/consoleLayout";
+import { defaultSurfaceForDomain, loadSurfacePreference, saveSurfacePreference, type StudySurface } from "../lib/documentSurface";
 import type { PlayerHandle } from "../player/types";
+
+export type { StudySurface };
 
 // "concepts" moved out of the bottom dock into the V2 right-rail Concepts
 // card (see study/RightRail.tsx) — the description box below the player now
@@ -489,6 +492,18 @@ export interface StudyLoopStore {
    *  nothing reads it yet. */
   pressure: number;
   setPressure: (v: number) => void;
+  /**
+   * Phase 8 "Document mode" (design/EXECUTION-PLAN-post-review-v1.md): which
+   * full-page surface the study page renders — the pane-engine console (the
+   * SessionCabinet toggle button labeled "Console") or the transcript-
+   * ordered document surface (study/DocumentView.tsx, "Document"). Defaults
+   * per-project from the project's domain (lib/documentSurface.ts's
+   * defaultSurfaceForDomain, computed once the project fetch resolves in
+   * loadProjectSession) unless the learner already made an explicit choice
+   * for this project, in which case that choice persists and wins.
+   */
+  studySurface: StudySurface;
+  setStudySurface: (surface: StudySurface) => void;
 
   // --- Console slice D: pane engine parity (design/mockups/video-console/index.html
   // lines 1044-1099, "drag-to-park + waiting ticks + undock") ----------------------
@@ -1030,6 +1045,11 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       condensedPlayback: false,
       consoleMode: true, // slice A: every project session starts in the console shell
       consoleEditMode: false,
+      // Phase 8: placeholder until the project fetch below resolves and its
+      // domain (or a stored per-project preference) is known — mirrors
+      // ccEnabled's own "set again once `project` is available" pattern a
+      // few lines down, not a real decision yet.
+      studySurface: "console",
       focusMode: false,
       keymapOpen: false,
       openCabinet: null,
@@ -1090,7 +1110,12 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       return;
     }
     if (!isCurrent()) return;
-    set({ currentProject: project, currentProjectLoading: false, ccEnabled: readCcEnabled(project.id) });
+    // Phase 8 "Document mode" item 4: an explicit prior choice for this
+    // project always wins; otherwise the domain-driven default (clinical ->
+    // document, everything else -> console).
+    const storedSurface = loadSurfacePreference(project.id);
+    const studySurface = storedSurface ?? defaultSurfaceForDomain(project.domain);
+    set({ currentProject: project, currentProjectLoading: false, ccEnabled: readCcEnabled(project.id), studySurface });
 
     const bubblesPromise = (async () => {
       set({ bubblesLoading: true });
@@ -1694,6 +1719,17 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   setScaffold: (v) => set({ scaffold: Math.min(100, Math.max(0, v)) }),
   pressure: 100,
   setPressure: (v) => set({ pressure: Math.min(100, Math.max(0, v)) }),
+  studySurface: "console",
+  setStudySurface: (surface) => {
+    if (get().studySurface === surface) return;
+    const projectId = get().currentProject?.id;
+    if (projectId) saveSurfacePreference(projectId, surface);
+    // Edit mode is a pane-engine concept (ConsoleLayer isn't even mounted in
+    // document mode — see StudyView.tsx) — leaving it on across a switch to
+    // Document would silently re-arm it for whenever the learner switches
+    // back, which isn't what "toggle to Document" asked for.
+    set({ studySurface: surface, consoleEditMode: surface === "document" ? false : get().consoleEditMode });
+  },
 
   // --- Console slice D: pane engine parity -----------------------------------------
   parkedPanes: {},

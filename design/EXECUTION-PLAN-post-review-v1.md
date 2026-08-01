@@ -20,8 +20,8 @@
 | 5 | Lens registry + clinical lens | DONE (763 server tests; six lens files incl. clinical w/ nclex dispatch + safety tier; user lens dir wins; legacy ids compat) |
 | 6 | Slide-text channel (PDF slice) | DONE (803 server tests; pdf-parse@1.1.1 per-page extraction — no native binaries; POST/GET/DELETE /api/projects/:id/slides; proportional chunk→page slide context in analysis.ts + evidence provenance field; staleReason "slides-changed"; web SlidesRow attach/remove affordance) |
 | 7 | Cheap retention wins (front door + export) | DONE (720 server tests; front-door redirect once/session with ?noredirect escape; GET /api/review/export.csv Anki-importable) |
-| 8 | Document mode (stretch — likely Kimi) | TODO |
-| 9 | Lens autogeneration for unknown subjects | TODO |
+| 8 | Document mode | DONE (331 web tests + 2 e2e; read-and-claim document surface, clinical defaults to it, console/document toggle in Session cabinet, video PiP, UnitProposalCard reused unchanged + cluster member fold) |
+| 9 | Lens autogeneration for unknown subjects | DONE (827 server tests; none-fits router → meta-schema draft → create-only write to user lens dir, origin:generated; safetyTier structurally impossible; generic fallback never fails analysis) |
 
 ---
 
