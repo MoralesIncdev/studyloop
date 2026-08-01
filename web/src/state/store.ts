@@ -5,6 +5,7 @@ import { create } from "zustand";
 import { api, ApiError } from "../lib/api";
 import { parseHash, routeToHash, type Route } from "../lib/router";
 import { activeConcepts, activeSegmentIndex } from "../lib/selectors";
+import { nextAbLoopAction } from "../lib/abLoop";
 import { formatTimestamp } from "../lib/time";
 import { buildMinedText } from "../lib/mining";
 import { pickPrompt, promptPoolFor } from "../lib/notationPrompts";
@@ -372,6 +373,12 @@ export interface StudyLoopStore {
   setPlaybackRate: (r: number) => void;
   volume: number;
   setVolume: (v: number) => void;
+  /** Console slice B (mock's `autoPaused`): true while playback is paused by a
+   *  hover-pause source (CCOverlay's caption hover) rather than an explicit
+   *  user pause — the status-chips row shows "Paused · reading" instead of
+   *  the 600ms-delayed manual-pause context chip while this is true. */
+  autoPaused: boolean;
+  setAutoPaused: (v: boolean) => void;
 
   // --- V3-A A1: state-aware surface purge -----------------------------------------
   /** True after 1.5s of continuous playback (debounced); false immediately on pause. */
@@ -391,6 +398,11 @@ export interface StudyLoopStore {
   setLoopA: (t: number | null) => void;
   setLoopB: (t: number | null) => void;
   clearLoop: () => void;
+  /** Console slice B (mock lines 897-911, "mpv grammar: A → B → clear"): one
+   *  button/hotkey (L) cycles the loop through set-A → set-B → clear instead
+   *  of separate Set A/Set B/Clear controls — see lib/abLoop.ts for the pure
+   *  transition table this wraps. */
+  cycleAbLoop: () => void;
   /** Console slice 6: condensed playback — the playhead skips stretches with no
    *  concept coverage (PlayerChrome owns the skip logic; this is just the mode). */
   condensedPlayback: boolean;
@@ -414,6 +426,16 @@ export interface StudyLoopStore {
    *  pane's stored position for the current project and snaps them back to
    *  their defaults. No-ops with no project loaded. */
   resetAllPaneLayouts: () => void;
+  /** Console slice B (mock body.focus, lines 59-62): distraction-free framing
+   *  around the stage — dims corner buttons/status chips, doesn't touch panes
+   *  or the transport itself. F or the transport's focus button toggles it. */
+  focusMode: boolean;
+  toggleFocusMode: () => void;
+  /** Console slice B (mock #keymap, lines 350-360): the centered shortcuts
+   *  overlay. `?` toggles, Esc closes (highest priority in the Escape cascade). */
+  keymapOpen: boolean;
+  toggleKeymap: () => void;
+  closeKeymap: () => void;
 
   // --- transcript UX --------------------------------------------------------------
   lastUserScrollAt: number;
@@ -907,6 +929,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       isPlaying: false,
       playbackFocus: false,
       focusOverride: false,
+      autoPaused: false,
       // "none" is a genuine persisted choice (both sections collapsed) and
       // must restore to `null` (the runtime "nothing open" state — see
       // setRailOpenSection), not fall through to the "transcript" default
@@ -923,6 +946,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       condensedPlayback: false,
       consoleMode: true, // slice A: every project session starts in the console shell
       consoleEditMode: false,
+      focusMode: false,
+      keymapOpen: false,
       controller: null,
       bubbles: [],
       bubblesLoading: false,
@@ -1154,6 +1179,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       isPlaying: false,
       playbackFocus: false,
       focusOverride: false,
+      autoPaused: false,
       railOpenSection: null,
       highlightedConceptId: null,
       ccEnabled: false,
@@ -1162,6 +1188,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       condensedPlayback: false,
       consoleMode: true, // slice A: leaves session state ready for the next project load
       consoleEditMode: false,
+      focusMode: false,
+      keymapOpen: false,
       bubbles: [],
       bubblesLoading: false,
       notes: "",
@@ -1401,6 +1429,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   setPlaybackRate: (r) => set({ playbackRate: clampRate(r) }),
   volume: 1,
   setVolume: (v) => set({ volume: clampVolume(v) }),
+  autoPaused: false,
+  setAutoPaused: (v) => set({ autoPaused: v }),
 
   // --- V3-A A1: state-aware surface purge ------------------------------------------
   playbackFocus: false,
@@ -1433,6 +1463,22 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       return { loopB: t };
     }),
   clearLoop: () => set({ loopA: null, loopB: null }),
+  cycleAbLoop: () => {
+    const state = get();
+    if (!state.controller) return;
+    const t = state.controller.getCurrentTime();
+    switch (nextAbLoopAction(state.loopA, state.loopB)) {
+      case "setA":
+        state.setLoopA(t);
+        break;
+      case "setB":
+        state.setLoopB(t);
+        break;
+      case "clear":
+        state.clearLoop();
+        break;
+    }
+  },
   condensedPlayback: false,
   toggleCondensedPlayback: () => {
     const next = !get().condensedPlayback;
@@ -1474,6 +1520,11 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     set((state) => ({ paneLayoutVersion: state.paneLayoutVersion + 1 }));
     get().pushToast("Pane layout reset", "info");
   },
+  focusMode: false,
+  toggleFocusMode: () => set((state) => ({ focusMode: !state.focusMode })),
+  keymapOpen: false,
+  toggleKeymap: () => set((state) => ({ keymapOpen: !state.keymapOpen })),
+  closeKeymap: () => set({ keymapOpen: false }),
 
   // --- transcript UX --------------------------------------------------------------
   lastUserScrollAt: 0,

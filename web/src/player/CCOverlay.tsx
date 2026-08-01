@@ -41,6 +41,7 @@ export function CCOverlay({ chromeVisible }: Props): JSX.Element | null {
       if (hoverPausedRef.current) {
         hoverPausedRef.current = false;
         useStudyLoopStore.getState().controller?.play();
+        useStudyLoopStore.getState().setAutoPaused(false);
       }
     },
     []
@@ -58,12 +59,18 @@ export function CCOverlay({ chromeVisible }: Props): JSX.Element | null {
     if (store.isPlaying && store.controller) {
       hoverPausedRef.current = true;
       store.controller.pause();
+      // Console slice B: status-chips row (PlayerChrome/StatusChips) shows
+      // "Paused · reading" for this pause source instead of the manual-pause
+      // context chip (design/mockups/video-console/index.html line 1068).
+      store.setAutoPaused(true);
     }
   };
   const handleLeave = (): void => {
     if (!hoverPausedRef.current) return;
     hoverPausedRef.current = false;
-    useStudyLoopStore.getState().controller?.play();
+    const store = useStudyLoopStore.getState();
+    store.controller?.play();
+    store.setAutoPaused(false);
   };
 
   return (

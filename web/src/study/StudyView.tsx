@@ -54,6 +54,10 @@ export function StudyView({ projectId }: Props): JSX.Element {
   const toggleConsoleMode = useStudyLoopStore((s) => s.toggleConsoleMode);
   const toggleConsoleEditMode = useStudyLoopStore((s) => s.toggleConsoleEditMode);
   const resetAllPaneLayouts = useStudyLoopStore((s) => s.resetAllPaneLayouts);
+  // Console slice B (mock body.focus, lines 59-62): distraction-free framing —
+  // an inset glow border over the stage, and the corner buttons (this view's
+  // equivalent of the mock's edge-handles) dim to stay out of the way.
+  const focusMode = useStudyLoopStore((s) => s.focusMode);
 
   // `undefined` = not yet decided (show resume prompt if applicable), a number =
   // the position the player should start at.
@@ -183,13 +187,21 @@ export function StudyView({ projectId }: Props): JSX.Element {
           {startAt !== undefined && <CCOverlay chromeVisible={chromeHovering} />}
           {startAt !== undefined && <ConsoleLayer frameRef={frameRef} />}
           {startAt !== undefined && <PlayerChrome frameRef={frameRef} onVisibleChange={setChromeHovering} />}
+          {/* Console slice B: mock's `.focus-frame` (lines 59-62) — inset
+              rounded border + soft glow, pointer-events:none so it never
+              intercepts anything underneath. */}
+          <div className={`${styles.focusFrame} ${focusMode ? styles.focusFrameOn : ""}`} aria-hidden="true" />
         </div>
 
         {/* Corner controls (mock lines 426-438): glass circular buttons, blur
             scoped to just these two small buttons — never blur the stage
             itself (perf law, mock comment at line 66). Fades toward the
-            player chrome's idle state; never fully hidden/unreachable. */}
-        <div className={`${styles.cornerButtons} ${chromeHovering ? styles.cornerButtonsVisible : ""}`}>
+            player chrome's idle state; never fully hidden/unreachable.
+            Console slice B: dims further in focus mode (mock's edge-handle
+            equivalent — "dim non-essential floating UI"). */}
+        <div
+          className={`${styles.cornerButtons} ${chromeHovering ? styles.cornerButtonsVisible : ""} ${focusMode ? styles.cornerButtonsDimmed : ""}`}
+        >
           <button
             type="button"
             className={`${styles.cornerBtn} ${consoleEditMode ? styles.cornerBtnOn : ""}`}

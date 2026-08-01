@@ -1,0 +1,68 @@
+/* Mock lines 324-333: floating pill row above the transport. */
+.row {
+  position: absolute;
+  left: 30px;
+  bottom: 108px;
+  z-index: 30;
+  display: flex;
+  gap: 8px;
+  transition: opacity 0.3s var(--ease);
+}
+
+.dimmed {
+  opacity: 0.2;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 13px;
+  border-radius: 99px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ice-core);
+  background: oklch(0.16 0.01 245 / 90%);
+  border: 1px solid var(--glass-line);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.4s var(--ease), transform 0.4s var(--ease);
+  pointer-events: none;
+}
+
+.chipOn {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 8px var(--amber);
+  flex: none;
+}
+
+.dotQuiet {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ice-dim);
+  flex: none;
+}
+
+.chip button {
+  display: inline-flex;
+  align-items: center;
+  color: var(--amber);
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.chip button:hover {
+  filter: drop-shadow(0 0 6px oklch(0.8 0.12 80 / 60%));
+}

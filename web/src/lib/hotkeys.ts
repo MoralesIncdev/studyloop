@@ -1,9 +1,39 @@
-// F3 ergonomics: the full hotkey set from SPEC, disabled while the user is typing
-// in an input/textarea/contenteditable. Reads/writes the store directly (via
+// F3 ergonomics: the full hotkey set, disabled while the user is typing in an
+// input/textarea/contenteditable. Reads/writes the store directly (via
 // getState()) rather than through selectors, since this is an imperative side
 // effect hook, not something that should re-render on every keystroke.
+//
+// Console slice B (design/mockups/video-console/index.html lines 1243-1266,
+// 730-744 "Console shortcuts" overlay): the hotkey grammar was rebuilt to
+// match the mock's, moving off the old YouTube-editor bindings (j/l ±10s,
+// a/b set loop points, plain c=captions) that never appeared in the mock's
+// own keymap:
+//
+//   space         play / pause
+//   L             A-B loop: set A → set B → clear (mpv grammar, replaces the
+//                 old j/l ±10s seek — j is now unbound, freed up by it; ← →
+//                 already cover ±5s/prev-next-concept seeking)
+//   M             mine this moment (frame + transcript slice, no dialog)
+//   C             condensed playback: play concepts only (was X; X still
+//                 works too, as a legacy alias — SURVEY.md slice 6 shipped
+//                 with X first and existing muscle memory shouldn't break)
+//   B             toggle captions (freed up from C, which condensed now owns)
+//   ← / →         previous/next concept tick when the video has any; falls
+//                 back to ±5s seek when it doesn't
+//   , / .         step 1s back / forward (was rate ±0.25 — rate now lives on
+//                 the transport's inline speed control, click-cycles)
+//   E             edit layout mode (materialize + arrange overlay panes)
+//   F             focus mode (distraction-free framing around the stage)
+//   O             toggle the pane-engine overlay layer
+//   ?             toggle the shortcuts overlay
+//   esc           close the topmost thing open: keymap overlay, then edit
+//                 mode, then (a later slice) an open cabinet
+//
+// Kept from before, unchanged: N (notation), S (screenshot).
 import { useEffect } from "react";
-import { clampRate, useStudyLoopStore } from "../state/store";
+import { useStudyLoopStore } from "../state/store";
+import { adjacentConceptTick } from "./conceptLoop";
+import { conceptTickTimes } from "./analysisFormat";
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -28,44 +58,32 @@ export function useHotkeys(enabled: boolean): void {
         else controller.play();
         return;
       }
-      if (e.key === "ArrowLeft") {
+
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
-        controller.seek(Math.max(0, controller.getCurrentTime() - 5));
+        const direction = e.key === "ArrowRight" ? "next" : "prev";
+        const times = conceptTickTimes(store.concepts, store.analysis?.concepts);
+        const t = controller.getCurrentTime();
+        const tick = times.length > 0 ? adjacentConceptTick(times, t, direction) : null;
+        if (tick != null) controller.seek(tick);
+        else controller.seek(Math.max(0, t + (direction === "next" ? 5 : -5)));
         return;
       }
-      if (e.key === "ArrowRight") {
-        e.preventDefault();
-        controller.seek(controller.getCurrentTime() + 5);
+
+      if (e.key === "?") {
+        store.toggleKeymap();
         return;
       }
 
       switch (e.key.toLowerCase()) {
-        case "j":
-          controller.seek(Math.max(0, controller.getCurrentTime() - 10));
+        case ",":
+          controller.seek(Math.max(0, controller.getCurrentTime() - 1));
+          break;
+        case ".":
+          controller.seek(controller.getCurrentTime() + 1);
           break;
         case "l":
-          controller.seek(controller.getCurrentTime() + 10);
-          break;
-        case "k":
-          controller.pause();
-          break;
-        case ",": {
-          // setRate syncs the store itself with whatever rate actually ends
-          // up in effect (see PlayerHandle.setRate) — no separate
-          // store.setPlaybackRate call needed here.
-          controller.setRate(clampRate(store.playbackRate - 0.25));
-          break;
-        }
-        case ".": {
-          controller.setRate(clampRate(store.playbackRate + 0.25));
-          break;
-        }
-        case "a":
-          if (e.shiftKey) store.clearLoop();
-          else store.setLoopA(controller.getCurrentTime());
-          break;
-        case "b":
-          store.setLoopB(controller.getCurrentTime());
+          store.cycleAbLoop();
           break;
         case "n":
           store.openNotation();
@@ -79,11 +97,12 @@ export function useHotkeys(enabled: boolean): void {
           void store.mineMoment();
           break;
         case "x":
+        case "c":
           // Console slice 6: condensed playback — skip the stretches with no
           // concepts (the heatmap/tick layer becomes a playback program).
           store.toggleCondensedPlayback();
           break;
-        case "c":
+        case "b":
           store.toggleCcEnabled();
           break;
         case "o":
@@ -94,8 +113,12 @@ export function useHotkeys(enabled: boolean): void {
           // Console edit mode: materialize + arrange the overlay panes.
           store.toggleConsoleEditMode();
           break;
+        case "f":
+          store.toggleFocusMode();
+          break;
         case "escape":
-          if (store.consoleEditMode) store.toggleConsoleEditMode();
+          if (store.keymapOpen) store.closeKeymap();
+          else if (store.consoleEditMode) store.toggleConsoleEditMode();
           break;
         default:
           break;

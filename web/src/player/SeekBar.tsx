@@ -1,7 +1,14 @@
-// YouTube-style progress bar: red played-portion, hover time tooltip, click-to-seek,
-// and marker layers rendered purely from props — bubble pins and concept ticks —
-// plus an optional heatmap density strip (SPEC "Player chrome" — see HeatmapStrip).
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+// Console slice B (design/mockups/video-console/index.html lines 260-313,
+// 800-889): the mock's minimal cinematic timeline — a 2.5px hairline rail, a
+// glowing gradient fill, a circular dot playhead, and a unified tick
+// vocabulary (jade attested / amber proposed / faint plain, with an optional
+// `.tail` for a real span and a pulsing yellow `.prov` for a note in
+// progress) — replacing the old YouTube red-bar look. Marker LOGIC is
+// unchanged from the pre-console version: click-to-seek/loop, hover
+// previews, the heatmap density strip, click-to-inspect, and zoom all still
+// work exactly as before; only the visual language and the concept-tick
+// hover treatment (now the mock's `.tick-peek` glass pill) changed.
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { formatTimestamp } from "../lib/time";
 import { marksForClickRatio } from "../lib/attentionHeatmap";
 import type { HeatmapMark } from "../lib/types";
@@ -22,9 +29,18 @@ export interface SeekBarBubbleMarker extends SeekBarMarker {
   thumbnailUrl?: string | null;
 }
 
-/** A concept tick carries its card title for a hover tooltip (F7). */
+/** A concept tick carries its card title for the hover peek pill (F7), plus
+ *  the mock's tick vocabulary (Console slice B). */
 export interface SeekBarConceptTick extends SeekBarMarker {
   title?: string;
+  /** attested (jade) / proposed (amber, awaiting attestation) / plain (faint,
+   *  no unit backing at all) — see PlayerChrome's derivation off `attestations`. */
+  kind?: "attested" | "proposed" | "plain";
+  /** Span end, when known — renders a `.tail` bar from t to end (mock lines
+   *  290-291, 864). Anchor data is point-only today (ConceptAnchor/UnitAnchor
+   *  carry only `t`), so this is normally undefined; the tail is plumbed
+   *  through and ready for whenever a data source actually supplies a span. */
+  end?: number;
 }
 
 /** V2-C: a pearl diamond — distinct from bubble pins/concept ticks (SPEC "Analysis engine"). */
@@ -39,6 +55,11 @@ export interface SeekBarOverlayMarker extends SeekBarMarker {
   hue: number;
   kind: "bubble" | "pearl";
 }
+
+/** Console slice 4: a mined capture's bubble text is always prefixed this way
+ *  by lib/mining.ts's buildMinedText — the one existing signal that
+ *  distinguishes a mined pin from a hand-typed note, without a schema change. */
+const MINED_TEXT_PREFIX = "[mined ";
 
 interface Props {
   currentTime: number;
@@ -70,6 +91,12 @@ interface Props {
   /** Raw marks behind both layers, resolved locally on click (lib/attentionHeatmap.ts) — omit to render the strip decoratively (no click-to-inspect). */
   attentionMarks?: { own: HeatmapMark[]; overlays: HeatmapMark[] };
   attentionBucketCount?: number;
+  /** Console slice 7 "timeline zoom" (SURVEY.md), lifted to PlayerChrome
+   *  (slice B) so the transport's t-row zoom chip can read/reset it too —
+   *  the visible window of the timeline, or null for the whole video. Scroll
+   *  on the bar zooms around the cursor; double-click (or the chip) resets. */
+  viewport: { s: number; e: number } | null;
+  onViewportChange: Dispatch<SetStateAction<{ s: number; e: number } | null>>;
 }
 
 export function SeekBar({
@@ -91,26 +118,26 @@ export function SeekBar({
   attentionOverlays,
   attentionMarks,
   attentionBucketCount,
+  viewport,
+  onViewportChange,
 }: Props): JSX.Element {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<{ x: number; t: number } | null>(null);
   const [hoverBubble, setHoverBubble] = useState<SeekBarBubbleMarker | null>(null);
   const [hoverPearl, setHoverPearl] = useState<SeekBarPearlMarker | null>(null);
+  // Console slice B: the mock's single reused #tickPeek pill (mock lines
+  // 307-312, 866-870) — label + time range, positioned at the hovered tick.
+  const [hoverTick, setHoverTick] = useState<SeekBarConceptTick | null>(null);
   const [dragging, setDragging] = useState(false);
   // V3-C C5: click-to-inspect popover state — the ratio (0..1) of the click
   // that opened it, or null when closed.
   const [inspectRatio, setInspectRatio] = useState<number | null>(null);
-  // Console slice 7 "timeline zoom" (SURVEY.md): the visible window of the
-  // timeline, or null for the whole video. Scroll on the bar zooms around the
-  // cursor; double-click (or the chip) resets. Required for 7-hour footage,
-  // where a full-width bar gives seconds per pixel and ticks pile into mud.
-  const [viewport, setViewport] = useState<{ s: number; e: number } | null>(null);
 
   const vs = viewport?.s ?? 0;
   const ve = viewport?.e ?? duration;
 
   // A new video (duration change) always starts unzoomed.
-  useEffect(() => setViewport(null), [duration]);
+  useEffect(() => onViewportChange(null), [duration]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const track = trackRef.current;
@@ -120,7 +147,7 @@ export function SeekBar({
       e.preventDefault();
       const rect = track.getBoundingClientRect();
       const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-      setViewport((cur) => {
+      onViewportChange((cur) => {
         const s0 = cur?.s ?? 0;
         const e0 = cur?.e ?? duration;
         const anchor = s0 + ratio * (e0 - s0);
@@ -134,6 +161,7 @@ export function SeekBar({
     // Native non-passive listener: React's synthetic wheel can't preventDefault.
     track.addEventListener("wheel", onWheel, { passive: false });
     return () => track.removeEventListener("wheel", onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [duration]);
 
   const inspectMarks = useMemo<HeatmapMark[]>(() => {
@@ -211,6 +239,8 @@ export function SeekBar({
 
   const span = ve - vs;
   const pct = (t: number): string => `${span > 0 ? Math.min(100, Math.max(0, ((t - vs) / span) * 100)) : 0}%`;
+  /** Width, in percent of the visible window, spanned from `from` to `to` — used for a tick's `.tail`. */
+  const pctWidth = (from: number, to: number): number => (span > 0 ? Math.max(0, ((to - from) / span) * 100) : 0);
   /** Whether a marker at `t` falls inside the visible window (zoomed views hide
    *  out-of-window markers instead of piling them at the edges). */
   const inView = (t: number): boolean => !viewport || (t >= vs - span * 0.01 && t <= ve + span * 0.01);
@@ -225,7 +255,7 @@ export function SeekBar({
         onMouseLeave={() => setHover(null)}
         onMouseDown={handleMouseDown}
         onClick={handleClick}
-        onDoubleClick={() => setViewport(null)}
+        onDoubleClick={() => onViewportChange(null)}
         onKeyDown={handleKeyDown}
         tabIndex={0}
         role="slider"
@@ -248,6 +278,7 @@ export function SeekBar({
             }
           />
         )}
+        <div className={styles.rail} />
         {loopA != null && loopB != null && (
           <div
             className={styles.loopRange}
@@ -256,41 +287,51 @@ export function SeekBar({
         )}
         <div className={styles.fill} style={{ width: pct(currentTime) }} />
         {conceptTicks.filter((tick) => inView(tick.t)).map((tick) => (
-          <Tooltip key={tick.id} label={tick.title ? `${tick.title} — ${formatTimestamp(tick.t)}` : formatTimestamp(tick.t)}>
-            <button
-              type="button"
-              className={styles.conceptTick}
-              data-kind="concept"
-              data-active={activeConceptTickId === tick.id}
-              style={{ left: pct(tick.t) }}
-              aria-label={`Concept: ${tick.title ?? "untitled"} at ${formatTimestamp(tick.t)}`}
-              aria-pressed={activeConceptTickId === tick.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (onConceptTick) onConceptTick(tick);
-                else onSeek(tick.t);
-              }}
-            />
-          </Tooltip>
-        ))}
-        {bubbles.filter((bubble) => inView(bubble.t)).map((bubble) => (
           <button
-            key={bubble.id}
+            key={tick.id}
             type="button"
-            className={styles.bubblePin}
-            data-kind="bubble"
-            style={{ left: pct(bubble.t) }}
-            aria-label={`Note: ${bubble.text || "untitled"} at ${formatTimestamp(bubble.t)}`}
-            onMouseEnter={() => setHoverBubble(bubble)}
-            onMouseLeave={() => setHoverBubble((cur) => (cur?.id === bubble.id ? null : cur))}
-            onFocus={() => setHoverBubble(bubble)}
-            onBlur={() => setHoverBubble((cur) => (cur?.id === bubble.id ? null : cur))}
+            className={styles.conceptTick}
+            data-kind={tick.kind ?? "plain"}
+            data-active={activeConceptTickId === tick.id}
+            style={{ left: pct(tick.t) }}
+            aria-label={`Concept: ${tick.title ?? "untitled"} at ${formatTimestamp(tick.t)}`}
+            aria-pressed={activeConceptTickId === tick.id}
+            onMouseEnter={() => setHoverTick(tick)}
+            onMouseLeave={() => setHoverTick((cur) => (cur?.id === tick.id ? null : cur))}
+            onFocus={() => setHoverTick(tick)}
+            onBlur={() => setHoverTick((cur) => (cur?.id === tick.id ? null : cur))}
             onClick={(e) => {
               e.stopPropagation();
-              (onSeekBubble ?? onSeek)(bubble.t);
+              if (onConceptTick) onConceptTick(tick);
+              else onSeek(tick.t);
             }}
-          />
+          >
+            {tick.end != null && tick.end > tick.t && (
+              <span className={styles.tail} style={{ width: `${pctWidth(tick.t, tick.end)}%` }} />
+            )}
+          </button>
         ))}
+        {bubbles.filter((bubble) => inView(bubble.t)).map((bubble) => {
+          const mined = bubble.text?.startsWith(MINED_TEXT_PREFIX) ?? false;
+          return (
+            <button
+              key={bubble.id}
+              type="button"
+              className={mined ? styles.minedTick : styles.bubblePin}
+              data-kind={mined ? "mined" : "bubble"}
+              style={{ left: pct(bubble.t) }}
+              aria-label={`${mined ? "Mined capture" : "Note"}: ${bubble.text || "untitled"} at ${formatTimestamp(bubble.t)}`}
+              onMouseEnter={() => setHoverBubble(bubble)}
+              onMouseLeave={() => setHoverBubble((cur) => (cur?.id === bubble.id ? null : cur))}
+              onFocus={() => setHoverBubble(bubble)}
+              onBlur={() => setHoverBubble((cur) => (cur?.id === bubble.id ? null : cur))}
+              onClick={(e) => {
+                e.stopPropagation();
+                (onSeekBubble ?? onSeek)(bubble.t);
+              }}
+            />
+          );
+        })}
         {/* V2-C: pearl diamonds — visually distinct from bubble pins (dots above)
             and concept ticks (bars below); size scales with importance. */}
         {pearls.filter((pearl) => inView(pearl.t)).map((pearl) => (
@@ -337,7 +378,16 @@ export function SeekBar({
           <div className={styles.provisionalTick} style={{ left: pct(provisionalT) }} />
         )}
         <div className={styles.playhead} style={{ left: pct(currentTime) }} />
-        {hoverPearl && (
+        {hoverTick && (
+          <div className={styles.tickPeek} style={{ left: pct(hoverTick.t) }}>
+            {hoverTick.title ?? "Untitled"}
+            <span className={styles.tickPeekTime}>
+              {formatTimestamp(hoverTick.t)}
+              {hoverTick.end != null ? `–${formatTimestamp(hoverTick.end)}` : ""}
+            </span>
+          </div>
+        )}
+        {!hoverTick && hoverPearl && (
           <div className={styles.bubbleTooltip} style={{ left: `clamp(28px, ${pct(hoverPearl.t)}, calc(100% - 28px))` }}>
             <span className={styles.pearlStars}>
               {Array.from({ length: 3 }, (_, i) => (
@@ -347,28 +397,22 @@ export function SeekBar({
             <span className={styles.bubbleTooltipText}>{hoverPearl.label}</span>
           </div>
         )}
-        {!hoverPearl && hoverBubble && (
+        {!hoverTick && !hoverPearl && hoverBubble && (
           <div className={styles.bubbleTooltip} style={{ left: `clamp(28px, ${pct(hoverBubble.t)}, calc(100% - 28px))` }}>
             {hoverBubble.thumbnailUrl && <img className={styles.bubbleTooltipImg} src={hoverBubble.thumbnailUrl} alt="" />}
             <span className={styles.bubbleTooltipText}>{hoverBubble.text || formatTimestamp(hoverBubble.t)}</span>
           </div>
         )}
-        {!hoverPearl && !hoverBubble && hover && (
+        {!hoverTick && !hoverPearl && !hoverBubble && hover && (
           <div className={styles.tooltip} style={{ left: `clamp(16px, ${hover.x}px, calc(100% - 16px))` }}>
             {formatTimestamp(hover.t)}
           </div>
         )}
       </div>
-      {viewport && duration > 0 && (
-        <button
-          type="button"
-          className={styles.zoomChip}
-          onClick={() => setViewport(null)}
-          aria-label="Reset timeline zoom"
-        >
-          {(duration / (viewport.e - viewport.s)).toFixed(1)}× · reset
-        </button>
-      )}
+      {/* Console slice B: the zoom chip moved into the transport's t-row
+          (mock line 687, `#zoomChip` next to chapters/condensed) — PlayerChrome
+          reads `viewport` (lifted here so both can see it) and renders it via
+          PlayerControls; SeekBar itself no longer floats its own copy. */}
       {inspectRatio !== null && (
         <AttentionPopover
           marks={inspectMarks}

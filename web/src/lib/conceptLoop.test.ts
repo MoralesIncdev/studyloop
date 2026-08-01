@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conceptLoopSpan, DEFAULT_SPAN_S, MIN_SPAN_S } from "./conceptLoop";
+import { adjacentConceptTick, conceptLoopSpan, DEFAULT_SPAN_S, MIN_SPAN_S } from "./conceptLoop";
 
 describe("conceptLoopSpan", () => {
   it("spans from the tick to the next concept tick", () => {
@@ -30,5 +30,35 @@ describe("conceptLoopSpan", () => {
 
   it("clamps a negative tick time to zero", () => {
     expect(conceptLoopSpan(-5, [], 1800).start).toBe(0);
+  });
+});
+
+describe("adjacentConceptTick", () => {
+  const times = [135, 522, 724, 1170, 1495];
+
+  it("finds the next tick after t", () => {
+    expect(adjacentConceptTick(times, 600, "next")).toBe(724);
+  });
+
+  it("finds the previous tick before t", () => {
+    expect(adjacentConceptTick(times, 600, "prev")).toBe(522);
+  });
+
+  it("returns null past the last tick going next", () => {
+    expect(adjacentConceptTick(times, 1495, "next")).toBeNull();
+  });
+
+  it("returns null before the first tick going prev", () => {
+    expect(adjacentConceptTick(times, 135, "prev")).toBeNull();
+  });
+
+  it("skips a tick within the 1s dead zone of t itself", () => {
+    expect(adjacentConceptTick(times, 724, "next")).toBe(1170);
+    expect(adjacentConceptTick(times, 724, "prev")).toBe(522);
+  });
+
+  it("returns null with no ticks at all", () => {
+    expect(adjacentConceptTick([], 100, "next")).toBeNull();
+    expect(adjacentConceptTick([], 100, "prev")).toBeNull();
   });
 });

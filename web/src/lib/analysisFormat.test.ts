@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { analysisConceptToConceptCard, hashHueForHandle, starStates, sortPearls } from "./analysisFormat";
-import type { AnalysisConcept, Pearl } from "./types";
+import { analysisConceptToConceptCard, conceptTickTimes, hashHueForHandle, starStates, sortPearls, unitIdForConceptCard } from "./analysisFormat";
+import type { AnalysisConcept, ConceptCard, Pearl } from "./types";
 
 describe("sortPearls", () => {
   it("sorts by importance descending, then by timestamp ascending", () => {
@@ -64,5 +64,36 @@ describe("analysisConceptToConceptCard", () => {
     expect(card.title).toBe("Grip Fighting");
     expect(card.body).toBe("## Full markdown body");
     expect(card.anchors).toEqual([{ t: 65 }, { t: 500 }]);
+  });
+});
+
+describe("unitIdForConceptCard", () => {
+  it("strips the ai: prefix so it matches analysis.units[].id", () => {
+    expect(unitIdForConceptCard("ai:grip-fighting")).toBe("grip-fighting");
+  });
+
+  it("leaves a doc concept id unprefixed and unchanged", () => {
+    expect(unitIdForConceptCard("frames-before-grips")).toBe("frames-before-grips");
+  });
+});
+
+describe("conceptTickTimes", () => {
+  const docConcepts: ConceptCard[] = [
+    { id: "frames", title: "Frames", body: "", raw: "", anchors: [{ t: 135 }, { t: null }] },
+  ];
+  const analysisConcepts: AnalysisConcept[] = [
+    { id: "distance", title: "Distance", summary: "", body: "", anchors: [{ t: 522 }] },
+  ];
+
+  it("flattens doc concept anchors, dropping unset (null) ones", () => {
+    expect(conceptTickTimes(docConcepts)).toEqual([135]);
+  });
+
+  it("includes AI-breakdown anchors when provided", () => {
+    expect(conceptTickTimes(docConcepts, analysisConcepts)).toEqual([135, 522]);
+  });
+
+  it("returns an empty array with no concepts at all", () => {
+    expect(conceptTickTimes([])).toEqual([]);
   });
 });

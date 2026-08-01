@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { clampRate, useStudyLoopStore } from "./store";
 import type { Project } from "../lib/types";
+import type { PlayerHandle } from "../player/types";
 
 describe("clampRate", () => {
   it("clamps to the 0.5–2.5 range", () => {
@@ -88,6 +89,76 @@ describe("A/B loop store logic", () => {
     useStudyLoopStore.getState().clearLoop();
     expect(useStudyLoopStore.getState().loopA).toBeNull();
     expect(useStudyLoopStore.getState().loopB).toBeNull();
+  });
+});
+
+describe("cycleAbLoop (console slice B, mpv grammar A → B → clear)", () => {
+  function fakeController(t: number): PlayerHandle {
+    return {
+      play: vi.fn(),
+      pause: vi.fn(),
+      seek: vi.fn(),
+      getCurrentTime: () => t,
+      getDuration: () => 1800,
+      setRate: vi.fn(),
+      getVolume: () => 1,
+      setVolume: vi.fn(),
+      on: () => () => {},
+    };
+  }
+
+  beforeEach(() => {
+    useStudyLoopStore.setState({ loopA: null, loopB: null, toasts: [], controller: fakeController(10) });
+  });
+
+  it("is a no-op without a controller", () => {
+    useStudyLoopStore.setState({ controller: null });
+    useStudyLoopStore.getState().cycleAbLoop();
+    expect(useStudyLoopStore.getState().loopA).toBeNull();
+  });
+
+  it("sets A on the first press, B on the second, clears on the third", () => {
+    useStudyLoopStore.getState().cycleAbLoop();
+    expect(useStudyLoopStore.getState().loopA).toBe(10);
+    expect(useStudyLoopStore.getState().loopB).toBeNull();
+
+    useStudyLoopStore.setState({ controller: fakeController(20) });
+    useStudyLoopStore.getState().cycleAbLoop();
+    expect(useStudyLoopStore.getState().loopA).toBe(10);
+    expect(useStudyLoopStore.getState().loopB).toBe(20);
+
+    useStudyLoopStore.getState().cycleAbLoop();
+    expect(useStudyLoopStore.getState().loopA).toBeNull();
+    expect(useStudyLoopStore.getState().loopB).toBeNull();
+  });
+});
+
+describe("focusMode / keymapOpen / autoPaused (console slice B)", () => {
+  beforeEach(() => {
+    useStudyLoopStore.setState({ focusMode: false, keymapOpen: false, autoPaused: false });
+  });
+
+  it("toggleFocusMode flips focusMode", () => {
+    useStudyLoopStore.getState().toggleFocusMode();
+    expect(useStudyLoopStore.getState().focusMode).toBe(true);
+    useStudyLoopStore.getState().toggleFocusMode();
+    expect(useStudyLoopStore.getState().focusMode).toBe(false);
+  });
+
+  it("toggleKeymap flips keymapOpen; closeKeymap always lands on false", () => {
+    useStudyLoopStore.getState().toggleKeymap();
+    expect(useStudyLoopStore.getState().keymapOpen).toBe(true);
+    useStudyLoopStore.getState().closeKeymap();
+    expect(useStudyLoopStore.getState().keymapOpen).toBe(false);
+    useStudyLoopStore.getState().closeKeymap();
+    expect(useStudyLoopStore.getState().keymapOpen).toBe(false);
+  });
+
+  it("setAutoPaused sets the flag directly", () => {
+    useStudyLoopStore.getState().setAutoPaused(true);
+    expect(useStudyLoopStore.getState().autoPaused).toBe(true);
+    useStudyLoopStore.getState().setAutoPaused(false);
+    expect(useStudyLoopStore.getState().autoPaused).toBe(false);
   });
 });
 
