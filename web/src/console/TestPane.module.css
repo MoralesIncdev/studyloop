@@ -42,10 +42,15 @@
   inset: 0;
   display: grid;
   place-items: center;
-  color: oklch(0.75 0.09 80);
-  font-size: 9px;
+  padding: 0 10px;
+  text-align: center;
+  color: oklch(0.86 0.09 80);
+  /* Ryan's live-use fix: 9px over a blur blob was unreadable — larger type
+     on a faint veil so the seal state reads at a glance. */
+  background: oklch(0.13 0.015 245 / 40%);
+  font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   transition: opacity 0.5s var(--ease);
 }
@@ -56,28 +61,38 @@
 }
 
 .prompt {
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 1.55;
-  color: rgb(255 255 255 / 88%);
+  color: rgb(255 255 255 / 92%);
   margin: 0;
 }
 
 .attemptRow {
   display: flex;
+  flex-direction: column;
   margin-top: 10px;
   gap: 8px;
 }
 
 .attemptInput {
-  flex: 1;
+  width: 100%;
   min-width: 0;
+  min-height: 64px;
+  resize: none;
+  overflow: hidden;
   background: oklch(0.1 0.012 245 / 55%);
   border: 1px solid oklch(0.8 0.05 215 / 14%);
   border-radius: 8px;
   color: var(--ice-core);
-  padding: 7px 10px;
+  padding: 8px 10px;
   font: inherit;
-  font-size: 13px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.attemptActions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .attemptInput::placeholder {

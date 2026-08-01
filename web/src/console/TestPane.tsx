@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState, type RefObject } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { activeUnitAt } from "../lib/activeUnit";
 import { formatTimestamp } from "../lib/time";
+import { testPrompt } from "../lib/testPrompt";
 import type { AnalysisUnit } from "../lib/types";
 import { Pane } from "./Pane";
 import paneStyles from "./Pane.module.css";
@@ -98,7 +99,10 @@ export function TestPane({ frameRef }: Props): JSX.Element | null {
         <p className={paneStyles.ghostText}>Appears while a proposed unit awaits your attempt.</p>
       ) : (
         <>
-          <p className={styles.prompt}>{active.unit.label}</p>
+          {/* Pre-reveal the pane poses an actual question (Ryan's live-use
+              fix — label alone gave nothing to answer); post-reveal it
+              settles back to the concept label above the unsealed answer. */}
+          <p className={styles.prompt}>{revealed ? active.unit.label : testPrompt(active.unit)}</p>
           <div className={`${styles.sealed} ${revealed ? styles.revealed : ""}`}>
             {active.unit.type === "CLUSTER" && active.unit.members && active.unit.members.length > 0 ? (
               // Phase 4 "Cluster unit type": one attempt/reveal for the
@@ -120,20 +124,32 @@ export function TestPane({ frameRef }: Props): JSX.Element | null {
           </div>
           {attempting && !revealed && (
             <div className={styles.attemptRow}>
-              <input
+              <textarea
                 className={styles.attemptInput}
                 value={attempt}
+                rows={3}
                 placeholder="Your answer, in your own words…"
                 onChange={(e) => setAttempt(e.target.value)}
+                // Grow with the typed answer; the pane scrolls if it outgrows a resized pane.
+                onInput={(e) => {
+                  const el = e.currentTarget;
+                  el.style.height = "auto";
+                  el.style.height = `${el.scrollHeight}px`;
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleReveal();
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleReveal();
+                  }
                 }}
                 // Generate modality is an explicit self-test mode; focus belongs here (mock line 1146).
                 autoFocus
               />
-              <button type="button" className={styles.button} onClick={handleReveal}>
-                Reveal
-              </button>
+              <div className={styles.attemptActions}>
+                <button type="button" className={styles.button} onClick={handleReveal}>
+                  Reveal
+                </button>
+              </div>
             </div>
           )}
           {!attempting && !revealed && (
