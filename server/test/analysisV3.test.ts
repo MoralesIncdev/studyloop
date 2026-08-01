@@ -11,15 +11,19 @@ import {
   __setAnalysisClientV3ForTests,
   AnalysisSchema,
   AnalysisUnitSchema,
+  buildSlideContextBlock,
   CLUSTER_MAX_MEMBERS,
+  effectiveEvidence,
   FakeAnalysisClient,
   isFakeAnalysisMode,
   LLMAnalysisClient,
+  mapChunkToSlidePages,
   mergeEdgesByFingerprint,
   mergeUnitsByFingerprint,
   resolveAnalysisClientV3,
   resolvePearlUnitId,
   runAnalysisJobV3,
+  SLIDE_CONTEXT_MAX_CHARS,
   unitsToConceptsMirror,
   type AnalysisLLMClientV3,
   type AnalysisOutcome,
@@ -226,6 +230,210 @@ describe("mergeUnitsByFingerprint — Phase 4 CLUSTER merging", () => {
     ]);
     expect(merged[0].type).toBe("CLAIM");
     expect(merged[0].members).toBeUndefined();
+  });
+});
+
+// --- Phase 6 "Slide-text channel, smallest slice (PDF)"
+// (design/EXECUTION-PLAN-post-review-v1.md) -----------------------------
+
+describe("mapChunkToSlidePages (Phase 6: naive proportional chunk->page mapping)", () => {
+  it("maps a single chunk to the whole deck", () => {
+    expect(mapChunkToSlidePages(0, 1, 10)).toEqual({ startPage: 1, endPage: 10 });
+  });
+
+  it("distributes pages evenly across chunks when they divide cleanly", () => {
+    // 10 pages / 5 chunks = 2 pages each.
+    expect(mapChunkToSlidePages(0, 5, 10)).toEqual({ startPage: 1, endPage: 2 });
+    expect(mapChunkToSlidePages(1, 5, 10)).toEqual({ startPage: 3, endPage: 4 });
+    expect(mapChunkToSlidePages(4, 5, 10)).toEqual({ startPage: 9, endPage: 10 });
+  });
+
+  it("the first chunk always starts at page 1 and the last chunk always ends at the last page, even when it doesn't divide cleanly", () => {
+    // 7 pages / 3 chunks.
+    const first = mapChunkToSlidePages(0, 3, 7);
+    const last = mapChunkToSlidePages(2, 3, 7);
+    expect(first?.startPage).toBe(1);
+    expect(last?.endPage).toBe(7);
+  });
+
+  it("every chunk's range stays within [1, totalPages] and start <= end", () => {
+    for (let totalChunks = 1; totalChunks <= 12; totalChunks++) {
+      for (let i = 0; i < totalChunks; i++) {
+        const range = mapChunkToSlidePages(i, totalChunks, 7);
+        expect(range).not.toBeNull();
+        expect(range!.startPage).toBeGreaterThanOrEqual(1);
+        expect(range!.endPage).toBeLessThanOrEqual(7);
+        expect(range!.startPage).toBeLessThanOrEqual(range!.endPage);
+      }
+    }
+  });
+
+  it("more chunks than pages: every chunk still gets a valid (possibly repeating) 1-page-or-more range", () => {
+    // 3 pages / 10 chunks — several chunks map to the same page(s), none map to nothing.
+    for (let i = 0; i < 10; i++) {
+      const range = mapChunkToSlidePages(i, 10, 3);
+      expect(range).not.toBeNull();
+      expect(range!.startPage).toBeGreaterThanOrEqual(1);
+      expect(range!.endPage).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it("returns null for zero pages or a non-positive chunk count", () => {
+    expect(mapChunkToSlidePages(0, 5, 0)).toBeNull();
+    expect(mapChunkToSlidePages(0, 0, 10)).toBeNull();
+  });
+});
+
+describe("buildSlideContextBlock (Phase 6: per-chunk slide context assembly)", () => {
+  const pages = [
+    { page: 1, text: "Intro slide text" },
+    { page: 2, text: "Middle slide text" },
+    { page: 3, text: "Conclusion slide text" },
+  ];
+
+  it("returns undefined when there are no pages at all (no deck attached)", () => {
+    expect(buildSlideContextBlock([], 0, 3)).toBeUndefined();
+  });
+
+  it("includes the mapped page range's text, labeled by slide number", () => {
+    const block = buildSlideContextBlock(pages, 0, 3);
+    expect(block).toContain("Slide deck text (pages 1–1");
+    expect(block).toContain("[Slide 1]");
+    expect(block).toContain("Intro slide text");
+    expect(block).not.toContain("Middle slide text");
+  });
+
+  it("names this as naive/proportional, not synced to transcript timing (honest-comment requirement)", () => {
+    const block = buildSlideContextBlock(pages, 1, 3);
+    expect(block).toMatch(/naive proportional mapping|NOT synced/i);
+  });
+
+  it("skips blank pages within the mapped range and returns undefined if all of them are blank", () => {
+    const blankPages = [
+      { page: 1, text: "   " },
+      { page: 2, text: "" },
+    ];
+    expect(buildSlideContextBlock(blankPages, 0, 1)).toBeUndefined();
+  });
+
+  it("caps the assembled text at SLIDE_CONTEXT_MAX_CHARS", () => {
+    const hugePages = [{ page: 1, text: "x".repeat(SLIDE_CONTEXT_MAX_CHARS * 3) }];
+    const block = buildSlideContextBlock(hugePages, 0, 1)!;
+    // Allow the fixed "[Slide 1]\n" prefix + "Slide deck text (...)" wrapper
+    // text around the capped body — only the BODY itself is bounded.
+    expect(block.length).toBeLessThan(SLIDE_CONTEXT_MAX_CHARS + 400);
+    expect(block).toContain("(truncated)");
+  });
+
+  it("returns undefined when the mapped range lands entirely outside every page's actual page number (more chunks than pages, last chunk overshoots)", () => {
+    // 1 page split across 5 chunks — later chunks all clamp back onto page 1, never undefined; sanity-check the invariant that *some* chunk still resolves it.
+    const results = [0, 1, 2, 3, 4].map((i) => buildSlideContextBlock(pages.slice(0, 1), i, 5));
+    expect(results.some((r) => r !== undefined)).toBe(true);
+  });
+});
+
+describe("mergeUnitsByFingerprint — Phase 6 evidence merging", () => {
+  const base = {
+    type: "CLAIM" as const,
+    label: "Same Concept",
+    summary: "s",
+    body: "b",
+    anchors: [],
+    confidence: 0.5,
+  };
+
+  it("leaves evidence undefined (collapses to 'transcript' via effectiveEvidence) when nothing in the group ever set it", () => {
+    const merged = mergeUnitsByFingerprint([{ ...base }]);
+    expect(merged[0].evidence).toBeUndefined();
+    expect(effectiveEvidence(merged[0])).toBe("transcript");
+  });
+
+  it("keeps a single unit's explicit evidence", () => {
+    const merged = mergeUnitsByFingerprint([{ ...base, evidence: "slides" }]);
+    expect(merged[0].evidence).toBe("slides");
+  });
+
+  it("'both' wins when the group has support for transcript AND slides across separate raw units", () => {
+    const merged = mergeUnitsByFingerprint([
+      { ...base, evidence: "transcript" },
+      { ...base, evidence: "slides" },
+    ]);
+    expect(merged[0].evidence).toBe("both");
+  });
+
+  it("a single raw unit already marked 'both' stays 'both'", () => {
+    const merged = mergeUnitsByFingerprint([{ ...base, evidence: "both" }]);
+    expect(merged[0].evidence).toBe("both");
+  });
+
+  it("stays 'transcript' when every raw unit in the group says 'transcript'", () => {
+    const merged = mergeUnitsByFingerprint([{ ...base, evidence: "transcript" }, { ...base, evidence: "transcript" }]);
+    expect(merged[0].evidence).toBe("transcript");
+  });
+});
+
+describe("AnalysisSchema — Phase 6 staleReason 'slides-changed'", () => {
+  it("accepts 'slides-changed' alongside the existing 'terms-changed'", () => {
+    const base = {
+      generatedAt: "2026-01-01T00:00:00Z",
+      model: "claude-test",
+      pearls: [],
+      concepts: [],
+      themes: [],
+    };
+    expect(AnalysisSchema.safeParse({ ...base, staleReason: "slides-changed" }).success).toBe(true);
+    expect(AnalysisSchema.safeParse({ ...base, staleReason: "terms-changed" }).success).toBe(true);
+    expect(AnalysisSchema.safeParse({ ...base, staleReason: null }).success).toBe(true);
+    expect(AnalysisSchema.safeParse({ ...base }).success).toBe(true);
+    expect(AnalysisSchema.safeParse({ ...base, staleReason: "bogus" }).success).toBe(false);
+  });
+});
+
+describe("runAnalysisJobV3 — Phase 6 slide context threading", () => {
+  it("passes no slideContext when the project has no slidePages", async () => {
+    const seenSlideContexts: (string | undefined)[] = [];
+    const spy: AnalysisLLMClientV3 = {
+      runRouter: async () => ({ kind: "ok", data: { domain: "generic" } }),
+      runChunkV3: async (chunk, domain, model, slideContext) => {
+        seenSlideContexts.push(slideContext);
+        return new FakeAnalysisClient().runChunkV3(chunk, domain, model, slideContext);
+      },
+      runMergeV3: (pearls) => new FakeAnalysisClient().runMergeV3(pearls, "claude-opus-5"),
+    };
+    const segments: TranscriptSegment[] = [];
+    for (let t = 0; t < 1000; t += 5) segments.push(segment(t, t + 5, `text at ${t}`));
+    await runAnalysisJobV3({ segments, model: "claude-opus-5", client: spy });
+    expect(seenSlideContexts.every((c) => c === undefined)).toBe(true);
+  });
+
+  it("passes a distinct, mapped slideContext per chunk when slidePages are provided", async () => {
+    const seenSlideContexts: (string | undefined)[] = [];
+    const spy: AnalysisLLMClientV3 = {
+      runRouter: async () => ({ kind: "ok", data: { domain: "generic" } }),
+      runChunkV3: async (chunk, domain, model, slideContext) => {
+        seenSlideContexts.push(slideContext);
+        return new FakeAnalysisClient().runChunkV3(chunk, domain, model, slideContext);
+      },
+      runMergeV3: (pearls) => new FakeAnalysisClient().runMergeV3(pearls, "claude-opus-5"),
+    };
+    const segments: TranscriptSegment[] = [];
+    for (let t = 0; t < 2000; t += 5) segments.push(segment(t, t + 5, `text at ${t}`));
+    const slidePages = [
+      { page: 1, text: "Alpha slide content" },
+      { page: 2, text: "Beta slide content" },
+      { page: 3, text: "Gamma slide content" },
+      { page: 4, text: "Delta slide content" },
+    ];
+    const analysis = await runAnalysisJobV3({ segments, model: "claude-opus-5", client: spy, slidePages });
+
+    expect(seenSlideContexts.length).toBeGreaterThan(1);
+    expect(seenSlideContexts.every((c) => c !== undefined)).toBe(true);
+    // Different chunks (first vs. last) mapped to different page ranges.
+    expect(seenSlideContexts[0]).not.toBe(seenSlideContexts[seenSlideContexts.length - 1]);
+    expect(seenSlideContexts[0]).toContain("Alpha slide content");
+
+    // Fake client sets evidence deterministically whenever it saw slide context.
+    expect(analysis.units!.some((u) => u.evidence === "slides" || u.evidence === "both")).toBe(true);
   });
 });
 
@@ -812,5 +1020,39 @@ describe("LLMAnalysisClient — Phase 5 prompt assembly from the lens registry",
     } finally {
       await fs.rm(dataDir, { recursive: true, force: true });
     }
+  });
+
+  // --- Phase 6 "Slide-text channel, smallest slice (PDF)" ------------------
+
+  it("runChunkV3's system prompt folds in the slideContext block and the evidence instruction when a deck is attached", async () => {
+    const { caller, requests } = spyCaller(JSON.stringify({ pearls: [], units: [], edges: [] }));
+    const client = new LLMAnalysisClient(caller, "");
+    const chunk = { index: 0, startSec: 0, endSec: 10, text: "[0:00] hello" };
+    await client.runChunkV3(chunk, "generic", "claude-opus-5", "Slide deck text (pages 1–2): [Slide 1]\nHypertension overview");
+    expect(requests).toHaveLength(1);
+    expect(requests[0].system).toContain("Slide deck text (pages 1–2)");
+    expect(requests[0].system).toContain("Hypertension overview");
+    expect(requests[0].system).toContain('"evidence"');
+    expect(requests[0].system).toContain('"slides"');
+  });
+
+  it("runChunkV3's system prompt still names 'evidence' as a required field even with no slide deck attached (default stays 'transcript')", async () => {
+    const { caller, requests } = spyCaller(JSON.stringify({ pearls: [], units: [], edges: [] }));
+    const client = new LLMAnalysisClient(caller, "");
+    const chunk = { index: 0, startSec: 0, endSec: 10, text: "[0:00] hello" };
+    await client.runChunkV3(chunk, "generic", "claude-opus-5");
+    expect(requests[0].system).toContain('"evidence"');
+    expect(requests[0].system).not.toContain("The learner also attached a slide deck");
+    expect(requests[0].jsonSchema).toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          units: expect.objectContaining({
+            items: expect.objectContaining({
+              required: expect.arrayContaining(["evidence"]),
+            }),
+          }),
+        }),
+      })
+    );
   });
 });

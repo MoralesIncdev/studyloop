@@ -17,8 +17,8 @@
 | 2 | Terminology layer v1 | DONE (667 server tests green; double-click a transcript word to correct; glossary inert until Phase 5) |
 | 3 | Integrity fixes (streak / heatmap / claimed-vs-restated) | DONE (streak only on true session-end; 3 heatmap strings → capture-density language; restatedCount split on StudyPath/Exhale/SessionCabinet) |
 | 4 | Cluster unit type | DONE (server: 696 tests green, `CLUSTER` unit type + `members` in analysis.ts/review.ts fan-out; web: ConceptPane/TestPane render members, ReviewView handles `clusterMember` cards; 308 web tests green) |
-| 5 | Clinical domain lens | TODO |
-| 6 | Slide-text channel (PDF slice) | TODO |
+| 5 | Lens registry + clinical lens | DONE (763 server tests; six lens files incl. clinical w/ nclex dispatch + safety tier; user lens dir wins; legacy ids compat) |
+| 6 | Slide-text channel (PDF slice) | DONE (803 server tests; pdf-parse@1.1.1 per-page extraction — no native binaries; POST/GET/DELETE /api/projects/:id/slides; proportional chunk→page slide context in analysis.ts + evidence provenance field; staleReason "slides-changed"; web SlidesRow attach/remove affordance) |
 | 7 | Cheap retention wins (front door + export) | DONE (720 server tests; front-door redirect once/session with ?noredirect escape; GET /api/review/export.csv Anki-importable) |
 | 8 | Document mode (stretch — likely Kimi) | TODO |
 | 9 | Lens autogeneration for unknown subjects | TODO |

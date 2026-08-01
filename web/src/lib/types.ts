@@ -325,6 +325,15 @@ export type UnitType =
   | "PRIORITIZATION";
 export type EdgeType = "REQUIRES" | "PART_OF" | "EXAMPLE_OF" | "PROCEDURE_STEP";
 
+/**
+ * Phase 6 "Slide-text channel, smallest slice (PDF)"
+ * (design/EXECUTION-PLAN-post-review-v1.md) — mirrors
+ * server/src/lib/analysis.ts's UnitEvidenceSchema. Absent means "transcript"
+ * (SPEC: "defaulting absent = transcript") — treat a missing `evidence`
+ * field the same as `"transcript"` wherever this is read.
+ */
+export type UnitEvidence = "transcript" | "slides" | "both";
+
 export interface UnitAnchor {
   t: number;
   quote: string;
@@ -385,6 +394,8 @@ export interface AnalysisUnit {
   threshold: boolean;
   /** Phase 4: present iff `type === "CLUSTER"` — 2..12 atomic facts sharing this unit's parent concept. Absent on every other unit type. */
   members?: ClusterMember[];
+  /** Phase 6 "Slide-text channel" provenance — absent means "transcript" (see UnitEvidence). */
+  evidence?: UnitEvidence;
 }
 
 export interface AnalysisEdge {
@@ -410,8 +421,14 @@ export interface Analysis {
   domain?: Domain;
   units?: AnalysisUnit[];
   edges?: AnalysisEdge[];
-  /** Phase 2 "Terminology layer v1": set when a term mapping changed since this analysis ran (PATCH /api/projects/:id/terms) — the web app's cue for a future "re-analyze" banner. `null`/absent means not stale. */
-  staleReason?: "terms-changed" | null;
+  /**
+   * Phase 2 "Terminology layer v1": set when a term mapping changed since
+   * this analysis ran (PATCH /api/projects/:id/terms) — the web app's cue
+   * for a "re-analyze" note. `null`/absent means not stale. Phase 6
+   * "Slide-text channel" adds `"slides-changed"` — set the same way when a
+   * slide deck is attached/removed (POST or DELETE /api/projects/:id/slides).
+   */
+  staleReason?: "terms-changed" | "slides-changed" | null;
 }
 
 // --- Phase 2 "Terminology layer v1" (design/EXECUTION-PLAN-post-review-v1.md) ---
@@ -440,6 +457,34 @@ export interface PatchTermsBody {
 export interface PatchTermsResponse {
   terms: TermsFile;
   /** True when this project already had an analysis that just got flagged stale (see Analysis.staleReason). */
+  analysisMarkedStale: boolean;
+}
+
+// --- Phase 6 "Slide-text channel, smallest slice (PDF)" (design/EXECUTION-PLAN-post-review-v1.md) ---
+// Mirrors server/src/lib/models.ts's SlidesMetaSchema/SlidesFileSchema.
+
+/** Upload metadata for a project's attached slide deck — mirrors server SlidesMeta. The web app never fetches the extracted page text itself, only this. */
+export interface SlidesMeta {
+  filename: string;
+  pageCount: number;
+  uploadedAt: string;
+}
+
+/** GET /api/projects/:id/slides — `meta` is `null` when no deck is attached. */
+export interface GetSlidesResponse {
+  meta: SlidesMeta | null;
+}
+
+/** POST /api/projects/:id/slides (multipart PDF upload) response. */
+export interface PostSlidesResponse {
+  meta: SlidesMeta;
+  /** True when this project already had an analysis that just got flagged stale (see Analysis.staleReason). */
+  analysisMarkedStale: boolean;
+}
+
+/** DELETE /api/projects/:id/slides response. */
+export interface DeleteSlidesResponse {
+  ok: true;
   analysisMarkedStale: boolean;
 }
 

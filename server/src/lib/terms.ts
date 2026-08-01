@@ -254,21 +254,31 @@ export async function recordTermCorrections(dataDir: string, id: string, hits: r
 // --- Downstream invalidation (Phase 2 item 5) -------------------------------
 
 /**
- * Marks this project's existing analysis.json stale after a term mapping
- * changed — the smallest honest invalidation mechanism: it never triggers a
- * re-run, only sets a flag (see analysis.ts's AnalysisSchema `staleReason`)
- * for the web app to surface as a "re-analyze" banner later. A raw
- * read-merge-write (not routed through the heavier AnalysisSchema in
+ * Marks this project's existing analysis.json stale after something it was
+ * built from changed — the smallest honest invalidation mechanism: it never
+ * triggers a re-run, only sets a flag (see analysis.ts's AnalysisSchema
+ * `staleReason`) for the web app to surface as a "re-analyze" banner later. A
+ * raw read-merge-write (not routed through the heavier AnalysisSchema in
  * lib/analysis.ts) — same "don't import the Anthropic-SDK-carrying module
  * just to touch one field" reasoning routes/attestation.ts already applies
  * via analysisAccess.ts's loose accessor. Returns `false` (nothing written)
  * when there's no analysis.json yet — no analysis exists to go stale.
+ *
+ * `reason` defaults to `"terms-changed"` (this function's original — and
+ * still only in-repo — caller, routes/terms.ts) so every existing call site
+ * keeps compiling and behaving identically. Phase 6 "Slide-text channel"
+ * reuses this same function with `"slides-changed"` from routes/slides.ts
+ * rather than duplicating the read-merge-write.
  */
-export async function markAnalysisStale(dataDir: string, id: string): Promise<boolean> {
+export async function markAnalysisStale(
+  dataDir: string,
+  id: string,
+  reason: "terms-changed" | "slides-changed" = "terms-changed"
+): Promise<boolean> {
   const path = analysisJsonPath(dataDir, id);
   const raw = await readJsonIfExists<Record<string, unknown>>(path);
   if (raw === null) return false;
-  await writeJsonAtomic(path, { ...raw, staleReason: "terms-changed" });
+  await writeJsonAtomic(path, { ...raw, staleReason: reason });
   return true;
 }
 

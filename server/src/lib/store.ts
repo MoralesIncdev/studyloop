@@ -159,6 +159,11 @@ export function analysisJsonPath(dataDir: string, id: string): string {
   return path.join(projectDir(dataDir, id), "analysis.json");
 }
 
+/** Phase 6 "Slide-text channel": `<project>/slides.json` — see lib/slides.ts for read/write/extract. */
+export function slidesJsonPath(dataDir: string, id: string): string {
+  return path.join(projectDir(dataDir, id), "slides.json");
+}
+
 /** V2-C: imported `.studyloop.json` overlay bundles from other viewers — see lib/shareBundle.ts. */
 export function overlaysDir(dataDir: string, id: string): string {
   return path.join(projectDir(dataDir, id), "overlays");

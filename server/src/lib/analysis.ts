@@ -125,6 +125,19 @@ export type ClusterMember = z.infer<typeof ClusterMemberSchema>;
 export const CLUSTER_MIN_MEMBERS = 2;
 export const CLUSTER_MAX_MEMBERS = 12;
 
+/**
+ * Phase 6 "Slide-text channel, smallest slice (PDF)": which source plausibly
+ * contributed a unit's content — "transcript" (spoken/shown-in-video content
+ * only; the default), "slides" (this unit's content came primarily from the
+ * supplementary slide-deck text block folded into the chunk prompt, not
+ * something actually said), or "both". This is the simplest honest
+ * provenance mechanism the phase spec asks for: a self-reported signal from
+ * the model, not a verified fact — see `effectiveEvidence` below for the
+ * "absent = transcript" default every reader should apply.
+ */
+export const UnitEvidenceSchema = z.enum(["transcript", "slides", "both"]);
+export type UnitEvidence = z.infer<typeof UnitEvidenceSchema>;
+
 // --- V3-D D1: domain overlay fields — PEDAGOGY §2 "domain lenses are prompt
 // modules + optional overlay fields, not separate engines" ------------------
 //
@@ -223,6 +236,15 @@ export const AnalysisUnitSchema = z.object({
    * reason.
    */
   members: z.array(ClusterMemberSchema).optional(),
+  /**
+   * Phase 6 "Slide-text channel" provenance (see UnitEvidenceSchema above).
+   * Optional and loosely validated (SPEC: "Loose validation, defaulting
+   * absent = transcript") — absent on every unit from a pre-Phase-6 analysis
+   * run and on any run for a project with no slides.json at all. Read
+   * through `effectiveEvidence` rather than this field directly wherever the
+   * "absent means transcript" default matters.
+   */
+  evidence: UnitEvidenceSchema.optional(),
 }).superRefine((unit, ctx) => {
   if (unit.type === "CLUSTER") {
     if (!unit.members || unit.members.length < CLUSTER_MIN_MEMBERS || unit.members.length > CLUSTER_MAX_MEMBERS) {
@@ -241,6 +263,11 @@ export const AnalysisUnitSchema = z.object({
   }
 });
 export type AnalysisUnit = z.infer<typeof AnalysisUnitSchema>;
+
+/** Phase 6: absent `evidence` means "transcript" (SPEC: "defaulting absent = transcript") — read through this helper rather than `unit.evidence` directly wherever provenance display/logic matters. */
+export function effectiveEvidence(unit: Pick<AnalysisUnit, "evidence">): UnitEvidence {
+  return unit.evidence ?? "transcript";
+}
 
 export const AnalysisEdgeSchema = z.object({
   source: z.string(),
@@ -292,8 +319,13 @@ export const AnalysisSchema = z.object({
    * POST /api/projects/:id/analyze naturally clears this by writing a whole
    * new analysis.json (via writeJsonAtomic in routes/analyze.ts) that simply
    * doesn't carry the field forward. `null`/absent means "not stale".
+   *
+   * Phase 6 "Slide-text channel" (design/EXECUTION-PLAN-post-review-v1.md)
+   * adds `"slides-changed"` — set by routes/slides.ts (via lib/terms.ts's
+   * now-generalized `markAnalysisStale`) whenever a slide deck is attached
+   * or removed, mirroring exactly how a terms.json edit already flags this.
    */
-  staleReason: z.enum(["terms-changed"]).nullable().optional(),
+  staleReason: z.enum(["terms-changed", "slides-changed"]).nullable().optional(),
 });
 export type Analysis = z.infer<typeof AnalysisSchema>;
 
@@ -349,6 +381,66 @@ export function chunkTranscript(
     windowStart += stride;
   }
   return chunks;
+}
+
+// --- Phase 6 "Slide-text channel, smallest slice (PDF)": per-chunk slide
+// context assembly -----------------------------------------------------------
+//
+// NAIVE MAPPING ONLY (SPEC: "exact slide-sync is future work"). A chunk's
+// transcript window and its mapped slide-page range are each computed
+// independently — equal-width time buckets vs. equal-width page buckets —
+// and lined up purely by INDEX (chunk 0 -> the deck's first slice, the last
+// chunk -> its last slice, evenly in between). There is no real signal here
+// (OCR, slide-change timestamps, speaker cues) tying "the lecturer is
+// showing slide 7 right now" to a specific transcript moment. This is good
+// enough to hand the model plausibly-relevant supplementary text on a deck
+// presented roughly linearly alongside the video, and will misalign on a
+// deck presented out of order or heavily front/back-loaded relative to the
+// talking — the chunk prompt says as much, and a unit's `evidence` field
+// (see UnitEvidenceSchema) is the model's own signal for whether the
+// supplementary text actually mattered, not a guarantee that it lines up.
+
+/** A few thousand chars per chunk (SPEC: "cap the slide text per chunk") — keeps one slide-heavy chunk from ballooning past the real transcript text in prompt size. */
+export const SLIDE_CONTEXT_MAX_CHARS = 4000;
+
+/**
+ * Maps chunk `index` (of `totalChunks`) to a 1-indexed, inclusive page range
+ * out of `totalPages`, proportionally by index. Returns `null` when there's
+ * nothing sensible to map (no pages, or a non-positive chunk/page count).
+ */
+export function mapChunkToSlidePages(
+  index: number,
+  totalChunks: number,
+  totalPages: number
+): { startPage: number; endPage: number } | null {
+  if (totalPages <= 0 || totalChunks <= 0) return null;
+  const perChunk = totalPages / totalChunks;
+  const startPage = Math.max(1, Math.floor(index * perChunk) + 1);
+  const endPage = Math.min(totalPages, Math.max(startPage, Math.ceil((index + 1) * perChunk)));
+  return { startPage, endPage };
+}
+
+/**
+ * Builds the "Slide deck text (pages n–m)" supplementary block folded into
+ * one chunk's system prompt (see buildChunkV3SystemPrompt's `slideContext`
+ * param), or `undefined` when there's no deck at all, or nothing landed in
+ * this chunk's mapped page range (a blank/image-only slide range, or a
+ * chunk count that outnumbers the deck's pages). Truncated to
+ * SLIDE_CONTEXT_MAX_CHARS.
+ */
+export function buildSlideContextBlock(
+  pages: readonly { page: number; text: string }[],
+  chunkIndex: number,
+  totalChunks: number
+): string | undefined {
+  if (pages.length === 0) return undefined;
+  const range = mapChunkToSlidePages(chunkIndex, totalChunks, pages.length);
+  if (!range) return undefined;
+  const inRange = pages.filter((p) => p.page >= range.startPage && p.page <= range.endPage && p.text.trim().length > 0);
+  if (inRange.length === 0) return undefined;
+  let body = inRange.map((p) => `[Slide ${p.page}]\n${p.text.trim()}`).join("\n\n");
+  if (body.length > SLIDE_CONTEXT_MAX_CHARS) body = `${body.slice(0, SLIDE_CONTEXT_MAX_CHARS)}\n…(truncated)`;
+  return `Slide deck text (pages ${range.startPage}–${range.endPage} of the deck, mapped to this segment by chunk index only — NOT synced to actual transcript timing; treat as supplementary context that MAY be relevant here, not a guarantee):\n${body}`;
 }
 
 // --- Per-chunk / merge wire shapes (raw, pre-id-assignment) -----------------
@@ -484,6 +576,8 @@ const ChunkUnitRawSchema = z.object({
    * one (see resolveClusterType).
    */
   members: z.array(ClusterMemberSchema).optional(),
+  /** Phase 6 "Slide-text channel" — optional at the wire level too (not just the final AnalysisUnit), same "pre-Phase-6 fixtures/callers keep compiling" reasoning as overlay/threshold above. */
+  evidence: UnitEvidenceSchema.optional(),
 });
 type ChunkUnitRaw = z.infer<typeof ChunkUnitRawSchema>;
 
@@ -657,8 +751,25 @@ const CHUNK_V3_JSON_SCHEMA = {
           // (same []/"" sentinel convention overlay/unitLabel already use) —
           // mergeUnitsByFingerprint enforces the real 2..12 bound post-merge.
           members: { type: "array", items: CLUSTER_MEMBER_JSON_SCHEMA },
+          // Phase 6 "Slide-text channel": required at the wire level (same
+          // "structured outputs want every property present" convention as
+          // every other field here) — "transcript" is always a valid value,
+          // so there's no need for an empty-string sentinel the way
+          // unitLabel/overlay need one.
+          evidence: { type: "string", enum: ["transcript", "slides", "both"] },
         },
-        required: ["type", "label", "summary", "body", "anchors", "confidence", "overlay", "threshold", "members"],
+        required: [
+          "type",
+          "label",
+          "summary",
+          "body",
+          "anchors",
+          "confidence",
+          "overlay",
+          "threshold",
+          "members",
+          "evidence",
+        ],
         additionalProperties: false,
       },
     },
@@ -758,16 +869,16 @@ function buildRouterUserPrompt(sampleText: string): string {
  * across lenses (CHUNK_V3_JSON_SCHEMA); only this text changes which unit
  * types/edge types/overlay fields the model reaches for.
  */
-function buildChunkV3SystemPrompt(lens: Lens): string {
+function buildChunkV3SystemPrompt(lens: Lens, slideContext?: string): string {
   return `You are analyzing one segment of an instructional video's transcript to help a learner study it later. The subject matter could be anything — cooking, martial arts, software, history, music theory, a lecture — extract what is actually being taught in THIS segment, never assume a fixed domain or template beyond the lens noted below.
 
 Extract:
 - "pearls": specific, memorable insights worth remembering, each anchored to the timestamp (in seconds) where it's said. A label under 60 characters, a 1-3 sentence insight, an importance rating (3 = critical/central point, 2 = useful supporting point, 1 = minor/incidental detail), and "unitLabel": the exact label of the unit below this pearl illustrates, or "" if none fits.
-- "units": typed knowledge units on a universal spine — each is exactly one of CLAIM (an assertion), MECHANISM (how/why something works), PROCEDURE (an ordered how-to), EXAMPLE (a concrete instance), BOUNDARY (a limit, exception, or "this doesn't apply when…"), CLUSTER (a parent concept covering 3 or more closely-related atomic facts — e.g. "side effects of metoprolol" listing bradycardia, hypotension, fatigue, etc. as separate facts), DOSAGE (a medication amount/frequency), CONTRAINDICATION (when NOT to do/give something), LAB_VALUE (a normal/abnormal test range or result), or PRIORITIZATION ("what do you do first" judgment material). Each unit has a short "label" (used to link edges/pearls to it — keep it stable and specific, not a generic phrase), a 1-2 sentence "summary", a longer markdown "body", one or more "anchors" (each an exact "quote" from the transcript plus its timestamp "t" in seconds), a "confidence" 0-1 for how clearly the transcript supports this unit as extracted, an "overlay" object of domain-specific structured fields (which ones to fill in is named by the lens below — leave the rest as "" or []), "threshold": true only when this unit is a transformative/integrative/troublesome idea — one that later material genuinely depends on understanding, a concept that "unlocks" the rest of the video once grasped (most units are NOT threshold — false otherwise), and "members": for a CLUSTER unit ONLY, 2 to 12 objects each with its own short "label" (the specific fact, e.g. "Bradycardia"), a 1-2 sentence "body" (that fact alone, phrased so it stands on its own as a flashcard answer), and "anchorSec" (seconds — reuse this unit's own anchor time if you have nothing more precise); for every non-CLUSTER unit, "members" MUST be an empty array. IMPORTANT: whenever the transcript states 3 or more closely-related atomic facts under one shared parent concept, emit ONE CLUSTER unit with those facts as members rather than 3+ separate CLAIM units for the same facts — this is what lets a learner attest the parent concept once instead of restating every fact individually. Use individual CLAIM (or other) units as usual for anything that isn't part of such a group.
+- "units": typed knowledge units on a universal spine — each is exactly one of CLAIM (an assertion), MECHANISM (how/why something works), PROCEDURE (an ordered how-to), EXAMPLE (a concrete instance), BOUNDARY (a limit, exception, or "this doesn't apply when…"), CLUSTER (a parent concept covering 3 or more closely-related atomic facts — e.g. "side effects of metoprolol" listing bradycardia, hypotension, fatigue, etc. as separate facts), DOSAGE (a medication amount/frequency), CONTRAINDICATION (when NOT to do/give something), LAB_VALUE (a normal/abnormal test range or result), or PRIORITIZATION ("what do you do first" judgment material). Each unit has a short "label" (used to link edges/pearls to it — keep it stable and specific, not a generic phrase), a 1-2 sentence "summary", a longer markdown "body", one or more "anchors" (each an exact "quote" from the transcript plus its timestamp "t" in seconds), a "confidence" 0-1 for how clearly the transcript supports this unit as extracted, an "overlay" object of domain-specific structured fields (which ones to fill in is named by the lens below — leave the rest as "" or []), "threshold": true only when this unit is a transformative/integrative/troublesome idea — one that later material genuinely depends on understanding, a concept that "unlocks" the rest of the video once grasped (most units are NOT threshold — false otherwise), "evidence": one of "transcript" (default — this unit's content came from what was actually said/shown in the video), "slides" (this unit's content came primarily from the supplementary slide-deck text below, not something actually said), or "both" — use "transcript" unless slide deck text was supplied below AND plausibly contributed to this specific unit, and "members": for a CLUSTER unit ONLY, 2 to 12 objects each with its own short "label" (the specific fact, e.g. "Bradycardia"), a 1-2 sentence "body" (that fact alone, phrased so it stands on its own as a flashcard answer), and "anchorSec" (seconds — reuse this unit's own anchor time if you have nothing more precise); for every non-CLUSTER unit, "members" MUST be an empty array. IMPORTANT: whenever the transcript states 3 or more closely-related atomic facts under one shared parent concept, emit ONE CLUSTER unit with those facts as members rather than 3+ separate CLAIM units for the same facts — this is what lets a learner attest the parent concept once instead of restating every fact individually. Use individual CLAIM (or other) units as usual for anything that isn't part of such a group.
 - "edges": relationships between two units you extracted THIS segment — "sourceLabel"/"targetLabel" must exactly match "label" fields above, "type" is one of REQUIRES (source requires target as a prerequisite), PART_OF (source is part of target), EXAMPLE_OF (source is an example of target), or PROCEDURE_STEP (source is the step before target in the same procedure), plus the supporting "quote" and a "confidence" 0-1. Only emit edges between two units both present in this same segment's "units" list.
 
 ${lens.unitTypeEmphasis}
-
+${slideContext ? `\nThe learner also attached a slide deck (PDF) alongside this video. ${slideContext}\n` : ""}
 Every timestamp you output MUST fall within this segment's own time range — never extrapolate a timestamp from outside what you were given. If the segment has little of substance, return short (or empty) arrays rather than inventing content.`;
 }
 
@@ -805,7 +916,14 @@ export interface AnalysisLLMClient {
  */
 export interface AnalysisLLMClientV3 {
   runRouter(sampleText: string, model: string): Promise<AnalysisOutcome<RouterResult>>;
-  runChunkV3(chunk: TranscriptChunk, domain: Domain, model: string): Promise<AnalysisOutcome<ChunkV3Result>>;
+  /**
+   * `slideContext` (Phase 6 "Slide-text channel"): the pre-built "Slide deck
+   * text (pages n–m)" block for THIS chunk (see buildSlideContextBlock),
+   * folded into the system prompt when present. Optional so every existing
+   * test double built against the pre-Phase-6 3-arg signature (see
+   * test/analysis.test.ts) keeps compiling unchanged.
+   */
+  runChunkV3(chunk: TranscriptChunk, domain: Domain, model: string, slideContext?: string): Promise<AnalysisOutcome<ChunkV3Result>>;
   runMergeV3(pearls: readonly ChunkPearlV3[], model: string): Promise<AnalysisOutcome<MergeV3Result>>;
 }
 
@@ -879,10 +997,10 @@ export class LLMAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV3
     );
   }
 
-  async runChunkV3(chunk: TranscriptChunk, domain: Domain, model: string): Promise<AnalysisOutcome<ChunkV3Result>> {
+  async runChunkV3(chunk: TranscriptChunk, domain: Domain, model: string, slideContext?: string): Promise<AnalysisOutcome<ChunkV3Result>> {
     const lens = resolveLensOrGeneric(this.dataDir, domain);
     return this.runStructured(
-      buildChunkV3SystemPrompt(lens),
+      buildChunkV3SystemPrompt(lens, slideContext),
       buildChunkUserPrompt(chunk),
       ChunkV3ResultSchema,
       CHUNK_V3_JSON_SCHEMA,
@@ -1040,7 +1158,7 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
     return { kind: "ok", data: { domain: best } };
   }
 
-  async runChunkV3(chunk: TranscriptChunk, domain: Domain, _model?: string): Promise<AnalysisOutcome<ChunkV3Result>> {
+  async runChunkV3(chunk: TranscriptChunk, domain: Domain, _model?: string, slideContext?: string): Promise<AnalysisOutcome<ChunkV3Result>> {
     const mid = chunk.startSec + (chunk.endSec - chunk.startSec) / 2;
     const words = chunk.text.replace(/\[[^\]]*\]/g, "").trim().split(/\s+/).filter(Boolean);
     const labelSeed = words.slice(0, 6).join(" ").trim();
@@ -1057,6 +1175,11 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
     const tailQuote = words.slice(-12).join(" ") || secondaryLabel;
     // V3-D D2: every third chunk's primary unit is flagged threshold — deterministic (no randomness), and frequent enough that a short fake-mode transcript still exercises the REINFORCE-step/priority-scheduling paths.
     const threshold = chunk.index % 3 === 0;
+    // Phase 6 "Slide-text channel": deterministic (no network, no randomness)
+    // evidence signal — only set when this chunk actually got a slide
+    // context block, cycling through "slides"/"both" so fake mode exercises
+    // both non-default branches without ever claiming "transcript" is wrong.
+    const primaryEvidence: UnitEvidence | undefined = slideContext ? (chunk.index % 2 === 0 ? "both" : "slides") : undefined;
     return {
       kind: "ok",
       data: {
@@ -1079,6 +1202,7 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
             confidence,
             overlay: fakeOverlayFor(domain, primaryLabel, chunk),
             threshold,
+            evidence: primaryEvidence,
           },
           {
             type: "EXAMPLE",
@@ -1400,6 +1524,25 @@ function resolveClusterType(group: readonly ChunkUnitRaw[]): { type: UnitType; m
   return { type: bestType, members: undefined };
 }
 
+/**
+ * Phase 6 "Slide-text channel": merges a fingerprint-group's raw `evidence`
+ * values into one — "both" if the group has support for both transcript and
+ * slides (across separate raw units, not just a single "both" value),
+ * "slides" if only slide-attributed, "transcript" if only transcript-
+ * attributed, and `undefined` (collapses to the "transcript" default via
+ * `effectiveEvidence`) when nothing in the group ever set the field at all —
+ * mirrors mergeOverlayFields' "don't persist a value nobody actually emitted"
+ * rule above.
+ */
+function mergeEvidence(group: readonly ChunkUnitRaw[]): UnitEvidence | undefined {
+  const values = group.map((g) => g.evidence).filter((v): v is UnitEvidence => v !== undefined);
+  if (values.length === 0) return undefined;
+  const hasSlides = values.some((v) => v === "slides" || v === "both");
+  const hasTranscript = values.some((v) => v === "transcript" || v === "both");
+  if (hasSlides && hasTranscript) return "both";
+  return hasSlides ? "slides" : "transcript";
+}
+
 export function mergeUnitsByFingerprint(units: readonly ChunkUnitRaw[]): AnalysisUnit[] {
   const order: string[] = [];
   const groups = new Map<string, ChunkUnitRaw[]>();
@@ -1451,6 +1594,8 @@ export function mergeUnitsByFingerprint(units: readonly ChunkUnitRaw[]): Analysi
       threshold: group.some((g) => g.threshold === true),
       // Phase 4: present only when finalType === "CLUSTER" (see resolveClusterType).
       members,
+      // Phase 6: undefined (not "transcript") when nothing in the group ever set it — see mergeEvidence.
+      evidence: mergeEvidence(group),
     };
   });
 }
@@ -1513,6 +1658,14 @@ export interface AnalysisJobParamsV3 {
   onProgress?: (pct: number) => void;
   /** Provenance to stamp on the resulting analysis.json (default "model" — see AnalysisSchema). */
   source?: AnalysisSource;
+  /**
+   * Phase 6 "Slide-text channel": this project's uploaded slide deck pages
+   * (from slides.json, see lib/slides.ts), if any — absent/empty for a
+   * project with no deck attached. Naively distributed across chunks by
+   * index (see buildSlideContextBlock) rather than synced to actual
+   * transcript timing; that's future work, not this slice.
+   */
+  slidePages?: readonly { page: number; text: string }[];
 }
 
 /**
@@ -1550,8 +1703,15 @@ export async function runAnalysisJobV3(params: AnalysisJobParamsV3): Promise<Ana
 
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
+    // Phase 6 "Slide-text channel": undefined when there's no deck (or
+    // nothing landed in this chunk's mapped page range) — runChunkV3/
+    // buildChunkV3SystemPrompt both treat undefined as "no slide context".
+    const slideContext =
+      params.slidePages && params.slidePages.length > 0
+        ? buildSlideContextBlock(params.slidePages, i, chunks.length)
+        : undefined;
     // eslint-disable-next-line no-await-in-loop -- chunks are analyzed sequentially by design (progress reporting, bounded concurrency to the API)
-    const outcome = await params.client.runChunkV3(chunk, domain, params.model);
+    const outcome = await params.client.runChunkV3(chunk, domain, params.model, slideContext);
     if (outcome.kind === "ok") {
       succeeded++;
       collectedPearls.push(...outcome.data.pearls);

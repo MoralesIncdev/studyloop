@@ -244,6 +244,33 @@ export const PatchTermsBodySchema = z.object({
 });
 export type PatchTermsBody = z.infer<typeof PatchTermsBodySchema>;
 
+/**
+ * Phase 6 "Slide-text channel, smallest slice (PDF)"
+ * (design/EXECUTION-PLAN-post-review-v1.md): one page's extracted text from
+ * an uploaded PDF slide deck, persisted in a project's `slides.json` (see
+ * lib/slides.ts). `page` is 1-indexed to match how a human refers to "slide 3".
+ */
+export const SlidePageSchema = z.object({
+  page: z.number().int().positive(),
+  text: z.string(),
+});
+export type SlidePage = z.infer<typeof SlidePageSchema>;
+
+/** Upload metadata for a project's attached slide deck — everything the web app needs to render "deck.pdf · 24 pages" without shipping the (potentially large) extracted text. */
+export const SlidesMetaSchema = z.object({
+  filename: z.string(),
+  pageCount: z.number().int().nonnegative(),
+  uploadedAt: z.string(),
+});
+export type SlidesMeta = z.infer<typeof SlidesMetaSchema>;
+
+/** Per-project `slides.json` — the whole uploaded deck's extracted per-page text plus upload metadata (see lib/slides.ts). */
+export const SlidesFileSchema = z.object({
+  meta: SlidesMetaSchema,
+  pages: z.array(SlidePageSchema),
+});
+export type SlidesFile = z.infer<typeof SlidesFileSchema>;
+
 export const BubbleSchema = z.object({
   id: z.string(),
   t: z.number().nonnegative(),

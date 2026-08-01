@@ -16,6 +16,7 @@ import { updateRegistryForProject } from "../lib/conceptRegistry.js";
 import { readConceptRegistry, withConceptRegistryLock, writeConceptRegistry } from "../lib/conceptRegistryStore.js";
 import { getLens } from "../lib/lenses.js";
 import { correctTranscriptSegments } from "../lib/terms.js";
+import { readSlides } from "../lib/slides.js";
 import { resolveTranscriptPath } from "../lib/transcriptResolve.js";
 import { loadTranscriptFromText, type TranscriptSegment } from "../lib/transcripts.js";
 import { ProjectIdParamSchema } from "../lib/models.js";
@@ -100,6 +101,11 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: "This project has no transcript to analyze", code: "no_transcript" });
     }
 
+    // Phase 6 "Slide-text channel": absent (undefined pages) when no PDF has
+    // been attached — runAnalysisJobV3 treats that as "no slide context" for
+    // every chunk, so this is a no-op for every project predating this phase.
+    const slidesFile = await readSlides(dataDir, params.data.id);
+
     const model = resolveAnalysisModel(config);
     const projectId = params.data.id;
     analysisJobs.start(projectId);
@@ -116,6 +122,7 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
           client,
           source: fakeMode ? "stub" : "model",
           onProgress: (pct) => analysisJobs.progress(projectId, pct),
+          slidePages: slidesFile?.pages,
         });
         await writeJsonAtomic(analysisPath, analysis);
         // V3-B B1: "domain ... stored on the project (editable chip near the

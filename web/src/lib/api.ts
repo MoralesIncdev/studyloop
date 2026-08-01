@@ -10,6 +10,8 @@ import type {
   ConceptProfile,
   ContinuityResponse,
   CreateProjectBody,
+  DeleteSlidesResponse,
+  GetSlidesResponse,
   HealthResponse,
   HeatmapResponse,
   LibraryResponse,
@@ -21,6 +23,7 @@ import type {
   PatchTermsBody,
   PatchTermsResponse,
   PearlReviewAddsResponse,
+  PostSlidesResponse,
   Project,
   RevealResponse,
   ReviewCardTransform,
@@ -219,6 +222,19 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+
+  // --- Phase 6: slide-text channel (PDF) -------------------------------------------
+  getSlides: (id: string) => request<GetSlidesResponse>(`/api/projects/${encodeURIComponent(id)}/slides`),
+  uploadSlides: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    // `request()` only sets Content-Type itself for a string body — a
+    // FormData body is left alone so fetch sets the correct
+    // multipart/form-data boundary header on its own.
+    return request<PostSlidesResponse>(`/api/projects/${encodeURIComponent(id)}/slides`, { method: "POST", body: formData });
+  },
+  deleteSlides: (id: string) =>
+    request<DeleteSlidesResponse>(`/api/projects/${encodeURIComponent(id)}/slides`, { method: "DELETE" }),
 
   // --- V3-D D4: domain-routed card transformation — "improve this card" -----------
   improveReviewCard: (cardId: string) =>
