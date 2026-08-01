@@ -187,7 +187,12 @@ export function Pane({
   const handlePointerDown = (e: PointerEvent<HTMLDivElement>): void => {
     // Interactive children own their own pointer story — dragging starts from
     // anywhere else on the pane (the chrome strip is the visual affordance).
-    if (e.target instanceof HTMLElement && e.target.closest("a, button, textarea, input, select")) return;
+    // `Element`, not `HTMLElement`: the tool buttons' icons are inline SVG, and
+    // an SVG <path> target is an SVGElement — an HTMLElement check lets the
+    // event through, starts a drag, and the pointer capture then swallows the
+    // button's own click (found via live click-tracing: every × tool "did
+    // nothing" because it micro-dragged instead).
+    if (e.target instanceof Element && e.target.closest("a, button, textarea, input, select")) return;
     const frame = frameRef.current;
     const pane = paneRef.current;
     if (!frame || !pane) return;
