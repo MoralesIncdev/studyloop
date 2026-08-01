@@ -19,6 +19,10 @@ interface Props {
   onClearLoop: () => void;
   nearestConceptTitle: string | null;
   nearbyNoteCount: number;
+  /** Console slice D (mock's flashCtx, index.html lines 1269-1275): a transient
+   *  override for the context chip's text (e.g. SuggestPane's "Cue kept as
+   *  note") — forces the chip on while set, falling back to the computed text. */
+  contextFlash?: string | null;
   /** Focus mode dims the whole row (mock body.focus lineage — see PlayerChrome). */
   dimmed?: boolean;
 }
@@ -33,6 +37,7 @@ export function StatusChips({
   onClearLoop,
   nearestConceptTitle,
   nearbyNoteCount,
+  contextFlash = null,
   dimmed = false,
 }: Props): JSX.Element {
   const [showContext, setShowContext] = useState(false);
@@ -55,10 +60,12 @@ export function StatusChips({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, autoPaused]);
 
-  const contextOn = showContext && !dismissed;
-  const contextText = nearestConceptTitle
-    ? `At ${formatTimestamp(currentTime)} · ${nearestConceptTitle} · ${nearbyNoteCount} notes near here`
-    : `At ${formatTimestamp(currentTime)} · between concepts`;
+  const contextOn = contextFlash != null || (showContext && !dismissed);
+  const contextText =
+    contextFlash ??
+    (nearestConceptTitle
+      ? `At ${formatTimestamp(currentTime)} · ${nearestConceptTitle} · ${nearbyNoteCount} notes near here`
+      : `At ${formatTimestamp(currentTime)} · between concepts`);
 
   return (
     <div className={`${styles.row} ${dimmed ? styles.dimmed : ""}`}>

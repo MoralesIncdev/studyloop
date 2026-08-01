@@ -1,0 +1,52 @@
+/* Console slice D: constellation map pane — mock's #p-map (lines 464-489,
+   144-151). Jade fill = attested, amber pulsing stroke = concept holding the
+   playhead, faint outline otherwise; light edges between temporally adjacent
+   concepts; current node's label brighter. */
+.svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.edge {
+  stroke: oklch(0.7 0.05 218 / 30%);
+  stroke-width: 1;
+}
+
+.node {
+  fill: none;
+  stroke: var(--ice-faint);
+  stroke-width: 1.5;
+  cursor: pointer;
+}
+
+.node:hover {
+  stroke: var(--ice);
+}
+
+.node.attested {
+  fill: var(--jade);
+  stroke: var(--jade);
+}
+
+.node.now {
+  stroke: var(--amber);
+  animation: nodepulse 2.4s ease-in-out infinite;
+}
+
+@keyframes nodepulse {
+  50% {
+    stroke-opacity: 0.35;
+  }
+}
+
+.label {
+  font-size: 8.5px;
+  fill: var(--ice-dim);
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+
+.label.hot {
+  fill: var(--ice-core);
+}

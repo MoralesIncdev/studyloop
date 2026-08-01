@@ -107,6 +107,14 @@ export function StudyView({ projectId }: Props): JSX.Element {
   useEffect(() => {
     if (!isSameProjectLoaded || !currentProject || !canPlay) return;
     if (startAt !== undefined) return;
+    // Console slice D item 7: a cross-project echo jump stages its target time
+    // in the store (the router carries only a projectId). Consuming it here IS
+    // the resume decision — the resume prompt must not also appear.
+    const pendingSeek = useStudyLoopStore.getState().consumePendingSeek();
+    if (pendingSeek != null) {
+      setStartAt(pendingSeek);
+      return;
+    }
     if (currentProject.lastPosition > RESUME_THRESHOLD_SECONDS) return; // wait for user choice
     setStartAt(0);
   }, [isSameProjectLoaded, currentProject, startAt, canPlay]);

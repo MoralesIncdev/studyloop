@@ -41,6 +41,10 @@ export interface SeekBarConceptTick extends SeekBarMarker {
    *  carry only `t`), so this is normally undefined; the tail is plumbed
    *  through and ready for whenever a data source actually supplies a span. */
   end?: number;
+  /** Console slice D: a pane is parked on this tick (store.parkedPanes) —
+   *  renders the mock's pulsing amber `.waiting` (lines 295-297); clicking
+   *  undocks the pane instead of seeking (via onWaitingTick). */
+  waiting?: boolean;
 }
 
 /** V2-C: a pearl diamond — distinct from bubble pins/concept ticks (SPEC "Analysis engine"). */
@@ -78,6 +82,9 @@ interface Props {
   /** Console slice 1: called when a concept tick is clicked, instead of onSeek —
    *  PlayerChrome uses it to scope playback to the concept's span. */
   onConceptTick?: (tick: SeekBarConceptTick) => void;
+  /** Console slice D: called instead of onConceptTick when the clicked tick
+   *  has a parked pane waiting on it — PlayerChrome undocks the pane. */
+  onWaitingTick?: (tick: SeekBarConceptTick) => void;
   /** The tick whose span is currently the playback window (renders amber). */
   activeConceptTickId?: string | null;
   /** Called when a bubble pin is clicked, instead of onSeek. Defaults to onSeek. */
@@ -111,6 +118,7 @@ export function SeekBar({
   provisionalT = null,
   onSeek,
   onConceptTick,
+  onWaitingTick,
   activeConceptTickId = null,
   onSeekBubble,
   onSeekPearl,
@@ -293,6 +301,7 @@ export function SeekBar({
             className={styles.conceptTick}
             data-kind={tick.kind ?? "plain"}
             data-active={activeConceptTickId === tick.id}
+            data-waiting={tick.waiting === true}
             style={{ left: pct(tick.t) }}
             aria-label={`Concept: ${tick.title ?? "untitled"} at ${formatTimestamp(tick.t)}`}
             aria-pressed={activeConceptTickId === tick.id}
@@ -302,7 +311,8 @@ export function SeekBar({
             onBlur={() => setHoverTick((cur) => (cur?.id === tick.id ? null : cur))}
             onClick={(e) => {
               e.stopPropagation();
-              if (onConceptTick) onConceptTick(tick);
+              if (tick.waiting && onWaitingTick) onWaitingTick(tick);
+              else if (onConceptTick) onConceptTick(tick);
               else onSeek(tick.t);
             }}
           >

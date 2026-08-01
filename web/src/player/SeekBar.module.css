@@ -217,6 +217,23 @@
   box-shadow: 0 0 10px oklch(0.82 0.13 80 / 80%);
 }
 
+/* Console slice D: a pane parked on this tick (mock's `.tick.waiting`, lines
+   295-297) — pulsing amber until clicked to undock. */
+.conceptTick[data-waiting="true"] {
+  background: var(--amber);
+  width: 3px;
+  height: 10px;
+  top: 6px;
+  box-shadow: 0 0 10px oklch(0.82 0.13 80 / 80%);
+  animation: waitingPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes waitingPulse {
+  50% {
+    box-shadow: 0 0 4px oklch(0.82 0.13 80 / 30%);
+  }
+}
+
 /* A real span's reach, when the tick carries `end` (mock lines 290-291). */
 .tail {
   position: absolute;

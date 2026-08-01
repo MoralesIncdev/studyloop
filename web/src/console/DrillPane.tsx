@@ -44,6 +44,8 @@ export function DrillPane({ frameRef }: Props): JSX.Element | null {
       frameRef={frameRef}
       defaultPos={{ fx: 0.04, fy: 0.12 }}
       width={300}
+      defaultMode="glassy"
+      chipStatus="proposed"
       label={active ? <>DRILL &middot; {formatTimestamp(active.t)}</> : "DRILL"}
       tools={
         !hidden && active ? (

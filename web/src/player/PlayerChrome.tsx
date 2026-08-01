@@ -159,6 +159,12 @@ export function PlayerChrome({ frameRef, onVisibleChange }: Props): JSX.Element 
   // analysis.units[].id, which the server keeps 1:1 with analysis.concepts[].id
   // (see unitIdForConceptCard) — doc concepts never match an entry, so they
   // fall through to "plain" every time, which is correct: they carry no unit.
+  // Console slice D: a tick matching a parked pane's anchor (store.parkedPanes)
+  // is marked `waiting` — it pulses amber and clicking it undocks the pane
+  // instead of seeking (mock's `.tick.waiting` + undockPane).
+  const parkedPanes = useStudyLoopStore((s) => s.parkedPanes);
+  const undockPane = useStudyLoopStore((s) => s.undockPane);
+  const contextFlash = useStudyLoopStore((s) => s.contextFlash);
   const conceptTicks = useMemo<SeekBarConceptTick[]>(
     () =>
       tickerConcepts.flatMap((c) => {
@@ -167,10 +173,20 @@ export function PlayerChrome({ frameRef, onVisibleChange }: Props): JSX.Element 
         const kind: SeekBarConceptTick["kind"] =
           entry?.status === "attested" ? "attested" : isAiBacked && entry?.status !== "dismissed" ? "proposed" : "plain";
         return c.anchors
-          .map((a, i): SeekBarConceptTick | null => (a.t != null ? { id: `${c.id}-${i}`, t: a.t, title: c.title, kind } : null))
+          .map((a, i): SeekBarConceptTick | null => {
+            if (a.t == null) return null;
+            const t = a.t;
+            return {
+              id: `${c.id}-${i}`,
+              t,
+              title: c.title,
+              kind,
+              waiting: Object.values(parkedPanes).some((p) => Math.abs(p.t - t) < 0.5),
+            };
+          })
           .filter((tick): tick is SeekBarConceptTick => tick !== null);
       }),
-    [tickerConcepts, attestations]
+    [tickerConcepts, attestations, parkedPanes]
   );
 
   // Console slice 1 (SURVEY.md delta #1): clicking a concept tick scopes playback
@@ -295,6 +311,7 @@ export function PlayerChrome({ frameRef, onVisibleChange }: Props): JSX.Element 
         }}
         nearestConceptTitle={nearestConceptTitle}
         nearbyNoteCount={nearbyNoteCount}
+        contextFlash={contextFlash}
         dimmed={focusMode}
       />
       <div className={`${styles.scrim} ${visible ? styles.scrimVisible : ""}`}>
@@ -333,6 +350,10 @@ export function PlayerChrome({ frameRef, onVisibleChange }: Props): JSX.Element 
             }
             conceptTicks={conceptTicks}
             onConceptTick={handleConceptTick}
+            onWaitingTick={(tick) => {
+              const parked = Object.entries(parkedPanes).find(([, p]) => Math.abs(p.t - tick.t) < 0.5);
+              if (parked) undockPane(parked[0]);
+            }}
             activeConceptTickId={activeConceptTickId}
             pearls={(analysis?.pearls ?? []).map((p) => ({ id: `pearl-${p.t}-${p.label}`, t: p.t, label: p.label, importance: p.importance }))}
             overlayMarkers={overlayMarkers}
