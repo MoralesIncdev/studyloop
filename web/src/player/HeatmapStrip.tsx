@@ -117,7 +117,7 @@ export function HeatmapStrip({ own, overlays = [], height = 32, onInspect, durat
       viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="none"
       role={onInspect ? "button" : undefined}
-      aria-label={onInspect ? "Attention — click to inspect marks" : undefined}
+      aria-label={onInspect ? "Capture density — click to inspect marks" : undefined}
       aria-hidden={onInspect ? undefined : "true"}
       onMouseDown={(e) => {
         if (onInspect) e.stopPropagation();

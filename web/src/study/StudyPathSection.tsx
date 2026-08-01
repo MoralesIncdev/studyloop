@@ -59,11 +59,22 @@ export function StudyPathSection(): JSX.Element | null {
   if (!units || units.length === 0) return null;
 
   const attestedCount = units.filter((u) => attestations[u.id]?.status === "attested").length;
+  // Phase 3 "Restated vs claimed counts": of the attested units, how many
+  // actually carry the learner's own words (non-empty userTake) vs a bare
+  // Attest click ("claimed"). Mirrors server/src/lib/attestation.ts's
+  // restatedCount — kept inline client-side since the server already serves
+  // the full attestations map and this component computes attestedCount the
+  // same way (no new endpoint needed).
+  const restatedCount = units.filter(
+    (u) => attestations[u.id]?.status === "attested" && Boolean(attestations[u.id]?.userTake?.trim())
+  ).length;
+  const claimedCount = attestedCount - restatedCount;
 
   return (
     <div className={styles.pane}>
       <div className={styles.progress}>
         {attestedCount} / {units.length} attested
+        {claimedCount > 0 && ` · ${restatedCount} restated · ${claimedCount} claimed`}
       </div>
       <div className={styles.list}>
         {steps.map((step) =>

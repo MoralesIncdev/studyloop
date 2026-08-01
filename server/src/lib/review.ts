@@ -151,6 +151,13 @@ export function isDue(state: ReviewCardState, nowMs: number): boolean {
  * grade is recorded that day (repeat grades the same day are no-ops). Not a
  * stats page (SPEC non-goal) — just enough state for the one summary line
  * the Review view shows at session end.
+ *
+ * Phase 3 "Streak demotion" (PEDAGOGY §5): display contract is footnote-only
+ * — the streak may render only next to the mastery count on the true
+ * session-end summary card (web/src/review/ReviewView.tsx's StreakLine,
+ * gated behind CaughtUpState's `showStreak` prop), never as a headline and
+ * never on any other screen. This file keeps computing/storing the streak
+ * unchanged; only the web display surface is constrained.
  */
 export function bumpStreak(prev: Streak | undefined, nowMs: number): Streak {
   const today = dayKeyUTC(nowMs);

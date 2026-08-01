@@ -83,3 +83,19 @@ export function feedableUnitIds(unitIds: readonly string[], attestations: Attest
 export function attestedCount(unitIds: readonly string[], attestations: AttestationsFile): number {
   return unitIds.filter((id) => attestations[id]?.status === "attested").length;
 }
+
+/**
+ * Phase 3 "Restated vs claimed counts" (Codex/DeepSeek/GLM review): of the
+ * units counted by `attestedCount`, how many actually carry the learner's own
+ * words (a non-empty, non-whitespace `userTake`) rather than just a bare
+ * Attest click. The gap between this and `attestedCount` is "claimed" —
+ * attested with no restatement — surfaced honestly wherever the "n/m
+ * attested" line renders (e.g. "4 restated · 2 claimed") instead of implying
+ * every attested unit was actively restated in the learner's own words.
+ */
+export function restatedCount(unitIds: readonly string[], attestations: AttestationsFile): number {
+  return unitIds.filter((id) => {
+    const entry = attestations[id];
+    return entry?.status === "attested" && Boolean(entry.userTake?.trim());
+  }).length;
+}

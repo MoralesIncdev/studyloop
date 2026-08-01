@@ -29,6 +29,13 @@ export function SessionCabinet(): JSX.Element {
   const attestedCount = useStudyLoopStore(
     (s) => Object.values(s.attestations).filter((a) => a.status === "attested").length
   );
+  // Phase 3 "Restated vs claimed counts": mirrors server/src/lib/attestation.ts's
+  // restatedCount (attested AND non-empty userTake), computed the same
+  // client-side way attestedCount already is above.
+  const restatedCount = useStudyLoopStore(
+    (s) => Object.values(s.attestations).filter((a) => a.status === "attested" && Boolean(a.userTake?.trim())).length
+  );
+  const claimedCount = attestedCount - restatedCount;
   const noteCount = useStudyLoopStore((s) => s.bubbles.length);
 
   return (
@@ -78,6 +85,11 @@ export function SessionCabinet(): JSX.Element {
               <span className={styles.countOf}>/{unitCount}</span>
             </div>
             <div className={styles.countLabel}>Attested</div>
+            {claimedCount > 0 && (
+              <div className={styles.countSplit}>
+                {restatedCount} restated &middot; {claimedCount} claimed
+              </div>
+            )}
           </div>
           <div>
             <div className={styles.countN}>{noteCount}</div>

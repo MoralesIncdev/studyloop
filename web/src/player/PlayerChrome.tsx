@@ -331,7 +331,7 @@ export function PlayerChrome({ frameRef, onVisibleChange }: Props): JSX.Element 
             above the strip the first time there's anything to see it about. */}
         {!attentionLegendSeen && (heatmapOwn.some((v) => v > 0) || heatmapOverlays.some((v) => v > 0)) && (
           <div className={styles.attentionLegend}>
-            <span>Attention = where marks concentrate, not importance.</span>
+            <span>Capture density — where your marks concentrate, not importance.</span>
             <button type="button" className={styles.attentionLegendClose} onClick={dismissAttentionLegend} aria-label="Dismiss">
               <Icon name="close" size={12} />
             </button>

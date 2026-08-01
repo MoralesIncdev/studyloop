@@ -230,7 +230,23 @@ function StreakLine(): JSX.Element | null {
   );
 }
 
-function CaughtUpState({ heading, body }: { heading: string; body: string }): JSX.Element {
+/**
+ * Phase 3 "Streak demotion" (PEDAGOGY §5 / SPEC B4): the day-streak may only
+ * ever appear as a footnote next to the mastery count at true session end —
+ * not on the "nothing due yet" / "all caught up" landing states, which are
+ * arrival states rather than a completed session's summary. `showStreak`
+ * defaults to false so callers must opt in explicitly for the one state that
+ * qualifies (see the `heading={`Concepts locked in: ...`}` call site below).
+ */
+function CaughtUpState({
+  heading,
+  body,
+  showStreak = false,
+}: {
+  heading: string;
+  body: string;
+  showStreak?: boolean;
+}): JSX.Element {
   const navigate = useStudyLoopStore((s) => s.navigate);
   return (
     <div className={styles.stateCard}>
@@ -239,7 +255,7 @@ function CaughtUpState({ heading, body }: { heading: string; body: string }): JS
       </span>
       <h2>{heading}</h2>
       <p>{body}</p>
-      <StreakLine />
+      {showStreak && <StreakLine />}
       <button type="button" className={styles.primaryButton} onClick={() => navigate({ view: "library" })}>
         Back to StudyLoop
       </button>
@@ -342,6 +358,7 @@ export function ReviewView(): JSX.Element {
           <CaughtUpState
             heading={`Concepts locked in: ${masteryCount ?? 0}`}
             body={`Reviewed ${session.clearedCount} card${session.clearedCount === 1 ? "" : "s"} this session.`}
+            showStreak
           />
         )}
 

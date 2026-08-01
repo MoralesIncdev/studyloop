@@ -21,7 +21,7 @@ export function AttentionPopover({ marks, anchorRatio, onSeek, onClose }: Props)
       className={styles.popover}
       style={{ left: `clamp(96px, ${(anchorRatio * 100).toFixed(2)}%, calc(100% - 96px))` }}
       role="dialog"
-      aria-label="Attention marks at this point"
+      aria-label="Marks at this point"
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >

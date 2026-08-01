@@ -19,7 +19,7 @@
 | 4 | Cluster unit type | DONE (server: 696 tests green, `CLUSTER` unit type + `members` in analysis.ts/review.ts fan-out; web: ConceptPane/TestPane render members, ReviewView handles `clusterMember` cards; 308 web tests green) |
 | 5 | Clinical domain lens | TODO |
 | 6 | Slide-text channel (PDF slice) | TODO |
-| 7 | Cheap retention wins (front door + export) | TODO |
+| 7 | Cheap retention wins (front door + export) | DONE (720 server tests; front-door redirect once/session with ?noredirect escape; GET /api/review/export.csv Anki-importable) |
 | 8 | Document mode (stretch — likely Kimi) | TODO |
 | 9 | Lens autogeneration for unknown subjects | TODO |
 
