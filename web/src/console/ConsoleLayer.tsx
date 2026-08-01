@@ -10,6 +10,7 @@ import { useStudyLoopStore } from "../state/store";
 import { ConceptPane } from "./ConceptPane";
 import { DrillPane } from "./DrillPane";
 import { EchoPane } from "./EchoPane";
+import { ExhaleOverlay } from "./ExhaleOverlay";
 import { NotePane } from "./NotePane";
 import styles from "./ConsoleLayer.module.css";
 
@@ -29,6 +30,7 @@ export function ConsoleLayer({ frameRef }: Props): JSX.Element | null {
       <DrillPane frameRef={frameRef} />
       <EchoPane frameRef={frameRef} />
       <NotePane frameRef={frameRef} />
+      <ExhaleOverlay />
     </div>
   );
 }
