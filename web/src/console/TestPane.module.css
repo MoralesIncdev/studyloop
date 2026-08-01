@@ -63,7 +63,10 @@
 .prompt {
   font-size: 14px;
   line-height: 1.55;
-  color: rgb(255 255 255 / 92%);
+  /* Match the legibility treatment every other over-footage pane text uses
+     (ConceptPane .body): solid white + dark halo, not translucent bare text. */
+  color: #fff;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 75%), 0 0 14px rgb(0 0 0 / 45%);
   margin: 0;
 }
 

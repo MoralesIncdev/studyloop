@@ -164,6 +164,17 @@ export function LocalVideoPlayer({ src, startAt = 0 }: Props): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Standard player behavior (Ryan's live-use ask, 2026-08-01): clicking the
+  // footage toggles play/pause. Routed through the registered controller so
+  // the play-failure toast and store state follow the same path as hotkeys.
+  const handleClick = (): void => {
+    const video = videoRef.current;
+    const controller = useStudyLoopStore.getState().controller;
+    if (!video || !controller) return;
+    if (video.paused) controller.play();
+    else controller.pause();
+  };
+
   return (
     <video
       ref={videoRef}
@@ -172,6 +183,7 @@ export function LocalVideoPlayer({ src, startAt = 0 }: Props): JSX.Element {
       controls={false}
       preload="metadata"
       playsInline
+      onClick={handleClick}
     />
   );
 }

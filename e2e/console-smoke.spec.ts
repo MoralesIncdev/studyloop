@@ -41,6 +41,16 @@ test.describe("console smoke", () => {
     const timelineRail = page.getByRole("slider", { name: "Seek" });
     await expect(timelineRail).toBeVisible();
 
+    // --- 2b. Click-to-pause on the footage (standard player behavior) -------
+    // Click off-center so no floating pane can intercept; toggle back to
+    // paused so the 14s fixture can't run out mid-test (the exhale overlay
+    // would cover later interactions).
+    await expect.poll(async () => video.evaluate((v: HTMLVideoElement) => v.paused)).toBe(true);
+    await video.click({ position: { x: 40, y: 200 } });
+    await expect.poll(async () => video.evaluate((v: HTMLVideoElement) => v.paused)).toBe(false);
+    await video.click({ position: { x: 40, y: 200 } });
+    await expect.poll(async () => video.evaluate((v: HTMLVideoElement) => v.paused)).toBe(true);
+
     const consoleRoot = page.locator('[class*="consoleRoot"]');
     await expect(consoleRoot).toBeVisible();
 
@@ -120,14 +130,13 @@ test.describe("console smoke", () => {
 
     // --- 7. Resize a pane on both axes; assert it persists after reload ----
     // Reposition first: NotePane's default spot (fy 0.6) sits low enough in
-    // the frame that its bottom-right grip falls under PlayerChrome's bottom
-    // control scrim, which is deliberately painted ABOVE the pane layer and
-    // (while paused, i.e. always in this spec) has `pointer-events: auto`
-    // (PlayerChrome.module.css's `.scrimVisible`) — a real stacking
-    // conflict, found the same way the codebase's own comments say the
-    // original chrome-tool click bug was found ("live click-tracing", not a
-    // static screenshot). Dragging the pane clear of that band first keeps
-    // this step testing the grip, not that unrelated overlap.
+    // the frame that its bottom-right grip overlaps PlayerChrome's bottom
+    // control scrim, which is deliberately painted ABOVE the pane layer.
+    // The scrim's box used to be `pointer-events: auto` wholesale while
+    // paused, which silently ate this grip's clicks — that's fixed now
+    // (PlayerChrome.module.css: only the scrim's content rows opt in), but
+    // the reposition stays so this step keeps testing the grip itself in
+    // clear space, independent of the scrim's hit-region shape.
     await dragBy(page, notePane, 0, -300);
     const grip = notePane.locator('[title="Resize"]');
     const beforeResize = await notePane.boundingBox();
