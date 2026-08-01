@@ -21,15 +21,19 @@ interface Props {
 export function ConsoleLayer({ frameRef }: Props): JSX.Element | null {
   const consoleMode = useStudyLoopStore((s) => s.consoleMode);
   const editing = useStudyLoopStore((s) => s.consoleEditMode);
+  // Bumped by store.resetAllPaneLayouts() (bento button double-click) — keying
+  // the panes off it forces a remount, which is how they notice their
+  // just-cleared localStorage entry and fall back to defaultPos.
+  const paneLayoutVersion = useStudyLoopStore((s) => s.paneLayoutVersion);
   if (!consoleMode) return null;
 
   return (
     <div className={`${styles.layer} ${editing ? styles.editing : ""}`}>
       {editing && <div className={styles.editBadge}>Edit layout · drag panes · E or Esc exits</div>}
-      <ConceptPane frameRef={frameRef} />
-      <DrillPane frameRef={frameRef} />
-      <EchoPane frameRef={frameRef} />
-      <NotePane frameRef={frameRef} />
+      <ConceptPane key={`concept-${paneLayoutVersion}`} frameRef={frameRef} />
+      <DrillPane key={`drill-${paneLayoutVersion}`} frameRef={frameRef} />
+      <EchoPane key={`echo-${paneLayoutVersion}`} frameRef={frameRef} />
+      <NotePane key={`note-${paneLayoutVersion}`} frameRef={frameRef} />
       <ExhaleOverlay />
     </div>
   );

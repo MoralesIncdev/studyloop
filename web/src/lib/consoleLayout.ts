@@ -67,6 +67,18 @@ export function clearPaneLayout(projectId: string, paneId: string): void {
   }
 }
 
+/** Every pane id that persists a layout — kept in one place so the "reset all"
+ *  corner control (double-click the bento button, slice A) doesn't drift out
+ *  of sync with whichever panes actually exist. */
+export const ALL_PANE_IDS = ["p-concept", "p-drill", "p-echo", "p-note"] as const;
+
+/** Bento-button double-click: forget every pane's stored position for this
+ *  project in one shot. Callers still need to force each Pane to re-read
+ *  (e.g. remount via a version key) — this only clears storage. */
+export function resetAllPaneLayouts(projectId: string): void {
+  for (const paneId of ALL_PANE_IDS) clearPaneLayout(projectId, paneId);
+}
+
 /** Edit-mode grid snapping (SURVEY.md, WoW Edit Mode / FFXIV): quantize a
  *  fraction to STEP increments so dragged layouts land looking intentional. */
 export const EDIT_SNAP_STEP = 0.02;

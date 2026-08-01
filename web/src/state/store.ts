@@ -36,6 +36,7 @@ import type {
 } from "../lib/types";
 import { llmConfigured } from "../lib/types";
 import { hasSeenAttentionLegend, markAttentionLegendSeen } from "../lib/attentionHeatmap";
+import { resetAllPaneLayouts as clearStoredPaneLayouts } from "../lib/consoleLayout";
 import type { PlayerHandle } from "../player/types";
 
 // "concepts" moved out of the bottom dock into the V2 right-rail Concepts
@@ -405,6 +406,14 @@ export interface StudyLoopStore {
    *  true; the "O" hotkey toggles it (see hotkeys.ts). */
   consoleMode: boolean;
   toggleConsoleMode: () => void;
+  /** Bumped by resetAllPaneLayouts() so ConsoleLayer can key its panes off
+   *  it, forcing them to remount and re-read (now-cleared) storage — panes
+   *  otherwise only load their position once, on mount. */
+  paneLayoutVersion: number;
+  /** Bento button double-click (slice A, mock lines 426-432): forgets every
+   *  pane's stored position for the current project and snaps them back to
+   *  their defaults. No-ops with no project loaded. */
+  resetAllPaneLayouts: () => void;
 
   // --- transcript UX --------------------------------------------------------------
   lastUserScrollAt: number;
@@ -912,7 +921,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       loopA: null,
       loopB: null,
       condensedPlayback: false,
-      consoleMode: false,
+      consoleMode: true, // slice A: every project session starts in the console shell
       consoleEditMode: false,
       controller: null,
       bubbles: [],
@@ -1151,7 +1160,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       loopA: null,
       loopB: null,
       condensedPlayback: false,
-      consoleMode: false,
+      consoleMode: true, // slice A: leaves session state ready for the next project load
       consoleEditMode: false,
       bubbles: [],
       bubblesLoading: false,
@@ -1433,7 +1442,10 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       "info"
     );
   },
-  consoleMode: false,
+  // Slice A: the console is the study page's shell now, not an opt-in
+  // overlay — every project session starts with it on (see the two session
+  // reset blocks above/below, which also default it to true).
+  consoleMode: true,
   toggleConsoleMode: () => {
     const next = !get().consoleMode;
     // Leaving console mode always leaves edit mode with it.
@@ -1453,6 +1465,14 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       next ? "Edit layout — drag panes, positions snap to the grid; E or Esc exits" : "Edit layout off",
       "info"
     );
+  },
+  paneLayoutVersion: 0,
+  resetAllPaneLayouts: () => {
+    const projectId = get().currentProject?.id;
+    if (!projectId) return;
+    clearStoredPaneLayouts(projectId);
+    set((state) => ({ paneLayoutVersion: state.paneLayoutVersion + 1 }));
+    get().pushToast("Pane layout reset", "info");
   },
 
   // --- transcript UX --------------------------------------------------------------

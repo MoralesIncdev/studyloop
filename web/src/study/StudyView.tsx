@@ -1,7 +1,12 @@
-// V2-A: YouTube watch-page layout (SPEC "V2 layout"). Player + hover chrome left,
-// right rail (Transcript / Concepts / Up next); below the player: title, channel
-// row, action pills, description box (Notes | Bubbles). The global TopBar (see
-// App.tsx) replaces the old per-view header entirely.
+// Console shell (slice A, design/mockups/video-console/index.html): the study
+// page is a full-bleed stage now, not a YouTube watch-page clone. `.console`
+// fills the viewport edge-to-edge with the player frame stretched inside it —
+// ConsoleLayer/CCOverlay/PlayerChrome/resume overlay all still live inside
+// that frame, unchanged in behavior. Everything that used to sit beside the
+// player (title, channel row, action pills, description, the right rail) now
+// scrolls in below the stage as `.belowFold` — same components, same store
+// wiring, just relocated out of the old watchGrid two-column layout. The
+// global TopBar no longer renders on this route at all (see App.tsx).
 // F3 ergonomics (hotkeys, resume prompt, periodic lastPosition persistence) still
 // live here since they're session-lifecycle concerns tied to "a project is open".
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -44,6 +49,11 @@ export function StudyView({ projectId }: Props): JSX.Element {
   const patchCurrentProject = useStudyLoopStore((s) => s.patchCurrentProject);
   const currentTime = useStudyLoopStore((s) => s.currentTime);
   const libraryItems = useStudyLoopStore((s) => s.libraryItems);
+  const consoleMode = useStudyLoopStore((s) => s.consoleMode);
+  const consoleEditMode = useStudyLoopStore((s) => s.consoleEditMode);
+  const toggleConsoleMode = useStudyLoopStore((s) => s.toggleConsoleMode);
+  const toggleConsoleEditMode = useStudyLoopStore((s) => s.toggleConsoleEditMode);
+  const resetAllPaneLayouts = useStudyLoopStore((s) => s.resetAllPaneLayouts);
 
   // `undefined` = not yet decided (show resume prompt if applicable), a number =
   // the position the player should start at.
@@ -135,8 +145,10 @@ export function StudyView({ projectId }: Props): JSX.Element {
 
   if (currentProjectLoading || !isSameProjectLoaded || !currentProject) {
     return (
-      <div className={styles.page}>
-        <div className={styles.status}>Loading project…</div>
+      <div className={styles.consoleRoot}>
+        <div className={styles.loadingStage}>
+          <div className={styles.loadingCard}>Loading project…</div>
+        </div>
       </div>
     );
   }
@@ -144,72 +156,111 @@ export function StudyView({ projectId }: Props): JSX.Element {
   const showResumePrompt = startAt === undefined && currentProject.lastPosition > RESUME_THRESHOLD_SECONDS;
 
   return (
-    <div className={styles.page}>
-      <div className={styles.watchGrid}>
-        <div className={styles.leftCol}>
-          <div className={styles.playerFrame} ref={frameRef}>
-            {showResumePrompt && (
-              <div className={styles.resumeOverlay}>
-                <div className={styles.resumeCard}>
-                  <p>Resume from {formatTimestamp(currentProject.lastPosition)}?</p>
-                  <div className={styles.resumeActions}>
-                    <button type="button" className={styles.primaryButton} onClick={() => setStartAt(currentProject.lastPosition)}>
-                      Resume
-                    </button>
-                    <button type="button" className={styles.secondaryButton} onClick={() => setStartAt(0)}>
-                      Start over
-                    </button>
-                  </div>
+    <div className={styles.consoleRoot}>
+      <section className={styles.console}>
+        <div className={styles.playerFrame} ref={frameRef}>
+          {showResumePrompt && (
+            <div className={styles.resumeOverlay}>
+              <div className={styles.resumeCard}>
+                <p>Resume from {formatTimestamp(currentProject.lastPosition)}?</p>
+                <div className={styles.resumeActions}>
+                  <button type="button" className={styles.primaryButton} onClick={() => setStartAt(currentProject.lastPosition)}>
+                    Resume
+                  </button>
+                  <button type="button" className={styles.secondaryButton} onClick={() => setStartAt(0)}>
+                    Start over
+                  </button>
                 </div>
               </div>
-            )}
-            {startAt !== undefined && currentProject.source.type === "local" && (
-              <LocalVideoPlayer key={currentProject.id} src={api.videoStreamUrl(currentProject.source.path)} startAt={startAt} />
-            )}
-            {startAt !== undefined && currentProject.source.type === "youtube" && (
-              <YouTubePlayer key={currentProject.id} videoId={currentProject.source.videoId} startAt={startAt} />
-            )}
-            {startAt !== undefined && <CCOverlay chromeVisible={chromeHovering} />}
-            {startAt !== undefined && <ConsoleLayer frameRef={frameRef} />}
-            {startAt !== undefined && <PlayerChrome frameRef={frameRef} onVisibleChange={setChromeHovering} />}
-          </div>
-
-          {/* V3-A A4: slim chip strip below the player, outside the video frame — replaces the old slide-over ticker. */}
-          <ConceptChipStrip />
-
-          <h1 className={styles.title}>{currentProject.title}</h1>
-
-          <div className={styles.channelRow}>
-            <div className={styles.channelIdentity}>
-              <span className={styles.avatar} aria-hidden="true">
-                {channelName.charAt(0).toUpperCase() || "?"}
-              </span>
-              <div className={styles.channelText}>
-                <span className={styles.channelName}>{channelName}</span>
-                <span className={styles.channelSource}>
-                  {currentProject.source.type === "local" ? currentProject.source.path : currentProject.source.url}
-                </span>
-              </div>
             </div>
-            <AnalyzeButton />
-          </div>
-
-          <DomainRow />
-
-          <div className={styles.actionPills}>
-            <CompileFlow />
-            <ShareFlow />
-            <ImportOverlayFlow />
-            <OverlaysPill />
-          </div>
-          <OverlayLegend />
-
-          <div className={styles.descriptionBox}>
-            <BottomDock />
-          </div>
+          )}
+          {startAt !== undefined && currentProject.source.type === "local" && (
+            <LocalVideoPlayer key={currentProject.id} src={api.videoStreamUrl(currentProject.source.path)} startAt={startAt} />
+          )}
+          {startAt !== undefined && currentProject.source.type === "youtube" && (
+            <YouTubePlayer key={currentProject.id} videoId={currentProject.source.videoId} startAt={startAt} />
+          )}
+          {startAt !== undefined && <CCOverlay chromeVisible={chromeHovering} />}
+          {startAt !== undefined && <ConsoleLayer frameRef={frameRef} />}
+          {startAt !== undefined && <PlayerChrome frameRef={frameRef} onVisibleChange={setChromeHovering} />}
         </div>
 
-        <div className={styles.rightCol}>
+        {/* Corner controls (mock lines 426-438): glass circular buttons, blur
+            scoped to just these two small buttons — never blur the stage
+            itself (perf law, mock comment at line 66). Fades toward the
+            player chrome's idle state; never fully hidden/unreachable. */}
+        <div className={`${styles.cornerButtons} ${chromeHovering ? styles.cornerButtonsVisible : ""}`}>
+          <button
+            type="button"
+            className={`${styles.cornerBtn} ${consoleEditMode ? styles.cornerBtnOn : ""}`}
+            onClick={toggleConsoleEditMode}
+            title="Edit layout (E)"
+            aria-label="Edit layout"
+            aria-pressed={consoleEditMode}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+              <path d="M11.3 2.1l2.6 2.6L5.6 13H3v-2.6z" />
+              <path d="M9.6 3.8l2.6 2.6" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className={`${styles.cornerBtn} ${consoleMode ? styles.cornerBtnOn : ""}`}
+            onClick={toggleConsoleMode}
+            onDoubleClick={resetAllPaneLayouts}
+            title="Overlay layer (O) · double-click resets pane layout"
+            aria-label="Overlay layer"
+            aria-pressed={consoleMode}
+          >
+            <svg width="17" height="17" viewBox="0 0 17 17" fill="none" stroke="currentColor" strokeWidth="1.4">
+              <rect x="1" y="1" width="6.4" height="6.4" rx="1.6" />
+              <rect x="9.6" y="1" width="6.4" height="6.4" rx="1.6" />
+              <rect x="1" y="9.6" width="6.4" height="6.4" rx="1.6" />
+              <rect x="9.6" y="9.6" width="6.4" height="6.4" rx="1.6" />
+            </svg>
+          </button>
+        </div>
+      </section>
+
+      <div className={styles.belowFold}>
+        {/* V3-A A4: slim chip strip below the player, outside the video frame — replaces the old slide-over ticker. */}
+        <ConceptChipStrip />
+
+        <h1 className={styles.title}>{currentProject.title}</h1>
+
+        <div className={styles.channelRow}>
+          <div className={styles.channelIdentity}>
+            <span className={styles.avatar} aria-hidden="true">
+              {channelName.charAt(0).toUpperCase() || "?"}
+            </span>
+            <div className={styles.channelText}>
+              <span className={styles.channelName}>{channelName}</span>
+              <span className={styles.channelSource}>
+                {currentProject.source.type === "local" ? currentProject.source.path : currentProject.source.url}
+              </span>
+            </div>
+          </div>
+          <AnalyzeButton />
+        </div>
+
+        <DomainRow />
+
+        <div className={styles.actionPills}>
+          <CompileFlow />
+          <ShareFlow />
+          <ImportOverlayFlow />
+          <OverlaysPill />
+        </div>
+        <OverlayLegend />
+
+        <div className={styles.descriptionBox}>
+          <BottomDock />
+        </div>
+
+        {/* Slice A: the right rail moves into the below-fold flow full-width
+            for now — a later slice relocates it into edge cabinets beside the
+            console (see BUILD-BRIEF.md); nothing here loses functionality. */}
+        <div className={styles.railWrap}>
           <RightRail segments={transcriptSegments} transcriptLoading={transcriptLoading} />
         </div>
       </div>
