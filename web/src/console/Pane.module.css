@@ -68,3 +68,34 @@
 .tool:hover {
   color: #fff;
 }
+
+/* Edit mode (SURVEY.md, WoW/ElvUI lineage): the pane materializes as a
+   labeled, outlined box — chrome always on, dashed border, grab cursor
+   everywhere. Hidden/ghost panes render their placeholder through .ghostText. */
+.pane.editing {
+  outline: 1.5px dashed rgb(255 255 255 / 45%);
+  outline-offset: 3px;
+  border-radius: var(--radius-xs);
+  cursor: grab;
+}
+
+.pane.editing.dragging {
+  cursor: grabbing;
+}
+
+.pane.editing .chrome {
+  background: rgb(0 0 0 / 65%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ghostText {
+  font-size: 12.5px;
+  font-style: italic;
+  line-height: 1.45;
+  color: rgb(255 255 255 / 55%);
+  margin: 0;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 75%);
+}

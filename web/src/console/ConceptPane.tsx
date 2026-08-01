@@ -42,10 +42,13 @@ export function ConceptPane({ frameRef }: Props): JSX.Element | null {
   );
 
   const active = useMemo(() => activeConceptAt(tickerConcepts, currentTime), [tickerConcepts, currentTime]);
+  // Edit mode materializes the pane even with nothing to show (ElvUI's rule:
+  // hidden-until-triggered UI must exist while you're arranging it).
+  const editing = useStudyLoopStore((s) => s.consoleEditMode);
 
-  if (!active) return null;
-  const key = `${active.card.id}@${active.t}`;
-  if (parkedKey === key) return null;
+  const key = active ? `${active.card.id}@${active.t}` : null;
+  const hidden = !active || parkedKey === key;
+  if (hidden && !editing) return null;
 
   return (
     <Pane
@@ -53,21 +56,29 @@ export function ConceptPane({ frameRef }: Props): JSX.Element | null {
       projectId={projectId}
       frameRef={frameRef}
       defaultPos={{ fx: 0.62, fy: 0.12 }}
-      label={<>CONCEPT &middot; {formatTimestamp(active.t)}</>}
+      label={active ? <>CONCEPT &middot; {formatTimestamp(active.t)}</> : "CONCEPT"}
       tools={
-        <button
-          type="button"
-          className={paneStyles.tool}
-          title="Park until the next concept"
-          aria-label="Park pane until the next concept"
-          onClick={() => setParkedKey(key)}
-        >
-          <Icon name="close" size={11} />
-        </button>
+        !hidden && key ? (
+          <button
+            type="button"
+            className={paneStyles.tool}
+            title="Park until the next concept"
+            aria-label="Park pane until the next concept"
+            onClick={() => setParkedKey(key)}
+          >
+            <Icon name="close" size={11} />
+          </button>
+        ) : undefined
       }
     >
-      <div className={styles.title}>{active.card.title}</div>
-      <p className={styles.body}>{bodyPreview(active.card.body)}</p>
+      {hidden || !active ? (
+        <p className={paneStyles.ghostText}>Appears while a concept is being taught.</p>
+      ) : (
+        <>
+          <div className={styles.title}>{active.card.title}</div>
+          <p className={styles.body}>{bodyPreview(active.card.body)}</p>
+        </>
+      )}
     </Pane>
   );
 }

@@ -6,7 +6,16 @@
 // this owns drag, clamping, and persistence. Perf constraint from the brief:
 // backdrop-filter only ever applies to the chrome strip, never a full pane.
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode, type RefObject } from "react";
-import { clampFraction, loadPaneLayout, savePaneLayout, type PaneFraction } from "../lib/consoleLayout";
+import { useStudyLoopStore } from "../state/store";
+import {
+  clampFraction,
+  clearPaneLayout,
+  loadPaneLayout,
+  savePaneLayout,
+  snapFraction,
+  type PaneFraction,
+} from "../lib/consoleLayout";
+import { Icon } from "../components/icons";
 import styles from "./Pane.module.css";
 
 interface DragState {
@@ -32,6 +41,9 @@ interface Props {
 }
 
 export function Pane({ paneId, projectId, frameRef, defaultPos, label, tools, width, children }: Props): JSX.Element {
+  // Edit mode (SURVEY.md, WoW/ElvUI lineage): chrome forced visible, dashed
+  // outline, drags snap to the grid, and a per-pane reset tool appears.
+  const editing = useStudyLoopStore((s) => s.consoleEditMode);
   const paneRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const posRef = useRef<PaneFraction>(defaultPos);
@@ -73,9 +85,11 @@ export function Pane({ paneId, projectId, frameRef, defaultPos, label, tools, wi
     const { frameRect, paneWidthFrac, paneHeightFrac, offsetX, offsetY } = drag;
     const rawFx = (e.clientX - offsetX - frameRect.left) / frameRect.width;
     const rawFy = (e.clientY - offsetY - frameRect.top) / frameRect.height;
+    const snappedFx = editing ? snapFraction(rawFx) : clampFraction(rawFx);
+    const snappedFy = editing ? snapFraction(rawFy) : clampFraction(rawFy);
     const next: PaneFraction = {
-      fx: Math.min(Math.max(0, 1 - paneWidthFrac), clampFraction(rawFx)),
-      fy: Math.min(Math.max(0, 1 - paneHeightFrac), clampFraction(rawFy)),
+      fx: Math.min(Math.max(0, 1 - paneWidthFrac), snappedFx),
+      fy: Math.min(Math.max(0, 1 - paneHeightFrac), snappedFy),
     };
     posRef.current = next;
     setPos(next);
@@ -89,10 +103,16 @@ export function Pane({ paneId, projectId, frameRef, defaultPos, label, tools, wi
     if (projectId) savePaneLayout(projectId, paneId, posRef.current);
   };
 
+  const handleReset = (): void => {
+    posRef.current = defaultPos;
+    setPos(defaultPos);
+    if (projectId) clearPaneLayout(projectId, paneId);
+  };
+
   return (
     <div
       ref={paneRef}
-      className={`${styles.pane} ${dragging ? styles.dragging : ""}`}
+      className={`${styles.pane} ${dragging ? styles.dragging : ""} ${editing ? styles.editing : ""}`}
       style={{ left: `${pos.fx * 100}%`, top: `${pos.fy * 100}%`, width: width ? `${width}px` : undefined }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -100,7 +120,20 @@ export function Pane({ paneId, projectId, frameRef, defaultPos, label, tools, wi
     >
       <div className={styles.chrome}>
         <span className={styles.label}>{label}</span>
-        {tools && <span className={styles.tools}>{tools}</span>}
+        <span className={styles.tools}>
+          {editing && (
+            <button
+              type="button"
+              className={styles.tool}
+              title="Reset this pane to its default position"
+              aria-label="Reset pane position"
+              onClick={handleReset}
+            >
+              <Icon name="refresh" size={11} />
+            </button>
+          )}
+          {tools}
+        </span>
       </div>
       {children}
     </div>

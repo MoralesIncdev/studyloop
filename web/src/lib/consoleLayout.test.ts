@@ -1,7 +1,7 @@
 // Console slice 8 scaffold (design/mockups/video-console/BUILD-BRIEF.md): tests
 // for the fractional pane-layout persistence helpers.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { clampFraction, loadPaneLayout, savePaneLayout } from "./consoleLayout";
+import { clampFraction, clearPaneLayout, loadPaneLayout, savePaneLayout, snapFraction } from "./consoleLayout";
 
 function fakeWindow(initialStorage: Record<string, string> = {}): { localStorage: Storage } {
   const backing = new Map(Object.entries(initialStorage));
@@ -89,5 +89,43 @@ describe("loadPaneLayout / savePaneLayout", () => {
       fakeWindow({ "studyloop:console-layout:proj1:p-concept": JSON.stringify({ foo: "bar" }) })
     );
     expect(loadPaneLayout("proj1", "p-concept")).toBeNull();
+  });
+});
+
+describe("clearPaneLayout", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("forgets a stored position so load returns null", () => {
+    vi.stubGlobal("window", fakeWindow());
+    savePaneLayout("p1", "pane", { fx: 0.3, fy: 0.4 });
+    expect(loadPaneLayout("p1", "pane")).not.toBeNull();
+    clearPaneLayout("p1", "pane");
+    expect(loadPaneLayout("p1", "pane")).toBeNull();
+  });
+
+  it("leaves other panes' positions alone", () => {
+    vi.stubGlobal("window", fakeWindow());
+    savePaneLayout("p1", "a", { fx: 0.3, fy: 0.4 });
+    savePaneLayout("p1", "b", { fx: 0.6, fy: 0.7 });
+    clearPaneLayout("p1", "a");
+    expect(loadPaneLayout("p1", "b")).toEqual({ fx: 0.6, fy: 0.7 });
+  });
+});
+
+describe("snapFraction", () => {
+  it("quantizes to the default step", () => {
+    expect(snapFraction(0.316)).toBeCloseTo(0.32);
+    expect(snapFraction(0.309)).toBeCloseTo(0.3);
+  });
+
+  it("clamps while snapping", () => {
+    expect(snapFraction(1.4)).toBe(1);
+    expect(snapFraction(-0.3)).toBe(0);
+  });
+
+  it("honors a custom step", () => {
+    expect(snapFraction(0.26, 0.25)).toBe(0.25);
   });
 });
