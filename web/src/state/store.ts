@@ -56,6 +56,13 @@ export interface Toast {
 const toastTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const TOAST_LIFETIME_MS = 6000;
 
+/** Console slice D: flashContext's auto-clear timer — same "kept outside the
+ *  store" reasoning as toastTimers above. Mock's own ctxFlashTimer (index.html
+ *  line 1269) is the same single-slot-not-a-queue design: a new flash simply
+ *  restarts the clock rather than queuing. */
+let contextFlashTimer: ReturnType<typeof setTimeout> | null = null;
+const CONTEXT_FLASH_MS = 2600;
+
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError) return err.message;
   if (err instanceof Error) return err.message;
@@ -464,6 +471,37 @@ export interface StudyLoopStore {
    *  nothing reads it yet. */
   pressure: number;
   setPressure: (v: number) => void;
+
+  // --- Console slice D: pane engine parity (design/mockups/video-console/index.html
+  // lines 1044-1099, "drag-to-park + waiting ticks + undock") ----------------------
+  /** One entry per currently-parked, tick-anchored pane — `t` is the concept
+   *  anchor its seek-bar tick should pulse `.waiting` at; `conceptId` lets the
+   *  owning pane (ConceptPane) recognize "this is MY parked occurrence" vs a
+   *  stale key from a since-changed concept. PlayerChrome reads this to mark
+   *  the matching tick and wire its click to undockPane. */
+  parkedPanes: Record<string, { conceptId: string; t: number }>;
+  parkPane: (paneId: string, conceptId: string, t: number) => void;
+  /** Clicking a waiting tick (mock's `undockPane`, index.html lines 1102-1110). */
+  undockPane: (paneId: string) => void;
+  /** Console slice D item 7 "Echo pane timestamp jump": the router only carries
+   *  a projectId (lib/router.ts), so a cross-project seek is staged here and
+   *  consumed once on the destination StudyView's load — also suppresses that
+   *  session's resume prompt (a queued seek IS the resume decision). */
+  pendingSeekT: number | null;
+  queuePendingSeek: (t: number) => void;
+  /** Reads and clears in one step — a second read (e.g. a re-render) must not replay the seek. */
+  consumePendingSeek: () => number | null;
+  /** Console slice D item 6: SuggestPane's "Keep as note" flashes the status-chips
+   *  context line with a custom message (mock's flashCtx, index.html lines
+   *  1270-1275) instead of the row's own computed "at T · concept · n notes"
+   *  text — auto-clears itself after the same ~2.6s the mock uses. */
+  contextFlash: string | null;
+  flashContext: (message: string) => void;
+  /** Console slice D item 8 "ghost notes": GhostNote reads this to skip
+   *  resurfacing a note's text while NotePane's textarea is actively focused —
+   *  set by NotePane's own focus/blur handlers. */
+  noteEditing: boolean;
+  setNoteEditing: (editing: boolean) => void;
 
   // --- transcript UX --------------------------------------------------------------
   lastUserScrollAt: number;
@@ -980,6 +1018,16 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       modality: "watch",
       scaffold: 100,
       pressure: 100,
+      // Console slice D: a stale parked-pane/flash/editing flag from the
+      // PREVIOUS project must not bleed into this one. `pendingSeekT`
+      // deliberately isn't listed here — a cross-project echo jump sets it
+      // right before calling navigate(), and this bulk reset (part of
+      // loadProjectSession, which the resulting StudyView mount triggers)
+      // must not clobber it before StudyView's own effect gets to
+      // consumePendingSeek() it.
+      parkedPanes: {},
+      contextFlash: null,
+      noteEditing: false,
       controller: null,
       bubbles: [],
       bubblesLoading: false,
@@ -1226,6 +1274,11 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       modality: "watch",
       scaffold: 100,
       pressure: 100,
+      // Console slice D: same exclusion as loadProjectSession's own reset —
+      // see its comment. `pendingSeekT` stays out on purpose.
+      parkedPanes: {},
+      contextFlash: null,
+      noteEditing: false,
       bubbles: [],
       bubblesLoading: false,
       notes: "",
@@ -1579,6 +1632,34 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   setScaffold: (v) => set({ scaffold: Math.min(100, Math.max(0, v)) }),
   pressure: 100,
   setPressure: (v) => set({ pressure: Math.min(100, Math.max(0, v)) }),
+
+  // --- Console slice D: pane engine parity -----------------------------------------
+  parkedPanes: {},
+  parkPane: (paneId, conceptId, t) => set((state) => ({ parkedPanes: { ...state.parkedPanes, [paneId]: { conceptId, t } } })),
+  undockPane: (paneId) =>
+    set((state) => {
+      const next = { ...state.parkedPanes };
+      delete next[paneId];
+      return { parkedPanes: next };
+    }),
+  pendingSeekT: null,
+  queuePendingSeek: (t) => set({ pendingSeekT: t }),
+  consumePendingSeek: () => {
+    const t = get().pendingSeekT;
+    if (t != null) set({ pendingSeekT: null });
+    return t;
+  },
+  contextFlash: null,
+  flashContext: (message) => {
+    if (contextFlashTimer) clearTimeout(contextFlashTimer);
+    set({ contextFlash: message });
+    contextFlashTimer = setTimeout(() => {
+      contextFlashTimer = null;
+      set({ contextFlash: null });
+    }, CONTEXT_FLASH_MS);
+  },
+  noteEditing: false,
+  setNoteEditing: (editing) => set({ noteEditing: editing }),
 
   // --- transcript UX --------------------------------------------------------------
   lastUserScrollAt: 0,

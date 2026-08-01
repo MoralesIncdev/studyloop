@@ -13,10 +13,37 @@ export interface PaneFraction {
   fy: number;
 }
 
+/** Console slice D: bare (frameless, chrome-on-hover) vs glassy (persistent
+ *  glass surface) — the pane-level toggle in the chrome strip (Pane.tsx). */
+export type PaneMode = "bare" | "glassy";
+
+/** Console slice D: the resize grip's clamp (Pane.module.css/.tsx). */
+export const PANE_MIN_WIDTH_PX = 210;
+export const PANE_MAX_WIDTH_PX = 640;
+
+/**
+ * Console slice D: extends the slice-8 fx/fy-only shape with the pane's
+ * resized width and bare/glassy mode, both optional so a pane that never
+ * touched its grip or mode toggle still round-trips cleanly. Backward
+ * compatible with everything slice 8 already wrote to localStorage — those
+ * entries simply have `width`/`mode` come back `undefined`, and callers fall
+ * back to their own defaults exactly like a missing key would.
+ */
+export interface PaneLayout extends PaneFraction {
+  width?: number;
+  mode?: PaneMode;
+}
+
 /** Clamp a fraction into [0, 1]; NaN (e.g. from corrupt JSON) falls back to 0. */
 export function clampFraction(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.min(1, Math.max(0, n));
+}
+
+/** Clamp a pane width into the grip's [210, 640] range; NaN falls back to the minimum. */
+export function clampPaneWidth(n: number): number {
+  if (!Number.isFinite(n)) return PANE_MIN_WIDTH_PX;
+  return Math.min(PANE_MAX_WIDTH_PX, Math.max(PANE_MIN_WIDTH_PX, n));
 }
 
 const STORAGE_PREFIX = "studyloop:console-layout:";
@@ -31,29 +58,64 @@ function isPaneFraction(value: unknown): value is PaneFraction {
   return typeof v.fx === "number" && typeof v.fy === "number";
 }
 
-/** Returns null on a missing key, corrupt JSON, or an unrecognized shape — callers fall back to a default position. */
-export function loadPaneLayout(projectId: string, paneId: string): PaneFraction | null {
+function readRaw(projectId: string, paneId: string): PaneLayout | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(storageKey(projectId, paneId));
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (!isPaneFraction(parsed)) return null;
-    return { fx: clampFraction(parsed.fx), fy: clampFraction(parsed.fy) };
+    const v = parsed as unknown as Record<string, unknown>;
+    const layout: PaneLayout = { fx: clampFraction(v.fx as number), fy: clampFraction(v.fy as number) };
+    if (typeof v.width === "number") layout.width = clampPaneWidth(v.width);
+    if (v.mode === "bare" || v.mode === "glassy") layout.mode = v.mode;
+    return layout;
   } catch {
     return null;
   }
 }
 
-export function savePaneLayout(projectId: string, paneId: string, pos: PaneFraction): void {
+/** Returns null on a missing key, corrupt JSON, or an unrecognized shape — callers fall back to a default position/width/mode. */
+export function loadPaneLayout(projectId: string, paneId: string): PaneLayout | null {
+  return readRaw(projectId, paneId);
+}
+
+function writeRaw(projectId: string, paneId: string, layout: PaneLayout): void {
   if (typeof window === "undefined") return;
   try {
-    const clamped: PaneFraction = { fx: clampFraction(pos.fx), fy: clampFraction(pos.fy) };
-    window.localStorage.setItem(storageKey(projectId, paneId), JSON.stringify(clamped));
+    window.localStorage.setItem(storageKey(projectId, paneId), JSON.stringify(layout));
   } catch {
     // Storage can throw (private browsing, quota) — the pane just won't
     // remember its position across reloads. Not worth a toast.
   }
+}
+
+export function savePaneLayout(projectId: string, paneId: string, pos: PaneFraction): void {
+  const existing = readRaw(projectId, paneId) ?? {};
+  writeRaw(projectId, paneId, { ...existing, fx: clampFraction(pos.fx), fy: clampFraction(pos.fy) });
+}
+
+/**
+ * Console slice D: persists the grip-resized width without disturbing the
+ * pane's stored position/mode (read-modify-write, same one-blob-per-pane
+ * storage as savePaneLayout). `currentPos` is the pane's position AS
+ * CURRENTLY DISPLAYED (stored value if any, else its defaultPos) — required
+ * because the stored blob's fx/fy are non-optional (isPaneFraction gates
+ * every read); resizing before ever dragging must not fabricate a (0,0)
+ * position and silently jump the pane to the corner.
+ */
+export function savePaneWidth(projectId: string, paneId: string, currentPos: PaneFraction, width: number): void {
+  const existing = readRaw(projectId, paneId);
+  const base = existing ?? currentPos;
+  writeRaw(projectId, paneId, { fx: clampFraction(base.fx), fy: clampFraction(base.fy), mode: existing?.mode, width: clampPaneWidth(width) });
+}
+
+/** Console slice D: persists the bare/glassy toggle — same currentPos
+ *  requirement as savePaneWidth. */
+export function savePaneMode(projectId: string, paneId: string, currentPos: PaneFraction, mode: PaneMode): void {
+  const existing = readRaw(projectId, paneId);
+  const base = existing ?? currentPos;
+  writeRaw(projectId, paneId, { fx: clampFraction(base.fx), fy: clampFraction(base.fy), width: existing?.width, mode });
 }
 
 /** Edit mode's per-pane reset — forget the stored position so the pane returns
@@ -70,7 +132,7 @@ export function clearPaneLayout(projectId: string, paneId: string): void {
 /** Every pane id that persists a layout — kept in one place so the "reset all"
  *  corner control (double-click the bento button, slice A) doesn't drift out
  *  of sync with whichever panes actually exist. */
-export const ALL_PANE_IDS = ["p-concept", "p-drill", "p-echo", "p-note"] as const;
+export const ALL_PANE_IDS = ["p-concept", "p-drill", "p-echo", "p-note", "p-test", "p-map", "p-suggest"] as const;
 
 /** Bento-button double-click: forget every pane's stored position for this
  *  project in one shot. Callers still need to force each Pane to re-read

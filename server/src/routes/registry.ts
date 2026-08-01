@@ -19,6 +19,8 @@ interface ResolvedUnitView {
   unitId: string;
   label: string;
   summary: string;
+  /** Console slice D item 7 "Echo pane timestamp jump": the unit's first anchor time, or null when it carries none. */
+  t: number | null;
 }
 
 /** Reads one unit's CURRENT (not registry-cached) label/summary + its project's title, for the merge-queue panel and the resolve route's "ignore" fallback. Returns null if the project, its analysis, or the unit itself no longer resolves (deleted/legacy analysis) — callers skip/degrade gracefully rather than 500ing the whole list. */
@@ -31,7 +33,7 @@ async function resolveUnitView(dataDir: string, projectId: string, unitId: strin
   const analysis: Analysis | null = parsed.success ? parsed.data : null;
   const unit = analysis?.units?.find((u) => u.id === unitId);
   if (!unit) return null;
-  return { projectId, projectTitle: project.title, unitId, label: unit.label, summary: unit.summary };
+  return { projectId, projectTitle: project.title, unitId, label: unit.label, summary: unit.summary, t: unit.anchors[0]?.t ?? null };
 }
 
 const ResolveParamsSchema = z.object({ candidateId: z.string().min(1) });
@@ -106,7 +108,8 @@ export async function registryRoutes(app: FastifyInstance): Promise<void> {
     if (!project) return reply.status(404).send({ error: "Project not found" });
 
     const registry = await readConceptRegistry(dataDir);
-    const result: Record<string, { projectId: string; projectTitle: string }[]> = {};
+    type MergedRef = { projectId: string; projectTitle: string; unitId?: string; t?: number };
+    const result: Record<string, MergedRef[]> = {};
 
     for (const unit of Object.values(registry.units)) {
       const mine = unit.projectRefs.filter((r) => r.projectId === params.data.id);
@@ -115,12 +118,21 @@ export async function registryRoutes(app: FastifyInstance): Promise<void> {
       if (otherProjectIds.length === 0) continue;
       // eslint-disable-next-line no-await-in-loop
       const others = await Promise.all(
-        otherProjectIds.map(async (pid) => {
+        otherProjectIds.map(async (pid): Promise<MergedRef | null> => {
+          // Console slice D item 7: resolve the OTHER project's own current
+          // unit id + anchor time too (not just its title) — the echo pane's
+          // "open it there" jump needs a real timestamp, not just a project.
+          const ref = unit.projectRefs.find((r) => r.projectId === pid);
+          const view = ref ? await resolveUnitView(dataDir, pid, ref.unitId) : null;
+          if (view) return { projectId: pid, projectTitle: view.projectTitle, unitId: view.unitId, t: view.t ?? undefined };
+          // Degrade gracefully (slice-8 behavior): the unit no longer
+          // resolves (deleted/legacy analysis) but the project itself still
+          // does — still worth a chip, just without a jump target.
           const p = await readProject(dataDir, pid);
           return p ? { projectId: pid, projectTitle: p.title } : null;
         })
       );
-      const filtered = others.filter((o): o is { projectId: string; projectTitle: string } => o !== null);
+      const filtered = others.filter((o): o is MergedRef => o !== null);
       if (filtered.length === 0) continue;
       for (const ref of mine) result[ref.unitId] = filtered;
     }

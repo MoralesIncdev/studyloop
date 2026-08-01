@@ -138,6 +138,12 @@ export interface ContinuityWeights {
 export interface MergedConceptRef {
   projectId: string;
   projectTitle: string;
+  /** Console slice D item 7 "Echo pane timestamp jump": the OTHER project's own
+   *  unit id for this same registry entry, and its first anchor time — absent
+   *  when that unit no longer resolves (deleted/legacy analysis) or carries no
+   *  anchor, in which case the jump degrades to "open the project" with no seek. */
+  unitId?: string;
+  t?: number;
 }
 
 /** GET /api/projects/:id/merged-concepts response: {[unitId]: other projects the same registry concept spans}. */
