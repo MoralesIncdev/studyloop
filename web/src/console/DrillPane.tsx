@@ -32,7 +32,9 @@ export function DrillPane({ frameRef }: Props): JSX.Element | null {
     return { key: `${hit.unit.id}@${hit.t}`, t: hit.t, label: hit.unit.label, drill };
   }, [analysis, currentTime]);
 
-  if (!active || parkedKey === active.key) return null;
+  const editing = useStudyLoopStore((s) => s.consoleEditMode);
+  const hidden = !active || parkedKey === active.key;
+  if (hidden && !editing) return null;
 
   return (
     <Pane
@@ -41,34 +43,42 @@ export function DrillPane({ frameRef }: Props): JSX.Element | null {
       frameRef={frameRef}
       defaultPos={{ fx: 0.04, fy: 0.12 }}
       width={300}
-      label={<>DRILL &middot; {formatTimestamp(active.t)}</>}
+      label={active ? <>DRILL &middot; {formatTimestamp(active.t)}</> : "DRILL"}
       tools={
-        <button
-          type="button"
-          className={paneStyles.tool}
-          title="Park until the next drillable unit"
-          aria-label="Park drill pane"
-          onClick={() => setParkedKey(active.key)}
-        >
-          <Icon name="close" size={11} />
-        </button>
+        !hidden && active ? (
+          <button
+            type="button"
+            className={paneStyles.tool}
+            title="Park until the next drillable unit"
+            aria-label="Park drill pane"
+            onClick={() => setParkedKey(active.key)}
+          >
+            <Icon name="close" size={11} />
+          </button>
+        ) : undefined
       }
     >
-      <div className={styles.label}>{active.label}</div>
-      {active.drill.triggers.length > 0 && (
-        <p className={styles.row}>
-          <b>Trigger:</b> {active.drill.triggers.join("; ")}
-        </p>
-      )}
-      {active.drill.failureModes.length > 0 && (
-        <p className={styles.row}>
-          <b>Failure check:</b> {active.drill.failureModes.join("; ")}
-        </p>
-      )}
-      {active.drill.drillPairing && (
-        <p className={styles.row}>
-          <b>Drill:</b> {active.drill.drillPairing}
-        </p>
+      {hidden || !active ? (
+        <p className={paneStyles.ghostText}>Appears when a unit carries drill content.</p>
+      ) : (
+        <>
+          <div className={styles.label}>{active.label}</div>
+          {active.drill.triggers.length > 0 && (
+            <p className={styles.row}>
+              <b>Trigger:</b> {active.drill.triggers.join("; ")}
+            </p>
+          )}
+          {active.drill.failureModes.length > 0 && (
+            <p className={styles.row}>
+              <b>Failure check:</b> {active.drill.failureModes.join("; ")}
+            </p>
+          )}
+          {active.drill.drillPairing && (
+            <p className={styles.row}>
+              <b>Drill:</b> {active.drill.drillPairing}
+            </p>
+          )}
+        </>
       )}
     </Pane>
   );

@@ -394,6 +394,12 @@ export interface StudyLoopStore {
    *  concept coverage (PlayerChrome owns the skip logic; this is just the mode). */
   condensedPlayback: boolean;
   toggleCondensedPlayback: () => void;
+  /** Console edit mode (SURVEY.md, WoW/ElvUI lineage): every pane materializes
+   *  as a labeled, outlined, draggable box — including ones with nothing to
+   *  show right now — with grid snapping and per-pane reset. Entering it
+   *  turns consoleMode on; only meaningful while the overlay exists. */
+  consoleEditMode: boolean;
+  toggleConsoleEditMode: () => void;
   /** Console slice 8 scaffold (design/mockups/video-console/BUILD-BRIEF.md): the
    *  pane-engine overlay — off by default. ConsoleLayer renders while this is
    *  true; the "O" hotkey toggles it (see hotkeys.ts). */
@@ -907,6 +913,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       loopB: null,
       condensedPlayback: false,
       consoleMode: false,
+      consoleEditMode: false,
       controller: null,
       bubbles: [],
       bubblesLoading: false,
@@ -1145,6 +1152,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       loopB: null,
       condensedPlayback: false,
       consoleMode: false,
+      consoleEditMode: false,
       bubbles: [],
       bubblesLoading: false,
       notes: "",
@@ -1428,9 +1436,21 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   consoleMode: false,
   toggleConsoleMode: () => {
     const next = !get().consoleMode;
-    set({ consoleMode: next });
+    // Leaving console mode always leaves edit mode with it.
+    set({ consoleMode: next, consoleEditMode: next ? get().consoleEditMode : false });
     get().pushToast(
       next ? "Console overlay on — drag the pane; O toggles" : "Console overlay off",
+      "info"
+    );
+  },
+  consoleEditMode: false,
+  toggleConsoleEditMode: () => {
+    const next = !get().consoleEditMode;
+    // Entering edit mode deliberately implies the overlay itself (WoW's Edit
+    // Mode is entered from a menu, not stumbled into — E is our menu).
+    set({ consoleEditMode: next, consoleMode: next ? true : get().consoleMode });
+    get().pushToast(
+      next ? "Edit layout — drag panes, positions snap to the grid; E or Esc exits" : "Edit layout off",
       "info"
     );
   },

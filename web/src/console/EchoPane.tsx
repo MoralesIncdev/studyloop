@@ -34,7 +34,9 @@ export function EchoPane({ frameRef }: Props): JSX.Element | null {
     return { key: `${hit.unit.id}@${hit.t}`, t: hit.t, label: hit.unit.label, elsewhere };
   }, [analysis, currentTime, mergedConcepts]);
 
-  if (!active || parkedKey === active.key) return null;
+  const editing = useStudyLoopStore((s) => s.consoleEditMode);
+  const hidden = !active || parkedKey === active.key;
+  if (hidden && !editing) return null;
 
   return (
     <Pane
@@ -43,31 +45,39 @@ export function EchoPane({ frameRef }: Props): JSX.Element | null {
       frameRef={frameRef}
       defaultPos={{ fx: 0.04, fy: 0.36 }}
       width={300}
-      label={<>ECHO &middot; {formatTimestamp(active.t)}</>}
+      label={active ? <>ECHO &middot; {formatTimestamp(active.t)}</> : "ECHO"}
       tools={
-        <button
-          type="button"
-          className={paneStyles.tool}
-          title="Park this echo"
-          aria-label="Park echo pane"
-          onClick={() => setParkedKey(active.key)}
-        >
-          <Icon name="close" size={11} />
-        </button>
+        !hidden && active ? (
+          <button
+            type="button"
+            className={paneStyles.tool}
+            title="Park this echo"
+            aria-label="Park echo pane"
+            onClick={() => setParkedKey(active.key)}
+          >
+            <Icon name="close" size={11} />
+          </button>
+        ) : undefined
       }
     >
-      <p className={styles.body}>
-        You&rsquo;ve met this before — <b>{active.label}</b> also lives in{" "}
-        <b>{active.elsewhere[0].projectTitle}</b>
-        {active.elsewhere.length > 1 ? ` (+${active.elsewhere.length - 1} more)` : ""}.
-      </p>
-      <button
-        type="button"
-        className={styles.jump}
-        onClick={() => navigate({ view: "study", projectId: active.elsewhere[0].projectId })}
-      >
-        Open it there
-      </button>
+      {hidden || !active ? (
+        <p className={paneStyles.ghostText}>Appears when a concept here also lives in another video.</p>
+      ) : (
+        <>
+          <p className={styles.body}>
+            You&rsquo;ve met this before — <b>{active.label}</b> also lives in{" "}
+            <b>{active.elsewhere[0].projectTitle}</b>
+            {active.elsewhere.length > 1 ? ` (+${active.elsewhere.length - 1} more)` : ""}.
+          </p>
+          <button
+            type="button"
+            className={styles.jump}
+            onClick={() => navigate({ view: "study", projectId: active.elsewhere[0].projectId })}
+          >
+            Open it there
+          </button>
+        </>
+      )}
     </Pane>
   );
 }

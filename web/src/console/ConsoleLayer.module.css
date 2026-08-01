@@ -8,3 +8,27 @@
   z-index: 7;
   pointer-events: none;
 }
+
+/* Edit mode: a faint dot grid over the frame plus the exit badge — the layer
+   reads as an arranging surface without stealing clicks outside panes. */
+.layer.editing {
+  background: radial-gradient(rgb(255 255 255 / 9%) 1px, transparent 1px) 0 0 / 28px 28px;
+}
+
+.editBadge {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 12px;
+  border: 1px solid rgb(255 255 255 / 25%);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 72%);
+  color: rgb(255 255 255 / 90%);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}

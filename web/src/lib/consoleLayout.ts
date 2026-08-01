@@ -55,3 +55,22 @@ export function savePaneLayout(projectId: string, paneId: string, pos: PaneFract
     // remember its position across reloads. Not worth a toast.
   }
 }
+
+/** Edit mode's per-pane reset — forget the stored position so the pane returns
+ *  to its default (loadPaneLayout goes back to null). */
+export function clearPaneLayout(projectId: string, paneId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(storageKey(projectId, paneId));
+  } catch {
+    // Same tolerance as savePaneLayout.
+  }
+}
+
+/** Edit-mode grid snapping (SURVEY.md, WoW Edit Mode / FFXIV): quantize a
+ *  fraction to STEP increments so dragged layouts land looking intentional. */
+export const EDIT_SNAP_STEP = 0.02;
+
+export function snapFraction(n: number, step: number = EDIT_SNAP_STEP): number {
+  return clampFraction(Math.round(n / step) * step);
+}

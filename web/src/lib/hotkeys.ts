@@ -90,6 +90,13 @@ export function useHotkeys(enabled: boolean): void {
           // Console slice 8: toggle the pane-engine overlay scaffold.
           store.toggleConsoleMode();
           break;
+        case "e":
+          // Console edit mode: materialize + arrange the overlay panes.
+          store.toggleConsoleEditMode();
+          break;
+        case "escape":
+          if (store.consoleEditMode) store.toggleConsoleEditMode();
+          break;
         default:
           break;
       }

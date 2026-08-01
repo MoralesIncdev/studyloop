@@ -19,10 +19,12 @@ interface Props {
 
 export function ConsoleLayer({ frameRef }: Props): JSX.Element | null {
   const consoleMode = useStudyLoopStore((s) => s.consoleMode);
+  const editing = useStudyLoopStore((s) => s.consoleEditMode);
   if (!consoleMode) return null;
 
   return (
-    <div className={styles.layer}>
+    <div className={`${styles.layer} ${editing ? styles.editing : ""}`}>
+      {editing && <div className={styles.editBadge}>Edit layout · drag panes · E or Esc exits</div>}
       <ConceptPane frameRef={frameRef} />
       <DrillPane frameRef={frameRef} />
       <EchoPane frameRef={frameRef} />
