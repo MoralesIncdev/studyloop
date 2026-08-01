@@ -445,6 +445,8 @@ export interface StudyLoopStore {
   captureScreenshotOnly: () => Promise<void>;
   /** Console slice 4: one-key mining — frame + transcript slice around the playhead, zero dialog. */
   mineMoment: () => Promise<void>;
+  /** Console slice 8: the quick-note pane pins free text at an anchor without the modal. */
+  pinQuickNote: (t: number, text: string) => Promise<void>;
 
   // --- F10 compile ------------------------------------------------------------------
   compiling: boolean;
@@ -1703,6 +1705,20 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       get().pushToast(`Mined ${formatTimestamp(t)} — frame + transcript slice`, "success");
     } catch (err) {
       get().pushToast(`Could not mine: ${errorMessage(err)}`, "error");
+    }
+  },
+
+  // --- Console slice 8: quick-note pane (design/mockups/video-console/BUILD-BRIEF.md) --
+  pinQuickNote: async (t, text) => {
+    const project = get().currentProject;
+    if (!project) return;
+    try {
+      const bubble = await api.createBubble(project.id, { t, text, shot: null });
+      set((state) => ({ bubbles: sortBubbles([...state.bubbles, bubble]) }));
+      get().pushToast(`Note pinned at ${formatTimestamp(t)}`, "success");
+    } catch (err) {
+      get().pushToast(`Could not pin note: ${errorMessage(err)}`, "error");
+      throw err;
     }
   },
 

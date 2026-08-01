@@ -8,6 +8,7 @@
 import { type RefObject } from "react";
 import { useStudyLoopStore } from "../state/store";
 import { ConceptPane } from "./ConceptPane";
+import { NotePane } from "./NotePane";
 import styles from "./ConsoleLayer.module.css";
 
 interface Props {
@@ -21,6 +22,7 @@ export function ConsoleLayer({ frameRef }: Props): JSX.Element | null {
   return (
     <div className={styles.layer}>
       <ConceptPane frameRef={frameRef} />
+      <NotePane frameRef={frameRef} />
     </div>
   );
 }

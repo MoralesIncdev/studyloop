@@ -1,0 +1,70 @@
+/* Console slice 8 (design/mockups/video-console/BUILD-BRIEF.md): shared pane
+   shell — bare content over the footage; the chrome strip is the only surface
+   that ever gets a background or backdrop-filter (perf: never blur a full
+   pane over video). */
+
+.pane {
+  position: absolute;
+  width: 340px;
+  pointer-events: auto;
+  cursor: default;
+  touch-action: none;
+  user-select: none;
+}
+
+.chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 22px;
+  margin: 0 0 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+  cursor: grab;
+  transition: opacity var(--duration-standard) var(--ease-standard),
+    background var(--duration-standard) var(--ease-standard);
+}
+
+.pane:hover .chrome,
+.pane.dragging .chrome {
+  background: rgb(0 0 0 / 65%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pane.dragging .chrome {
+  cursor: grabbing;
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 88%);
+  white-space: nowrap;
+}
+
+.tools {
+  display: flex;
+  gap: 2px;
+}
+
+.tool {
+  padding: 2px;
+  line-height: 0;
+  border: none;
+  background: none;
+  color: rgb(255 255 255 / 65%);
+  cursor: pointer;
+}
+
+.tool:hover {
+  color: #fff;
+}
