@@ -8,7 +8,7 @@
 // lib/analysis.ts (fake/real client, resolve*/​__set*ForTests).
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { ANALYSIS_MAX_TOKENS, type AnalysisOutcome, type LLMClientAuth } from "./analysis.js";
+import { ANALYSIS_MAX_TOKENS, type AnalysisOutcome, type LLMClientAuth, type UnitType } from "./analysis.js";
 import { createStructuredCaller, type ProviderAuth, type StructuredLLMCaller } from "./providers.js";
 import type { Domain } from "./models.js";
 
@@ -46,6 +46,23 @@ export interface CardTransformInput {
   kind: "bubble" | "pearl";
   /** V3-D D4 "domain-routed" card transformation — the owning project's domain (undefined for a v2 analysis, a project with no domain yet, or "generic"), shapes the question STYLE below. */
   domain?: Domain;
+  /**
+   * Phase 5 "Lens registry": the active lens's `questionStyle` (e.g.
+   * "nclex") — an ADDITIONAL dispatch layer on top of `domain` above.
+   * Absent, or any value other than a recognized special style (currently
+   * just "nclex"), preserves the pre-Phase-5 domain-flavored behavior
+   * exactly (SPEC: "Default questionStyle preserves current behavior
+   * exactly for the migrated five").
+   */
+  questionStyle?: string;
+  /**
+   * Phase 5: the linked unit's type, when this card traces back to one
+   * (currently only pearls do, via `pearl.unitId` — see routes/review.ts's
+   * loadLiveCards). Only meaningful when `questionStyle === "nclex"`, to
+   * choose between the scenario-option framing (PRIORITIZATION/synthesis
+   * material) and the exact-value framing (DOSAGE/LAB_VALUE).
+   */
+  unitType?: UnitType;
 }
 
 const CARD_TRANSFORM_SYSTEM_PROMPT = `You turn a learner's study-session note or a pearl of insight into a spaced-repetition review card. Given the source text, produce:
@@ -59,9 +76,15 @@ Keep all three fields short (front/why under 160 characters, back under 240). Ba
  * prompt uses the project domain to shape question style (mechanistic why /
  * sourcing / scenario application / notation)." Appended to the shared
  * system prompt above — same "one shared JSON schema, only the text
- * changes" pattern as lib/analysis.ts's DOMAIN_MODULES.
+ * changes" pattern as lib/analysis.ts's per-lens `unitTypeEmphasis`.
+ *
+ * Phase 5 "Lens registry": widened from `Record<Domain, string>` (a fixed
+ * 5-key literal union) to `Record<string, string>` with an explicit generic
+ * fallback for any domain id not in this map (a future/user/generated lens)
+ * — the five original entries are untouched, so this preserves exact
+ * pre-Phase-5 behavior for them (SPEC item 6).
  */
-const CARD_TRANSFORM_DOMAIN_MODULES: Record<Domain, string> = {
+const CARD_TRANSFORM_DOMAIN_MODULES: Record<string, string> = {
   biology: 'Question style: mechanistic why. Prefer a "front" that asks HOW or WHY the mechanism works, not just what it is.',
   history:
     'Question style: sourcing. Prefer a "front" that asks who claims this and on what basis, or what kind of source/perspective it reflects.',
@@ -71,9 +94,29 @@ const CARD_TRANSFORM_DOMAIN_MODULES: Record<Domain, string> = {
   generic: "No specific domain lens applies — use your best general judgment for question style.",
 };
 
-function buildCardTransformSystemPrompt(domain?: Domain): string {
-  if (!domain) return CARD_TRANSFORM_SYSTEM_PROMPT;
-  return `${CARD_TRANSFORM_SYSTEM_PROMPT}\n\n${CARD_TRANSFORM_DOMAIN_MODULES[domain]}`;
+/**
+ * Phase 5 "Lens registry", item 6: questionStyle "nclex" (the clinical
+ * lens's dispatch key) branches ENTIRELY away from the domain-flavored
+ * modules above — a scenario-with-options style for PRIORITIZATION/
+ * synthesis material, and an exact-value "verbatim matters" style for
+ * DOSAGE/LAB_VALUE material (both safety-tier types — see
+ * lib/conceptRegistry.ts's never-auto-merge extension for the other half of
+ * "safety tier is code, not data").
+ */
+const NCLEX_SCENARIO_MODULE = `Question style: NCLEX-style scenario. Produce a "front" that poses a short clinical scenario stem ending in a question, followed by four lettered answer options (A-D) with exactly one correct answer. "back" states the correct option plainly. "why" is the rationale — why that option is correct and, briefly, why the others aren't. Base every option strictly on the given source text; never invent a clinical fact not present in it.`;
+
+const NCLEX_VERBATIM_MODULE = `Question style: exact-value recall ("verbatim matters"). This is a dosage/lab-value fact — "front" must ask for the precise value/number/unit stated in the source, never a rounded or paraphrased approximation. "back" must reproduce that value exactly as given. "why" notes why the exact value matters (e.g. a narrow safety margin) — never frame it as "close enough."`;
+
+function isVerbatimNclexUnitType(unitType?: UnitType): boolean {
+  return unitType === "DOSAGE" || unitType === "LAB_VALUE";
+}
+
+function buildCardTransformSystemPrompt(input: Pick<CardTransformInput, "domain" | "questionStyle" | "unitType">): string {
+  if (input.questionStyle === "nclex") {
+    return `${CARD_TRANSFORM_SYSTEM_PROMPT}\n\n${isVerbatimNclexUnitType(input.unitType) ? NCLEX_VERBATIM_MODULE : NCLEX_SCENARIO_MODULE}`;
+  }
+  if (!input.domain) return CARD_TRANSFORM_SYSTEM_PROMPT;
+  return `${CARD_TRANSFORM_SYSTEM_PROMPT}\n\n${CARD_TRANSFORM_DOMAIN_MODULES[input.domain] ?? CARD_TRANSFORM_DOMAIN_MODULES.generic}`;
 }
 
 function buildCardTransformUserPrompt(input: CardTransformInput): string {
@@ -91,7 +134,7 @@ export class LLMCardTransformClient implements CardTransformLLMClient {
 
   async transform(input: CardTransformInput, model: string): Promise<AnalysisOutcome<CardTransformResult>> {
     const result = await this.caller.call({
-      system: buildCardTransformSystemPrompt(input.domain),
+      system: buildCardTransformSystemPrompt(input),
       userPrompt: buildCardTransformUserPrompt(input),
       jsonSchema: CARD_TRANSFORM_JSON_SCHEMA as unknown as Record<string, unknown>,
       model,
@@ -148,10 +191,34 @@ function domainFront(domain: Domain | undefined, kind: CardTransformInput["kind"
   }
 }
 
+/**
+ * Phase 5 "Lens registry": deterministic nclex-style fake card — mirrors
+ * NCLEX_SCENARIO_MODULE/NCLEX_VERBATIM_MODULE's dispatch without a network
+ * call, so questionStyle routing is exercisable/testable in fake mode too.
+ */
+function nclexFakeCard(input: CardTransformInput, source: string): CardTransformResult {
+  const s = source.slice(0, 80);
+  if (isVerbatimNclexUnitType(input.unitType)) {
+    return {
+      front: `Exact value check (verbatim matters) — what is the precise value stated: "${s}"?`,
+      back: s,
+      why: "The exact value matters here — an approximation could be clinically unsafe.",
+    };
+  }
+  return {
+    front: `Scenario: "${s}" — what's the priority action? A) Reassess the patient B) Notify the provider C) Document only D) No action needed`,
+    back: "B) Notify the provider",
+    why: "Prioritization here follows from what the source material attests, not a generic default.",
+  };
+}
+
 /** Deterministic — no network call, mirrors FakeAnalysisClient's role for STUDYLOOP_FAKE_ANALYSIS=1 / tests. */
 export class FakeCardTransformClient implements CardTransformLLMClient {
   async transform(input: CardTransformInput, _model?: string): Promise<AnalysisOutcome<CardTransformResult>> {
     const source = input.quote.trim() || input.note.trim() || "this point";
+    if (input.questionStyle === "nclex") {
+      return { kind: "ok", data: nclexFakeCard(input, source) };
+    }
     return {
       kind: "ok",
       data: {

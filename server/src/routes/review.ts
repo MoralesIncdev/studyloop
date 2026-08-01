@@ -20,6 +20,7 @@ import {
   withTransformResult,
   type CardTransformInput,
 } from "../lib/cardTransform.js";
+import { getLens } from "../lib/lenses.js";
 import type { Project } from "../lib/models.js";
 import { readPearlReviewAdds } from "../lib/pearlReviewStore.js";
 import {
@@ -82,12 +83,27 @@ async function loadLiveCards(
       // owning project's domain (see lib/cardTransform.ts's
       // CARD_TRANSFORM_DOMAIN_MODULES) — undefined domain (a v3 analysis
       // whose router call was skipped) falls back to the generic style.
+      //
+      // Phase 5 "Lens registry": also resolves the active lens's
+      // `questionStyle` ("nclex" for the clinical lens, "default" otherwise)
+      // — an additional dispatch layer cardTransform.ts uses ON TOP OF the
+      // domain-flavored text above. For pearl cards specifically, also
+      // resolves the linked unit's type (via `pearl.unitId`, matched back to
+      // its original pearl by timestamp — pearl card ids are already
+      // `pearl:${projectId}:${p.t}`, so `t` is a stable join key within one
+      // project's analysis) so the "nclex" dispatch can distinguish the
+      // scenario-option framing from the exact-value framing.
       const domain = analysis.domain;
+      const questionStyle = domain ? getLens(dataDir, domain)?.questionStyle : undefined;
+      const unitsById = new Map((analysis.units ?? []).map((u) => [u.id, u]));
+      const pearlByT = new Map(analysis.pearls.map((p) => [p.t, p]));
       for (const c of liveCards) {
         if (c.kind === "bubble" && isWeakBubbleText(c.text)) {
-          transformCandidates.set(c.id, { quote: c.text, note: "", kind: "bubble", domain });
+          transformCandidates.set(c.id, { quote: c.text, note: "", kind: "bubble", domain, questionStyle });
         } else if (c.kind === "pearl") {
-          transformCandidates.set(c.id, { quote: c.insight, note: c.label, kind: "pearl", domain });
+          const sourcePearl = pearlByT.get(c.t);
+          const unitType = sourcePearl?.unitId ? unitsById.get(sourcePearl.unitId)?.type : undefined;
+          transformCandidates.set(c.id, { quote: c.insight, note: c.label, kind: "pearl", domain, questionStyle, unitType });
         }
       }
     }

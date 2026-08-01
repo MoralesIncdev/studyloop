@@ -14,6 +14,7 @@ import { AnalysisJobManager, evaluateAnalyzeGuard } from "../lib/analysisJobs.js
 import { missingCredentialMessage, resolveAnalysisModel, resolveProviderAuth } from "../lib/providers.js";
 import { updateRegistryForProject } from "../lib/conceptRegistry.js";
 import { readConceptRegistry, withConceptRegistryLock, writeConceptRegistry } from "../lib/conceptRegistryStore.js";
+import { getLens } from "../lib/lenses.js";
 import { correctTranscriptSegments } from "../lib/terms.js";
 import { resolveTranscriptPath } from "../lib/transcriptResolve.js";
 import { loadTranscriptFromText, type TranscriptSegment } from "../lib/transcripts.js";
@@ -108,7 +109,7 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
     // its own in-memory status as it goes, and writes analysis.json on success.
     void (async () => {
       try {
-        const client = resolveAnalysisClientV3(providerAuth);
+        const client = resolveAnalysisClientV3(providerAuth, dataDir);
         const analysis = await runAnalysisJobV3({
           segments,
           model,
@@ -138,13 +139,19 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
           try {
             await withConceptRegistryLock(async () => {
               const registry = await readConceptRegistry(dataDir);
+              const resolvedDomain = analysis.domain ?? "generic";
+              // Phase 5 "Safety tier": the active lens's safetyTier (e.g.
+              // clinical's DOSAGE/CONTRAINDICATION/LAB_VALUE) extends the
+              // never-auto-merge rule below, alongside BOUNDARY/threshold.
+              const safetyUnitTypes = new Set(getLens(dataDir, resolvedDomain)?.safetyTier ?? []);
               const next = updateRegistryForProject(
                 registry,
                 projectId,
-                analysis.domain ?? "generic",
+                resolvedDomain,
                 analysis.units!,
                 new Date().toISOString(),
-                newId
+                newId,
+                safetyUnitTypes
               );
               await writeConceptRegistry(dataDir, next);
             });

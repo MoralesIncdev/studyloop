@@ -1,0 +1,13 @@
+{
+  "id": "history",
+  "label": "History",
+  "routerDescription": "historical events, causation, sourcing",
+  "unitTypeEmphasis": "Domain lens: history. Favor CLAIM units, and in each unit's body note who is claiming it and on what basis (primary/secondary sourcing, corroboration, perspective) where the transcript supports it; use REQUIRES edges for causal chains between events. Where supported, fill in overlay.sourceType (e.g. \"primary\", \"secondary\"), overlay.causationType (e.g. \"proximate\", \"structural\", \"contingent\"), overlay.actors (who is involved), and overlay.perspectiveFlag (whose viewpoint this reflects) — leave every other overlay field empty.",
+  "overlayFields": [
+    { "key": "sourceType", "label": "Source type", "hint": "e.g. primary, secondary" },
+    { "key": "causationType", "label": "Causation type", "hint": "e.g. proximate, structural, contingent" },
+    { "key": "actors", "label": "Actors", "hint": "who is involved" },
+    { "key": "perspectiveFlag", "label": "Perspective", "hint": "whose viewpoint this reflects" }
+  ],
+  "questionStyle": "default"
+}

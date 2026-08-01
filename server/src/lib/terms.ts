@@ -18,6 +18,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { TermsFileSchema, type TermsFile } from "./models.js";
+import { getLens } from "./lenses.js";
 import { analysisJsonPath, readJsonIfExists, termCorrectionsJsonPath, termsJsonPath, writeJsonAtomic } from "./store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -142,16 +143,27 @@ export async function writeTerms(dataDir: string, id: string, terms: TermsFile):
 }
 
 // --- Seed glossary (Phase 2 item 5): defaults merged in for domain "clinical" projects ---
-// "clinical" doesn't exist in models.ts's DomainSchema yet — it ships in
-// Phase 5. `domain` is deliberately typed as `string | undefined` (not
-// `Domain | undefined`) here so this activates the moment Phase 5 adds the
-// literal, with no change needed in this file — comparing against the
-// current DomainSchema union would make `domain === "clinical"` a TypeScript
-// error today (no overlap between the two literal types).
-const CLINICAL_DOMAIN = "clinical";
+// Phase 5 "Lens registry + clinical as first data-driven lens" (item 7):
+// this used to be a literal `domain === "clinical"` string check (domain was
+// still a hardcoded enum with no "clinical" member, so this was written to
+// activate the moment Phase 5 added it). Domain is data-driven now
+// (server/lenses/*.json, see lib/lenses.ts) — the glossary activates
+// whenever the ACTIVE LENS declares `glossaryRef: "nursing"`, not because
+// its id happens to be the literal string "clinical". In practice this is
+// still exactly "clinical" today (it's the only shipped lens with that
+// glossaryRef), but a future/user/generated lens that opts into the nursing
+// glossary via the same glossaryRef now Just Works without another code
+// change here.
+//
+// `dataDir` defaults to "" (repo lenses always load regardless of dataDir —
+// only a user-authored lens OVERRIDE would be missed) so every existing
+// call site/test that only passes `domain` keeps compiling and behaving
+// identically; `loadEffectiveTerms` below passes the real dataDir through.
+const NURSING_GLOSSARY_REF = "nursing";
 
-export function isClinicalDomain(domain: string | undefined | null): boolean {
-  return domain === CLINICAL_DOMAIN;
+export function isClinicalDomain(domain: string | undefined | null, dataDir: string = ""): boolean {
+  if (!domain) return false;
+  return getLens(dataDir, domain)?.glossaryRef === NURSING_GLOSSARY_REF;
 }
 
 const GlossaryEntrySchema = z.object({
@@ -195,17 +207,18 @@ export function __resetNursingGlossaryCacheForTests(): void {
  * Merges glossary defaults *under* the project's own terms.json — a user
  * entry for a given garbled key always wins over a glossary entry for the
  * same key (SPEC: "user overrides glossary"). Inert (returns `userTerms`
- * unchanged) unless `domain` is `"clinical"` — see `isClinicalDomain` above.
+ * unchanged) unless the active lens declares `glossaryRef: "nursing"` — see
+ * `isClinicalDomain` above.
  */
-export function mergeGlossaryDefaults(userTerms: TermsFile, domain: string | undefined | null): TermsFile {
-  if (!isClinicalDomain(domain)) return userTerms;
+export function mergeGlossaryDefaults(userTerms: TermsFile, domain: string | undefined | null, dataDir: string = ""): TermsFile {
+  if (!isClinicalDomain(domain, dataDir)) return userTerms;
   return { ...loadNursingGlossary(), ...userTerms };
 }
 
 /** The project's terms.json merged with glossary defaults (if applicable) — this is what the rewrite pass should actually apply. */
 export async function loadEffectiveTerms(dataDir: string, id: string, domain: string | undefined | null): Promise<TermsFile> {
   const userTerms = await readTerms(dataDir, id);
-  return mergeGlossaryDefaults(userTerms, domain);
+  return mergeGlossaryDefaults(userTerms, domain, dataDir);
 }
 
 // --- Diff log (Phase 2 item: "record a diff log ... into the project") -----

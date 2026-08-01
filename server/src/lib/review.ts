@@ -12,7 +12,7 @@
 // streak counter are all deterministically testable against a fake clock.
 import { z } from "zod";
 import type { Bubble, Project } from "./models.js";
-import { CLUSTER_MAX_MEMBERS, type Analysis } from "./analysis.js";
+import { CLUSTER_MAX_MEMBERS, type Analysis, type UnitType } from "./analysis.js";
 import { isUnitFeedable, type AttestationsFile } from "./attestation.js";
 
 // --- Scheduling constants (SPEC "Scheduling (hidden SM-2-lite)") -----------
@@ -205,7 +205,8 @@ export interface ReviewPearlCard extends ReviewCardBase {
  */
 export interface ReviewUnitCard extends ReviewCardBase {
   kind: "unit";
-  unitType: "CLAIM" | "MECHANISM" | "PROCEDURE" | "EXAMPLE" | "BOUNDARY";
+  /** Phase 5 "Lens registry": widened from a fixed 5-literal union to every non-CLUSTER spine type (DOSAGE/CONTRAINDICATION/LAB_VALUE/PRIORITIZATION included) — a feedable unit of any of those types becomes a "unit" generation card exactly like the original five. */
+  unitType: Exclude<UnitType, "CLUSTER">;
   label: string;
   summary: string;
   userTake: string | null;

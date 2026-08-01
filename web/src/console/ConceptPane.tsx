@@ -32,6 +32,11 @@ const UNIT_TYPE_LABEL: Record<UnitType, string> = {
   EXAMPLE: "Example",
   BOUNDARY: "Boundary",
   CLUSTER: "Cluster",
+  // Phase 5 "Lens registry": spine-level additions (clinical is the first lens to emphasize them).
+  DOSAGE: "Dosage",
+  CONTRAINDICATION: "Contraindication",
+  LAB_VALUE: "Lab value",
+  PRIORITIZATION: "Prioritization",
 };
 
 interface Props {

@@ -273,6 +273,95 @@ describe("updateRegistryForProject", () => {
   });
 });
 
+// --- Phase 5 "Lens registry + clinical as first data-driven lens", item 5
+// "Safety tier": extends the BOUNDARY/threshold never-auto-merge rule to
+// whichever unit types the active lens flags via `safetyTier` (e.g.
+// clinical's DOSAGE/CONTRAINDICATION/LAB_VALUE). ---------------------------
+
+describe("evaluateNewUnit — Phase 5 safety-tier never-auto-merge extension", () => {
+  it("never auto-merges a unit whose type is in safetyUnitTypes, even on an exact fingerprint match — queues a candidate instead", () => {
+    let registry = emptyConceptRegistry();
+    registry = evaluateNewUnit(registry, {
+      projectId: "p1",
+      domain: "clinical",
+      unit: unit({ id: "u1", label: "Metoprolol Dose", type: "DOSAGE" }),
+      nowIso: "t",
+      newId,
+    }).registry;
+
+    const result = evaluateNewUnit(registry, {
+      projectId: "p2",
+      domain: "clinical",
+      unit: unit({ id: "u2", label: "Metoprolol Dose", type: "DOSAGE" }),
+      nowIso: "t",
+      newId,
+      safetyUnitTypes: new Set(["DOSAGE", "CONTRAINDICATION", "LAB_VALUE"]),
+    });
+    expect(result.outcome).toBe("candidate");
+    expect(result.registry.candidates).toHaveLength(1);
+    // The registry unit itself is untouched — still just p1's original ref.
+    const original = Object.values(result.registry.units).find((u) => u.projectRefs.some((r) => r.projectId === "p1"))!;
+    expect(original.projectRefs).toEqual([{ projectId: "p1", unitId: "u1" }]);
+  });
+
+  it("auto-merges normally when the unit's type is NOT in safetyUnitTypes (extension only blocks the listed types)", () => {
+    let registry = emptyConceptRegistry();
+    registry = evaluateNewUnit(registry, {
+      projectId: "p1",
+      domain: "clinical",
+      unit: unit({ id: "u1", label: "Assessment Step", type: "CLAIM" }),
+      nowIso: "t",
+      newId,
+    }).registry;
+
+    const result = evaluateNewUnit(registry, {
+      projectId: "p2",
+      domain: "clinical",
+      unit: unit({ id: "u2", label: "Assessment Step", type: "CLAIM" }),
+      nowIso: "t",
+      newId,
+      safetyUnitTypes: new Set(["DOSAGE", "CONTRAINDICATION", "LAB_VALUE"]),
+    });
+    expect(result.outcome).toBe("auto-merged");
+  });
+
+  it("is a no-op (preserves the pre-Phase-5 auto-merge behavior exactly) when safetyUnitTypes is omitted entirely", () => {
+    let registry = emptyConceptRegistry();
+    registry = evaluateNewUnit(registry, {
+      projectId: "p1",
+      domain: "clinical",
+      unit: unit({ id: "u1", label: "Metoprolol Dose", type: "DOSAGE" }),
+      nowIso: "t",
+      newId,
+    }).registry;
+
+    const result = evaluateNewUnit(registry, {
+      projectId: "p2",
+      domain: "clinical",
+      unit: unit({ id: "u2", label: "Metoprolol Dose", type: "DOSAGE" }),
+      nowIso: "t",
+      newId,
+      // safetyUnitTypes deliberately omitted
+    });
+    expect(result.outcome).toBe("auto-merged");
+  });
+
+  it("updateRegistryForProject threads safetyUnitTypes through to every unit in the run", () => {
+    const registry = updateRegistryForProject(
+      emptyConceptRegistry(),
+      "p1",
+      "clinical",
+      [unit({ id: "u1", label: "Metoprolol Dose", type: "DOSAGE" }), unit({ id: "u2", label: "metoprolol dose", type: "DOSAGE" })],
+      "t",
+      newId,
+      new Set(["DOSAGE"])
+    );
+    // Both units registered separately (never merged) — one candidate queued, not an auto-merge.
+    expect(Object.keys(registry.units)).toHaveLength(1);
+    expect(registry.candidates).toHaveLength(1);
+  });
+});
+
 describe("resolveMergeCandidate", () => {
   function seedCandidate(): { registry: ConceptRegistryFile; candidateId: string; targetId: string } {
     let registry = emptyConceptRegistry();

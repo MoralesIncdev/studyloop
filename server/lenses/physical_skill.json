@@ -1,0 +1,12 @@
+{
+  "id": "physical_skill",
+  "label": "Physical Skill",
+  "routerDescription": "martial arts, sports, dance, or other physical technique/movement instruction",
+  "unitTypeEmphasis": "Domain lens: physical skill. Favor PROCEDURE units for ordered steps, triggers, and failure modes; use PROCEDURE_STEP edges between consecutive steps of the same procedure. Where supported, fill in overlay.triggers (what cue starts this step), overlay.failureModes (common ways it goes wrong), and overlay.drillPairing (a drill that isolates it) — leave every other overlay field empty.",
+  "overlayFields": [
+    { "key": "triggers", "label": "Triggers", "hint": "what cue starts this step" },
+    { "key": "failureModes", "label": "Failure modes", "hint": "common ways it goes wrong" },
+    { "key": "drillPairing", "label": "Drill pairing", "hint": "a drill that isolates it" }
+  ],
+  "questionStyle": "default"
+}

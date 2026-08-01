@@ -27,7 +27,8 @@ import crypto from "node:crypto";
 import { createStructuredCaller, type ProviderAuth, type StructuredLLMCaller } from "./providers.js";
 import { z } from "zod";
 import { formatTimestamp } from "./time.js";
-import { DomainSchema, type Domain } from "./models.js";
+import { DomainSchema, type Domain, type Lens } from "./models.js";
+import { listLensesOrFallback, resolveLensOrGeneric } from "./lenses.js";
 import type { TranscriptSegment } from "./transcripts.js";
 
 // --- Public analysis.json shape (SPEC) --------------------------------------
@@ -75,7 +76,28 @@ export type AnalysisSource = z.infer<typeof AnalysisSourceSchema>;
  * review.ts fans a feedable CLUSTER out into one review card per member
  * rather than one card for the whole unit.
  */
-export const UnitTypeSchema = z.enum(["CLAIM", "MECHANISM", "PROCEDURE", "EXAMPLE", "BOUNDARY", "CLUSTER"]);
+/**
+ * Phase 5 "Lens registry + clinical as first data-driven lens": DOSAGE,
+ * CONTRAINDICATION, LAB_VALUE, and PRIORITIZATION are spine-level additions
+ * (usable by ANY lens, not clinical-exclusive) — the clinical lens
+ * (server/lenses/clinical.json) is simply the first to actually emphasize
+ * them via its `unitTypeEmphasis` prompt text, and the first to flag
+ * DOSAGE/CONTRAINDICATION/LAB_VALUE as `safetyTier` (see
+ * lib/conceptRegistry.ts's never-auto-merge extension and the web unit
+ * card's unconditional verbatim-quote display).
+ */
+export const UnitTypeSchema = z.enum([
+  "CLAIM",
+  "MECHANISM",
+  "PROCEDURE",
+  "EXAMPLE",
+  "BOUNDARY",
+  "CLUSTER",
+  "DOSAGE",
+  "CONTRAINDICATION",
+  "LAB_VALUE",
+  "PRIORITIZATION",
+]);
 export type UnitType = z.infer<typeof UnitTypeSchema>;
 
 export const EdgeTypeSchema = z.enum(["REQUIRES", "PART_OF", "EXAMPLE_OF", "PROCEDURE_STEP"]);
@@ -108,9 +130,11 @@ export const CLUSTER_MAX_MEMBERS = 12;
 //
 // One flat schema shared across every domain (SPEC: "zod optional
 // everywhere") rather than a per-domain discriminated union — a unit only
-// ever gets the subset of fields its project's domain module asked for
-// (DOMAIN_MODULES below tells the model which ones), everything else stays
-// undefined and is stripped before being persisted (see mergeOverlayFields).
+// ever gets the subset of fields its project's lens asked for (the active
+// lens's `unitTypeEmphasis` prompt text tells the model which ones — Phase 5
+// "Lens registry", see lib/lenses.ts/buildChunkV3SystemPrompt below),
+// everything else stays undefined and is stripped before being persisted
+// (see mergeOverlayFields).
 // This is also the wire-level shape (ChunkUnitRawSchema.overlay below) —
 // unlike unitLabel's "" sentinel convention, there's no need for a separate
 // raw/clean pair here: a present-but-empty string from a structured-output
@@ -135,6 +159,13 @@ export const UnitOverlaySchema = z.object({
   triggers: z.array(z.string()).optional(),
   failureModes: z.array(z.string()).optional(),
   drillPairing: z.string().optional(),
+  // Phase 5 "Clinical lens" overlay fields (server/lenses/clinical.json's overlayFields).
+  drugClass: z.string().optional(),
+  genericName: z.string().optional(),
+  brandName: z.string().optional(),
+  route: z.string().optional(),
+  normalRange: z.string().optional(),
+  nclexCategory: z.string().optional(),
 });
 export type UnitOverlay = z.infer<typeof UnitOverlaySchema>;
 
@@ -148,6 +179,12 @@ const OVERLAY_STRING_KEYS = [
   "notation",
   "keyContext",
   "drillPairing",
+  "drugClass",
+  "genericName",
+  "brandName",
+  "route",
+  "normalRange",
+  "nclexCategory",
 ] as const satisfies readonly (keyof UnitOverlay)[];
 
 const OVERLAY_ARRAY_KEYS = ["entities", "actors", "triggers", "failureModes"] as const satisfies readonly (keyof UnitOverlay)[];
@@ -475,14 +512,22 @@ export type MergeV3Result = z.infer<typeof MergeV3ResultSchema>;
 const ROUTER_RESULT_SCHEMA = z.object({ domain: DomainSchema });
 export type RouterResult = z.infer<typeof ROUTER_RESULT_SCHEMA>;
 
-const ROUTER_JSON_SCHEMA = {
-  type: "object",
-  properties: {
-    domain: { type: "string", enum: ["biology", "history", "music", "physical_skill", "generic"] },
-  },
-  required: ["domain"],
-  additionalProperties: false,
-} as const;
+/**
+ * Phase 5 "Lens registry": the router's structured-output enum used to be a
+ * static 5-item list — it's now built from whichever lenses are actually
+ * loaded (repo + user dir), so a project can route to "clinical" (or any
+ * future/generated lens) the moment its lens file exists.
+ */
+function buildRouterJsonSchema(ids: readonly string[]): Record<string, unknown> {
+  return {
+    type: "object",
+    properties: {
+      domain: { type: "string", enum: [...ids] },
+    },
+    required: ["domain"],
+    additionalProperties: false,
+  };
+}
 
 const UNIT_ANCHOR_JSON_SCHEMA = {
   type: "object",
@@ -532,6 +577,12 @@ const OVERLAY_JSON_SCHEMA = {
     triggers: { type: "array", items: { type: "string" } },
     failureModes: { type: "array", items: { type: "string" } },
     drillPairing: { type: "string" },
+    drugClass: { type: "string" },
+    genericName: { type: "string" },
+    brandName: { type: "string" },
+    route: { type: "string" },
+    normalRange: { type: "string" },
+    nclexCategory: { type: "string" },
   },
   required: [
     "levelOfOrganization",
@@ -547,6 +598,12 @@ const OVERLAY_JSON_SCHEMA = {
     "triggers",
     "failureModes",
     "drillPairing",
+    "drugClass",
+    "genericName",
+    "brandName",
+    "route",
+    "normalRange",
+    "nclexCategory",
   ],
   additionalProperties: false,
 } as const;
@@ -574,7 +631,21 @@ const CHUNK_V3_JSON_SCHEMA = {
       items: {
         type: "object",
         properties: {
-          type: { type: "string", enum: ["CLAIM", "MECHANISM", "PROCEDURE", "EXAMPLE", "BOUNDARY", "CLUSTER"] },
+          type: {
+            type: "string",
+            enum: [
+              "CLAIM",
+              "MECHANISM",
+              "PROCEDURE",
+              "EXAMPLE",
+              "BOUNDARY",
+              "CLUSTER",
+              "DOSAGE",
+              "CONTRAINDICATION",
+              "LAB_VALUE",
+              "PRIORITIZATION",
+            ],
+          },
           label: { type: "string" },
           summary: { type: "string" },
           body: { type: "string" },
@@ -655,8 +726,26 @@ function buildMergeUserPrompt(pearls: readonly ChunkPearl[], concepts: readonly 
 }
 
 // --- V3-B B1: router + typed-spine prompts ----------------------------------
+// Phase 5 "Lens registry": both prompts below used to be static strings
+// hardcoded against the fixed five-domain enum. They're now assembled from
+// whichever lenses are actually loaded (repo server/lenses/*.json + user
+// `<dataDir>/lenses/*.json` — see lib/lenses.ts), so a new lens file (Phase
+// 5's clinical.json, or a Phase 9 generated one) participates in routing and
+// per-chunk extraction without any code change here.
 
-const ROUTER_SYSTEM_PROMPT = `Classify the dominant subject-matter domain of an instructional video from a sample of its transcript. Choose exactly one of: "biology" (life sciences, physiology, systems/mechanisms), "history" (historical events, causation, sourcing), "music" (music theory, notation, ear training), "physical_skill" (martial arts, sports, dance, or other physical technique/movement instruction), or "generic" (anything else, mixed subject matter, or unclear from the sample). This is a coarse routing signal, not a final judgment — the learner can change it later, so prefer your best single guess over hedging.`;
+/**
+ * Classifies the dominant subject-matter domain from a sample of the
+ * transcript. `lenses` should be non-empty (callers fall back to
+ * `listLensesOrFallback`/a hardcoded generic lens if the registry somehow
+ * came back empty) — each lens contributes one `"id" (routerDescription)`
+ * clause, in the same order as the JSON schema's enum (see
+ * `buildRouterJsonSchema`), so the model's choices and the schema's allowed
+ * values always agree.
+ */
+function buildRouterSystemPrompt(lenses: readonly Lens[]): string {
+  const options = lenses.map((l) => `"${l.id}" (${l.routerDescription})`).join(", ");
+  return `Classify the dominant subject-matter domain of an instructional video from a sample of its transcript. Choose exactly one of: ${options}. This is a coarse routing signal, not a final judgment — the learner can change it later, so prefer your best single guess over hedging.`;
+}
 
 function buildRouterUserPrompt(sampleText: string): string {
   return `Transcript sample:\n\n${sampleText}`;
@@ -664,38 +753,20 @@ function buildRouterUserPrompt(sampleText: string): string {
 
 /**
  * PEDAGOGY §2 "domain lenses are prompt modules, not separate engines" — one
- * line of emphasis appended to the shared v3 chunk system prompt per domain.
- * The JSON schema stays identical across domains (CHUNK_V3_JSON_SCHEMA);
- * only this text changes which unit types/edge types the model reaches for.
+ * paragraph of emphasis (the lens's own `unitTypeEmphasis`, verbatim) appended
+ * to the shared v3 chunk system prompt. The JSON schema stays identical
+ * across lenses (CHUNK_V3_JSON_SCHEMA); only this text changes which unit
+ * types/edge types/overlay fields the model reaches for.
  */
-/**
- * V3-D D1: each module now also names the `overlay` sub-fields this domain
- * cares about (everything else on the unit's `overlay` stays empty — the
- * JSON schema is identical across domains, per the comment above; only this
- * text changes which fields get filled in).
- */
-const DOMAIN_MODULES: Record<Domain, string> = {
-  biology:
-    'Domain lens: biology/systems. Favor MECHANISM units for causal chains, feedback loops, and levels of organization; use REQUIRES/PART_OF edges to connect a mechanism to the components or prerequisite mechanisms it depends on. Where the transcript supports it, fill in overlay.levelOfOrganization (e.g. "cell", "organ system"), overlay.mechanismType (e.g. "feedback loop", "causal chain"), and overlay.entities (the components/molecules/organs involved) — leave every other overlay field empty.',
-  history:
-    'Domain lens: history. Favor CLAIM units, and in each unit\'s body note who is claiming it and on what basis (primary/secondary sourcing, corroboration, perspective) where the transcript supports it; use REQUIRES edges for causal chains between events. Where supported, fill in overlay.sourceType (e.g. "primary", "secondary"), overlay.causationType (e.g. "proximate", "structural", "contingent"), overlay.actors (who is involved), and overlay.perspectiveFlag (whose viewpoint this reflects) — leave every other overlay field empty.',
-  music:
-    "Domain lens: music theory. Favor CLAIM units for theory statements and EXAMPLE units for the passages/sounds that illustrate them; use EXAMPLE_OF edges to link a specific example to the concept it demonstrates, and note notation-to-sound pairings in the body where audible. Where supported, fill in overlay.schema (the theory schema/pattern named), overlay.notation (how it would appear notated), and overlay.keyContext (the key/mode in play) — leave every other overlay field empty.",
-  physical_skill:
-    "Domain lens: physical skill. Favor PROCEDURE units for ordered steps, triggers, and failure modes; use PROCEDURE_STEP edges between consecutive steps of the same procedure. Where supported, fill in overlay.triggers (what cue starts this step), overlay.failureModes (common ways it goes wrong), and overlay.drillPairing (a drill that isolates it) — leave every other overlay field empty.",
-  generic:
-    "No specific domain lens applies — keep unit-type emphasis balanced across CLAIM/MECHANISM/PROCEDURE/EXAMPLE/BOUNDARY rather than favoring one. Leave every overlay field empty; this lens doesn't use them.",
-};
-
-function buildChunkV3SystemPrompt(domain: Domain): string {
+function buildChunkV3SystemPrompt(lens: Lens): string {
   return `You are analyzing one segment of an instructional video's transcript to help a learner study it later. The subject matter could be anything — cooking, martial arts, software, history, music theory, a lecture — extract what is actually being taught in THIS segment, never assume a fixed domain or template beyond the lens noted below.
 
 Extract:
 - "pearls": specific, memorable insights worth remembering, each anchored to the timestamp (in seconds) where it's said. A label under 60 characters, a 1-3 sentence insight, an importance rating (3 = critical/central point, 2 = useful supporting point, 1 = minor/incidental detail), and "unitLabel": the exact label of the unit below this pearl illustrates, or "" if none fits.
-- "units": typed knowledge units on a universal spine — each is exactly one of CLAIM (an assertion), MECHANISM (how/why something works), PROCEDURE (an ordered how-to), EXAMPLE (a concrete instance), BOUNDARY (a limit, exception, or "this doesn't apply when…"), or CLUSTER (a parent concept covering 3 or more closely-related atomic facts — e.g. "side effects of metoprolol" listing bradycardia, hypotension, fatigue, etc. as separate facts). Each unit has a short "label" (used to link edges/pearls to it — keep it stable and specific, not a generic phrase), a 1-2 sentence "summary", a longer markdown "body", one or more "anchors" (each an exact "quote" from the transcript plus its timestamp "t" in seconds), a "confidence" 0-1 for how clearly the transcript supports this unit as extracted, an "overlay" object of domain-specific structured fields (which ones to fill in is named by the domain lens below — leave the rest as "" or []), "threshold": true only when this unit is a transformative/integrative/troublesome idea — one that later material genuinely depends on understanding, a concept that "unlocks" the rest of the video once grasped (most units are NOT threshold — false otherwise), and "members": for a CLUSTER unit ONLY, 2 to 12 objects each with its own short "label" (the specific fact, e.g. "Bradycardia"), a 1-2 sentence "body" (that fact alone, phrased so it stands on its own as a flashcard answer), and "anchorSec" (seconds — reuse this unit's own anchor time if you have nothing more precise); for every non-CLUSTER unit, "members" MUST be an empty array. IMPORTANT: whenever the transcript states 3 or more closely-related atomic facts under one shared parent concept, emit ONE CLUSTER unit with those facts as members rather than 3+ separate CLAIM units for the same facts — this is what lets a learner attest the parent concept once instead of restating every fact individually. Use individual CLAIM (or other) units as usual for anything that isn't part of such a group.
+- "units": typed knowledge units on a universal spine — each is exactly one of CLAIM (an assertion), MECHANISM (how/why something works), PROCEDURE (an ordered how-to), EXAMPLE (a concrete instance), BOUNDARY (a limit, exception, or "this doesn't apply when…"), CLUSTER (a parent concept covering 3 or more closely-related atomic facts — e.g. "side effects of metoprolol" listing bradycardia, hypotension, fatigue, etc. as separate facts), DOSAGE (a medication amount/frequency), CONTRAINDICATION (when NOT to do/give something), LAB_VALUE (a normal/abnormal test range or result), or PRIORITIZATION ("what do you do first" judgment material). Each unit has a short "label" (used to link edges/pearls to it — keep it stable and specific, not a generic phrase), a 1-2 sentence "summary", a longer markdown "body", one or more "anchors" (each an exact "quote" from the transcript plus its timestamp "t" in seconds), a "confidence" 0-1 for how clearly the transcript supports this unit as extracted, an "overlay" object of domain-specific structured fields (which ones to fill in is named by the lens below — leave the rest as "" or []), "threshold": true only when this unit is a transformative/integrative/troublesome idea — one that later material genuinely depends on understanding, a concept that "unlocks" the rest of the video once grasped (most units are NOT threshold — false otherwise), and "members": for a CLUSTER unit ONLY, 2 to 12 objects each with its own short "label" (the specific fact, e.g. "Bradycardia"), a 1-2 sentence "body" (that fact alone, phrased so it stands on its own as a flashcard answer), and "anchorSec" (seconds — reuse this unit's own anchor time if you have nothing more precise); for every non-CLUSTER unit, "members" MUST be an empty array. IMPORTANT: whenever the transcript states 3 or more closely-related atomic facts under one shared parent concept, emit ONE CLUSTER unit with those facts as members rather than 3+ separate CLAIM units for the same facts — this is what lets a learner attest the parent concept once instead of restating every fact individually. Use individual CLAIM (or other) units as usual for anything that isn't part of such a group.
 - "edges": relationships between two units you extracted THIS segment — "sourceLabel"/"targetLabel" must exactly match "label" fields above, "type" is one of REQUIRES (source requires target as a prerequisite), PART_OF (source is part of target), EXAMPLE_OF (source is an example of target), or PROCEDURE_STEP (source is the step before target in the same procedure), plus the supporting "quote" and a "confidence" 0-1. Only emit edges between two units both present in this same segment's "units" list.
 
-${DOMAIN_MODULES[domain]}
+${lens.unitTypeEmphasis}
 
 Every timestamp you output MUST fall within this segment's own time range — never extrapolate a timestamp from outside what you were given. If the segment has little of substance, return short (or empty) arrays rather than inventing content.`;
 }
@@ -752,7 +823,16 @@ export const ANALYSIS_MAX_TOKENS = 16000;
  * gate regardless of provider.
  */
 export class LLMAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV3 {
-  constructor(private readonly caller: StructuredLLMCaller) {}
+  /**
+   * Phase 5 "Lens registry": `dataDir` resolves the lens registry once at
+   * construction (loadLensRegistry itself memoizes per dataDir, so this is
+   * cheap even across many short-lived clients) — v2's runChunk/runMerge
+   * never touch it; only the v3 router/chunk methods below do.
+   */
+  constructor(
+    private readonly caller: StructuredLLMCaller,
+    private readonly dataDir: string = ""
+  ) {}
 
   private async runStructured<T>(
     system: string,
@@ -788,19 +868,21 @@ export class LLMAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV3
   // --- V3-B B1: typed-spine methods -----------------------------------------
 
   async runRouter(sampleText: string, model: string): Promise<AnalysisOutcome<RouterResult>> {
+    const lenses = listLensesOrFallback(this.dataDir);
     return this.runStructured(
-      ROUTER_SYSTEM_PROMPT,
+      buildRouterSystemPrompt(lenses),
       buildRouterUserPrompt(sampleText),
       ROUTER_RESULT_SCHEMA,
-      ROUTER_JSON_SCHEMA,
+      buildRouterJsonSchema(lenses.map((l) => l.id)),
       model,
       ROUTER_MAX_TOKENS
     );
   }
 
   async runChunkV3(chunk: TranscriptChunk, domain: Domain, model: string): Promise<AnalysisOutcome<ChunkV3Result>> {
+    const lens = resolveLensOrGeneric(this.dataDir, domain);
     return this.runStructured(
-      buildChunkV3SystemPrompt(domain),
+      buildChunkV3SystemPrompt(lens),
       buildChunkUserPrompt(chunk),
       ChunkV3ResultSchema,
       CHUNK_V3_JSON_SCHEMA,
@@ -815,10 +897,15 @@ export class LLMAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV3
 
 /**
  * V3-D D1: deterministic domain-shaped overlay for FakeAnalysisClient's
- * primary unit — mirrors DOMAIN_MODULES' "which fields this domain fills in"
+ * primary unit — mirrors each lens's "which fields this domain fills in"
  * without ever hitting the network. Purely a function of (domain, label,
  * chunk.index) so two runs over the same input produce byte-identical
  * output, matching this class's own doc comment below.
+ *
+ * Phase 5 "Lens registry": `domain` is a plain string now (any lens id, not
+ * just the original five), so this switch needs a `default` — an unknown/
+ * future/generated lens id falls back to the same "no overlay" behavior as
+ * "generic" rather than erroring.
  */
 function fakeOverlayFor(domain: Domain, label: string, chunk: TranscriptChunk): UnitOverlay {
   switch (domain) {
@@ -847,7 +934,16 @@ function fakeOverlayFor(domain: Domain, label: string, chunk: TranscriptChunk): 
         failureModes: [`losing ${label.toLowerCase()}`],
         drillPairing: `Drill: isolate ${label}`,
       };
+    case "clinical":
+      return {
+        drugClass: chunk.index % 2 === 0 ? "beta blocker" : "ACE inhibitor",
+        genericName: label,
+        route: chunk.index % 2 === 0 ? "PO" : "IV",
+        normalRange: "60-100 bpm",
+        nclexCategory: "pharmacological therapies",
+      };
     case "generic":
+    default:
       return {};
   }
 }
@@ -922,18 +1018,19 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
 
   // --- V3-B B1: typed-spine methods (also deterministic, no randomness) ----
 
-  /** Simple keyword-count heuristic — deterministic, no network call, mirrors the real router's five-way classification without needing a model. */
+  /** Simple keyword-count heuristic — deterministic, no network call, mirrors the real router's classification without needing a model. Phase 5 "Lens registry": `clinical` keywords added alongside the original five — any domain string not covered here (a future/generated lens with no keyword list) simply never wins the count and the default "generic" is kept. */
   async runRouter(sampleText: string, _model?: string): Promise<AnalysisOutcome<RouterResult>> {
     const lower = sampleText.toLowerCase();
-    const keywordsByDomain: Record<Exclude<Domain, "generic">, string[]> = {
+    const keywordsByDomain: Record<string, string[]> = {
       biology: ["cell", "organism", "enzyme", "protein", "mechanism", "biology", "dna", "tissue", "membrane"],
       history: ["century", "war", "empire", "revolution", "treaty", "historian", "era", "dynasty"],
       music: ["chord", "scale", "note", "melody", "rhythm", "harmony", "key signature", "cadence"],
       physical_skill: ["grip", "stance", "technique", "drill", "posture", "balance", "guard", "submission", "takedown"],
+      clinical: ["patient", "nurse", "nursing", "dosage", "medication", "diagnosis", "vital signs", "nclex", "contraindication", "assessment"],
     };
     let best: Domain = "generic";
     let bestCount = 0;
-    for (const [domain, keywords] of Object.entries(keywordsByDomain) as [Exclude<Domain, "generic">, string[]][]) {
+    for (const [domain, keywords] of Object.entries(keywordsByDomain)) {
       const count = keywords.reduce((sum, kw) => sum + (lower.includes(kw) ? 1 : 0), 0);
       if (count > bestCount) {
         best = domain;
@@ -1077,12 +1174,19 @@ export function __setAnalysisClientV3ForTests(client: AnalysisLLMClientV3 | null
   injectedClientForTestsV3 = client;
 }
 
-/** V3-B B1 counterpart to `resolveAnalysisClient` — same priority order, resolving the typed-spine interface instead. */
-export function resolveAnalysisClientV3(auth: LLMClientAuth): AnalysisLLMClientV3 {
+/**
+ * V3-B B1 counterpart to `resolveAnalysisClient` — same priority order,
+ * resolving the typed-spine interface instead. Phase 5 "Lens registry":
+ * `dataDir` (default "" — harmless: repo lenses load regardless, only a
+ * user-authored lens override would be missed) is threaded into the real
+ * client so its router/chunk prompts are built from the actual lens
+ * registry rather than a hardcoded five-domain list.
+ */
+export function resolveAnalysisClientV3(auth: LLMClientAuth, dataDir: string = ""): AnalysisLLMClientV3 {
   if (injectedClientForTestsV3) return injectedClientForTestsV3;
   if (process.env.STUDYLOOP_FAKE_ANALYSIS === "1") return new FakeAnalysisClient();
   if (!auth) throw new NoApiKeyError();
-  return new LLMAnalysisClient(callerFromAuth(auth));
+  return new LLMAnalysisClient(callerFromAuth(auth), dataDir);
 }
 
 export function isFakeAnalysisMode(): boolean {

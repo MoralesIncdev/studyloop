@@ -7,15 +7,22 @@ import { useStudyLoopStore } from "../state/store";
 import type { Domain } from "../lib/types";
 import styles from "./DomainRow.module.css";
 
-const DOMAIN_LABEL: Record<Domain, string> = {
+// Phase 5 "Lens registry": this stays a hardcoded mirror of the shipped
+// server/lenses/*.json ids (same "plain interface, not a cross-workspace
+// import" convention lib/types.ts's header comment documents) rather than a
+// dynamic fetch — a Phase 9-generated/user-authored lens simply won't show
+// up in this dropdown yet, same limitation the rest of the web app's
+// hardcoded server-shape mirrors already have.
+const DOMAIN_LABEL: Partial<Record<Domain, string>> = {
   biology: "Biology",
   history: "History",
   music: "Music",
   physical_skill: "Physical skill",
+  clinical: "Clinical / Nursing",
   generic: "Generic",
 };
 
-const DOMAIN_OPTIONS: Domain[] = ["biology", "history", "music", "physical_skill", "generic"];
+const DOMAIN_OPTIONS: Domain[] = ["biology", "history", "music", "physical_skill", "clinical", "generic"];
 
 export function DomainRow(): JSX.Element | null {
   const currentProject = useStudyLoopStore((s) => s.currentProject);
@@ -36,7 +43,7 @@ export function DomainRow(): JSX.Element | null {
           >
             {DOMAIN_OPTIONS.map((d) => (
               <option key={d} value={d}>
-                {DOMAIN_LABEL[d]}
+                {DOMAIN_LABEL[d] ?? d}
               </option>
             ))}
           </select>

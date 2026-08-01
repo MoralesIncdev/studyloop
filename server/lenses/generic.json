@@ -1,0 +1,8 @@
+{
+  "id": "generic",
+  "label": "Generic",
+  "routerDescription": "anything else, mixed subject matter, or unclear from the sample",
+  "unitTypeEmphasis": "No specific domain lens applies — keep unit-type emphasis balanced across CLAIM/MECHANISM/PROCEDURE/EXAMPLE/BOUNDARY rather than favoring one. Leave every overlay field empty; this lens doesn't use them.",
+  "overlayFields": [],
+  "questionStyle": "default"
+}

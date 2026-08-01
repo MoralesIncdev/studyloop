@@ -3,7 +3,10 @@
 // test/analysis.test.ts's structure (fake-client end-to-end, no live API
 // calls) but exercises the new router gate, deterministic unit/edge merge,
 // and the resulting version:3 analysis shape.
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import {
   __setAnalysisClientV3ForTests,
   AnalysisSchema,
@@ -11,6 +14,7 @@ import {
   CLUSTER_MAX_MEMBERS,
   FakeAnalysisClient,
   isFakeAnalysisMode,
+  LLMAnalysisClient,
   mergeEdgesByFingerprint,
   mergeUnitsByFingerprint,
   resolveAnalysisClientV3,
@@ -23,6 +27,8 @@ import {
   type ChunkV3Result,
   type MergeV3Result,
 } from "../src/lib/analysis.js";
+import { __resetLensRegistryCacheForTests } from "../src/lib/lenses.js";
+import type { StructuredLLMCaller, StructuredLLMRequest, StructuredCallResult } from "../src/lib/providers.js";
 import type { TranscriptSegment } from "../src/lib/transcripts.js";
 
 function segment(start: number, end: number, text = "word"): TranscriptSegment {
@@ -672,5 +678,139 @@ describe("runAnalysisJobV3 (fake client end-to-end — no live API calls)", () =
       source: "stub",
     });
     expect(analysis.source).toBe("stub");
+  });
+});
+
+// --- Phase 5 "Lens registry + clinical as first data-driven lens" ----------
+// (design/EXECUTION-PLAN-post-review-v1.md, AMENDED spec).
+
+describe("AnalysisSchema/DomainSchema — Phase 5 legacy five-id compat", () => {
+  it("still parses a version:3 analysis stored under an original five-lens id (identical strings, no enum check anymore)", () => {
+    for (const domain of ["biology", "history", "music", "physical_skill", "generic"]) {
+      const parsed = AnalysisSchema.parse({
+        generatedAt: "2026-01-01T00:00:00Z",
+        model: "claude-opus-5",
+        version: 3,
+        source: "model",
+        domain,
+        pearls: [],
+        concepts: [],
+        themes: [],
+        units: [],
+        edges: [],
+      });
+      expect(parsed.domain).toBe(domain);
+    }
+  });
+
+  it("also parses the new 'clinical' lens id", () => {
+    const parsed = AnalysisSchema.parse({
+      generatedAt: "2026-01-01T00:00:00Z",
+      model: "claude-opus-5",
+      version: 3,
+      source: "model",
+      domain: "clinical",
+      pearls: [],
+      concepts: [],
+      themes: [],
+      units: [],
+      edges: [],
+    });
+    expect(parsed.domain).toBe("clinical");
+  });
+
+  it("DomainSchema is a validated string, not a closed enum — an arbitrary/future lens id parses at the schema level too (boundary validation lives in routes, not here)", () => {
+    const parsed = AnalysisSchema.parse({
+      generatedAt: "2026-01-01T00:00:00Z",
+      model: "claude-opus-5",
+      version: 3,
+      source: "model",
+      domain: "some-future-generated-lens",
+      pearls: [],
+      concepts: [],
+      themes: [],
+      units: [],
+      edges: [],
+    });
+    expect(parsed.domain).toBe("some-future-generated-lens");
+  });
+});
+
+describe("LLMAnalysisClient — Phase 5 prompt assembly from the lens registry", () => {
+  function spyCaller(responseText: string): { caller: StructuredLLMCaller; requests: StructuredLLMRequest[] } {
+    const requests: StructuredLLMRequest[] = [];
+    const caller: StructuredLLMCaller = {
+      call: async (request: StructuredLLMRequest): Promise<StructuredCallResult> => {
+        requests.push(request);
+        return { kind: "ok", text: responseText };
+      },
+    };
+    return { caller, requests };
+  }
+
+  beforeEach(() => {
+    __resetLensRegistryCacheForTests();
+  });
+
+  it("runRouter's system prompt names every loaded lens, including clinical, by its routerDescription", async () => {
+    const { caller, requests } = spyCaller(JSON.stringify({ domain: "clinical" }));
+    const client = new LLMAnalysisClient(caller, "");
+    const outcome = await client.runRouter("some transcript sample", "claude-opus-5");
+    expect(outcome.kind).toBe("ok");
+    if (outcome.kind === "ok") expect(outcome.data.domain).toBe("clinical");
+    expect(requests).toHaveLength(1);
+    expect(requests[0].system).toContain('"clinical"');
+    expect(requests[0].system).toContain("pharmacology");
+    expect(requests[0].jsonSchema).toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          domain: expect.objectContaining({ enum: expect.arrayContaining(["biology", "clinical", "generic", "history", "music", "physical_skill"]) }),
+        }),
+      })
+    );
+  });
+
+  it("runChunkV3's system prompt embeds the resolved lens's unitTypeEmphasis verbatim, for the clinical lens", async () => {
+    const { caller, requests } = spyCaller(JSON.stringify({ pearls: [], units: [], edges: [] }));
+    const client = new LLMAnalysisClient(caller, "");
+    const chunk = { index: 0, startSec: 0, endSec: 10, text: "[0:00] give metoprolol 25mg PO" };
+    const outcome = await client.runChunkV3(chunk, "clinical", "claude-opus-5");
+    expect(outcome.kind).toBe("ok");
+    expect(requests).toHaveLength(1);
+    expect(requests[0].system).toContain("DOSAGE units for medication amounts/frequencies");
+    expect(requests[0].system).toContain("safety-critical");
+  });
+
+  it("runChunkV3 falls back to the generic lens's unitTypeEmphasis for an unknown domain id", async () => {
+    const { caller, requests } = spyCaller(JSON.stringify({ pearls: [], units: [], edges: [] }));
+    const client = new LLMAnalysisClient(caller, "");
+    const chunk = { index: 0, startSec: 0, endSec: 10, text: "[0:00] hello" };
+    await client.runChunkV3(chunk, "totally-unknown-domain", "claude-opus-5");
+    expect(requests[0].system).toContain("No specific domain lens applies");
+  });
+
+  it("a user-authored lens override changes the assembled prompt (registry precedence flows through to the real client)", async () => {
+    const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "studyloop-analysis-lens-override-"));
+    try {
+      await fs.mkdir(path.join(dataDir, "lenses"), { recursive: true });
+      await fs.writeFile(
+        path.join(dataDir, "lenses", "biology.json"),
+        JSON.stringify({
+          id: "biology",
+          label: "Biology (user override)",
+          routerDescription: "a completely user-authored router description",
+          unitTypeEmphasis: "a completely user-authored unit-type emphasis paragraph",
+          overlayFields: [],
+          questionStyle: "default",
+        })
+      );
+      const { caller, requests } = spyCaller(JSON.stringify({ pearls: [], units: [], edges: [] }));
+      const client = new LLMAnalysisClient(caller, dataDir);
+      const chunk = { index: 0, startSec: 0, endSec: 10, text: "[0:00] hello" };
+      await client.runChunkV3(chunk, "biology", "claude-opus-5");
+      expect(requests[0].system).toContain("a completely user-authored unit-type emphasis paragraph");
+    } finally {
+      await fs.rm(dataDir, { recursive: true, force: true });
+    }
   });
 });

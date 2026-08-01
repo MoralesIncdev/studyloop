@@ -1,0 +1,17 @@
+{
+  "id": "clinical",
+  "label": "Clinical / Nursing",
+  "routerDescription": "nursing or medical lecture/clinical content — pharmacology, patient assessment, procedures, lab values",
+  "unitTypeEmphasis": "Domain lens: clinical/nursing. Favor DOSAGE units for medication amounts/frequencies, CONTRAINDICATION units for when NOT to do/give something, LAB_VALUE units for normal/abnormal test ranges, and PRIORITIZATION units for \"what do you do first\" nursing-judgment material; use CLUSTER units for enumerable fact groups (e.g. \"side effects of metoprolol\", \"signs of digoxin toxicity\") rather than one unit per fact. Where the transcript supports it, fill in overlay.drugClass, overlay.genericName, overlay.brandName, overlay.route (PO/IV/IM/etc.), overlay.normalRange, and overlay.nclexCategory (the NCLEX client-needs category this fact falls under) — leave every other overlay field empty. DOSAGE/CONTRAINDICATION/LAB_VALUE units are safety-critical: never round or paraphrase a stated value away from what the transcript actually says.",
+  "overlayFields": [
+    { "key": "drugClass", "label": "Drug class", "hint": "e.g. beta blocker, ACE inhibitor" },
+    { "key": "genericName", "label": "Generic name" },
+    { "key": "brandName", "label": "Brand name" },
+    { "key": "route", "label": "Route", "hint": "e.g. PO, IV, IM" },
+    { "key": "normalRange", "label": "Normal range" },
+    { "key": "nclexCategory", "label": "NCLEX category" }
+  ],
+  "questionStyle": "nclex",
+  "glossaryRef": "nursing",
+  "safetyTier": ["DOSAGE", "CONTRAINDICATION", "LAB_VALUE"]
+}

@@ -18,6 +18,7 @@ import {
   writeTerms,
   __resetNursingGlossaryCacheForTests,
 } from "../src/lib/terms.js";
+import { __resetLensRegistryCacheForTests } from "../src/lib/lenses.js";
 import { analysisJsonPath, writeJsonAtomic } from "../src/lib/store.js";
 import type { TermsFile } from "../src/lib/models.js";
 
@@ -231,6 +232,56 @@ describe("loadEffectiveTerms (project terms.json + glossary merge)", () => {
     const effective = await loadEffectiveTerms(dataDir, projectId, "clinical");
     expect(effective["metro pro law"].correct).toBe("USER OVERRIDE");
     expect(Object.keys(effective).length).toBeGreaterThan(150);
+  });
+});
+
+// --- Phase 5 "Lens registry + clinical as first data-driven lens", item 7
+// "Phase 2 glossary wiring": isClinicalDomain/mergeGlossaryDefaults/
+// loadEffectiveTerms now key off the ACTIVE LENS's glossaryRef ("nursing"),
+// not a literal `domain === "clinical"` string check — this generalizes to
+// ANY lens id (a user-authored or Phase-9-generated one) that declares the
+// same glossaryRef, without needing another code change here. ---------------
+
+describe("isClinicalDomain / mergeGlossaryDefaults — Phase 5 glossaryRef generalization", () => {
+  let dataDir: string;
+
+  beforeEach(async () => {
+    __resetNursingGlossaryCacheForTests();
+    __resetLensRegistryCacheForTests();
+    dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "studyloop-glossary-ref-"));
+  });
+
+  afterEach(async () => {
+    __resetLensRegistryCacheForTests();
+    await fs.rm(dataDir, { recursive: true, force: true });
+  });
+
+  it("activates for a user-authored lens id (not literally 'clinical') that declares glossaryRef 'nursing'", async () => {
+    await fs.mkdir(path.join(dataDir, "lenses"), { recursive: true });
+    await fs.writeFile(
+      path.join(dataDir, "lenses", "veterinary.json"),
+      JSON.stringify({
+        id: "veterinary",
+        label: "Veterinary",
+        routerDescription: "veterinary medicine content",
+        unitTypeEmphasis: "Domain lens: veterinary.",
+        overlayFields: [],
+        questionStyle: "default",
+        glossaryRef: "nursing",
+      })
+    );
+    expect(isClinicalDomain("veterinary", dataDir)).toBe(true);
+    const merged = mergeGlossaryDefaults({}, "veterinary", dataDir);
+    expect(merged["metro pro law"]).toEqual({ correct: "metoprolol", source: "glossary", createdAt: expect.any(String) });
+  });
+
+  it("stays inert for a lens id with no glossaryRef at all, even with the same dataDir passed", () => {
+    expect(isClinicalDomain("biology", dataDir)).toBe(false);
+    expect(mergeGlossaryDefaults({}, "biology", dataDir)).toEqual({});
+  });
+
+  it("dataDir defaults to \"\" (repo-only) — the shipped clinical lens's glossaryRef still activates with no dataDir argument at all", () => {
+    expect(isClinicalDomain("clinical")).toBe(true);
   });
 });
 

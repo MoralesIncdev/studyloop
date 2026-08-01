@@ -24,8 +24,16 @@ export type TranscriptRef = { type: "file"; path: string } | { type: "none" };
 
 export type ConceptProfile = "bjj-curriculum" | "headings";
 
-/** V3-B B1: router-classified (then user-editable) subject-matter domain — mirrors server/src/lib/models.ts DomainSchema. */
-export type Domain = "biology" | "history" | "music" | "physical_skill" | "generic";
+/**
+ * V3-B B1: router-classified (then user-editable) subject-matter domain —
+ * mirrors server/src/lib/models.ts DomainSchema. Phase 5 "Lens registry +
+ * clinical as first data-driven lens" (AMENDED spec): the server's
+ * DomainSchema is a plain validated string now (lenses are data files, see
+ * server/src/lib/lenses.ts), not a closed enum — widened to `string` here
+ * for the same reason (any lens id is valid, including a future
+ * user-authored/generated one), keeping the shipped ids as inline docs.
+ */
+export type Domain = "biology" | "history" | "music" | "physical_skill" | "generic" | "clinical" | (string & {});
 
 export interface ConceptDocRef {
   path?: string;
@@ -296,8 +304,25 @@ export interface AnalysisTheme {
 
 // --- V3-B B1: typed spine (units/edges) — see PEDAGOGY.md §2 ---------------
 
-/** Phase 4 "Cluster unit type" (design/EXECUTION-PLAN-post-review-v1.md) adds "CLUSTER" — see AnalysisUnit's `members` field below. */
-export type UnitType = "CLAIM" | "MECHANISM" | "PROCEDURE" | "EXAMPLE" | "BOUNDARY" | "CLUSTER";
+/**
+ * Phase 4 "Cluster unit type" (design/EXECUTION-PLAN-post-review-v1.md) adds
+ * "CLUSTER" — see AnalysisUnit's `members` field below. Phase 5 "Lens
+ * registry + clinical as first data-driven lens" adds DOSAGE/
+ * CONTRAINDICATION/LAB_VALUE/PRIORITIZATION — spine-level (usable by any
+ * lens, not clinical-exclusive); DOSAGE/CONTRAINDICATION/LAB_VALUE are also
+ * the clinical lens's `safetyTier` (see lib/safetyTier.ts).
+ */
+export type UnitType =
+  | "CLAIM"
+  | "MECHANISM"
+  | "PROCEDURE"
+  | "EXAMPLE"
+  | "BOUNDARY"
+  | "CLUSTER"
+  | "DOSAGE"
+  | "CONTRAINDICATION"
+  | "LAB_VALUE"
+  | "PRIORITIZATION";
 export type EdgeType = "REQUIRES" | "PART_OF" | "EXAMPLE_OF" | "PROCEDURE_STEP";
 
 export interface UnitAnchor {
@@ -337,6 +362,13 @@ export interface UnitOverlay {
   triggers?: string[];
   failureModes?: string[];
   drillPairing?: string;
+  // Phase 5 "Clinical lens" overlay fields (server/lenses/clinical.json's overlayFields).
+  drugClass?: string;
+  genericName?: string;
+  brandName?: string;
+  route?: string;
+  normalRange?: string;
+  nclexCategory?: string;
 }
 
 export interface AnalysisUnit {

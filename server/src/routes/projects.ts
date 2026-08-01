@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { expandHome, getConfig, resolveDataDir, resolveRoots } from "../config.js";
+import { isKnownLensId } from "../lib/lenses.js";
 import { isInsideAnyRootCanonical, isPathAllowedCanonical } from "../lib/paths.js";
 import { assertValidYoutubeUrl, InvalidYoutubeUrlError } from "../lib/ytdlp.js";
 import {
@@ -153,6 +154,13 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
     }
     if (patch.transcript?.type === "file" && !(await isPathAllowedCanonical(patch.transcript.path, roots))) {
       return reply.status(403).send({ error: "transcript.path is outside configured roots" });
+    }
+    // Phase 5 "Lens registry": DomainSchema is a plain validated string now
+    // (not a z.enum — see models.ts), so the editable domain chip's PATCH
+    // needs its own boundary check against the loaded lens registry rather
+    // than getting it for free from the schema.
+    if (patch.domain !== undefined && !isKnownLensId(dataDir, patch.domain)) {
+      return reply.status(400).send({ error: `Unknown lens/domain id: ${patch.domain}` });
     }
 
     const result = await withProjectLock(params.data.id, async () => {

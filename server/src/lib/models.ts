@@ -35,9 +35,67 @@ export type ConceptDocRef = z.infer<typeof ConceptDocRefSchema>;
  * prompt modules, not separate engines"). Stored on the project (not just
  * analysis.json) because it's user-editable independent of re-analyzing —
  * SPEC: "editable chip near the channel row; PATCH `domain`".
+ *
+ * Phase 5 "Lens registry + clinical as first data-driven lens"
+ * (design/EXECUTION-PLAN-post-review-v1.md, AMENDED): this was a fixed
+ * `z.enum([...five ids])` before Phase 5 — the domain/lens set is now data
+ * (server/lenses/*.json + `<dataDir>/lenses/*.json`, see lib/lenses.ts), not
+ * a closed list known at compile time, so the schema is a plain validated
+ * string here. The real "is this a known lens id" check happens at the
+ * boundaries that actually need it (the analyze router's structured-output
+ * enum, and routes/projects.ts's PATCH `domain` validation via
+ * lib/lenses.ts's `isKnownLensId`) — never here, so a project stored under
+ * an OLD build's five literal enum values keeps parsing unchanged (the ids
+ * are identical strings, just no longer enum-checked at this layer).
  */
-export const DomainSchema = z.enum(["biology", "history", "music", "physical_skill", "generic"]);
+export const DomainSchema = z.string().min(1);
 export type Domain = z.infer<typeof DomainSchema>;
+
+/**
+ * Phase 5 "Lens registry": one overlay field a lens wants the model to try
+ * to fill in on a unit (see AnalysisUnitSchema's `overlay` in lib/analysis.ts)
+ * — `key` must be one of UnitOverlaySchema's known keys (loosely checked;
+ * an unknown key is simply never populated since the model prompt/schema
+ * only names keys UnitOverlaySchema itself declares), `label` is the web
+ * unit-card's human-readable row label, `hint` is optional extra guidance
+ * text (currently informational only — not yet threaded into the chunk
+ * prompt beyond the lens's own `unitTypeEmphasis` prose).
+ */
+export const LensOverlayFieldSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().min(1),
+  hint: z.string().optional(),
+});
+export type LensOverlayField = z.infer<typeof LensOverlayFieldSchema>;
+
+/**
+ * Phase 5 "Lens registry + clinical as first data-driven lens" (AMENDED
+ * spec): a subject-matter lens is now a data file (server/lenses/<id>.json,
+ * repo-shipped, merged with user overrides from `<dataDir>/lenses/<id>.json`
+ * — see lib/lenses.ts) rather than a hardcoded DOMAIN_MODULES prompt-string
+ * record. `id` doubles as the Domain value stored on a project/analysis.
+ * `safetyTier` is data that only ever REFERENCES a code-level capability
+ * (lib/conceptRegistry.ts's never-auto-merge extension, the web unit card's
+ * unconditional verbatim-quote display) — a lens cannot redefine what the
+ * tier DOES, only which of its own unit types opt into it.
+ */
+export const LensSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  /** Short clause used inside the router's classification prompt: `"${id}" (${routerDescription})`. */
+  routerDescription: z.string().min(1),
+  /** The per-chunk system-prompt module text (verbatim migration of the old DOMAIN_MODULES[domain] string for the original five lenses) — which unit types/edges to favor and which overlay fields to fill in. */
+  unitTypeEmphasis: z.string().min(1),
+  overlayFields: z.array(LensOverlayFieldSchema).default([]),
+  /** Dispatch key for cardTransform.ts's question-style prompt selection. "default" (or any value other than a recognized special style) preserves the pre-Phase-5 domain-flavored behavior for the original five lenses. */
+  questionStyle: z.string().min(1).default("default"),
+  /** When set, activates lib/terms.ts's nursing glossary merge for projects whose active lens declares this ref (currently only "nursing" has a glossary file). */
+  glossaryRef: z.string().optional(),
+  masteryNotes: z.string().optional(),
+  /** Unit types (lib/analysis.ts's UnitTypeSchema values) this lens flags as safety-critical — see the schema-level doc comment above. */
+  safetyTier: z.array(z.string()).optional(),
+});
+export type Lens = z.infer<typeof LensSchema>;
 
 /**
  * V2-B "Fast YouTube layer": related-video shape returned by both Innertube's
