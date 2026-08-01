@@ -14,7 +14,10 @@
 // tick-anchored panes (parkAnchor) — drag-to-park: dragging into the bottom
 // 150px of the frame arms parking, release flies the pane toward its seek-bar
 // tick (~750ms) and parks it via store.parkPane; PlayerChrome's waiting tick
-// + store.undockPane bring it back.
+// + store.undockPane bring it back. Non-anchored panes get the mock's hidePane
+// instead (index.html line 1082): a × tool fades the pane out and persists
+// `hidden` in the layout blob; hidden panes reappear ghosted in edit mode
+// (mock line 194) where the chrome's eye tool unhides them.
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { useStudyLoopStore } from "../state/store";
 import {
@@ -22,6 +25,7 @@ import {
   clampPaneWidth,
   clearPaneLayout,
   loadPaneLayout,
+  savePaneHidden,
   savePaneLayout,
   savePaneMode,
   savePaneWidth,
@@ -51,6 +55,8 @@ interface SizeState {
 const PARK_ZONE_PX = 150;
 /** Mock's dockPane flight duration (index.html lines 1091-1098). */
 const PARK_FLIGHT_MS = 750;
+/** Mock's hidePane fade-out (index.html line 1084: opacity 0, display none after 450ms). */
+const HIDE_FADE_MS = 450;
 
 export type ChipStatus = "proposed" | "attested" | "quiet";
 
@@ -106,7 +112,7 @@ export function Pane({
   arriving = false,
   onEngaged,
   children,
-}: Props): JSX.Element {
+}: Props): JSX.Element | null {
   // Edit mode (SURVEY.md, WoW/ElvUI lineage): chrome forced visible, dashed
   // outline, drags snap to the grid, and a per-pane reset tool appears.
   const editing = useStudyLoopStore((s) => s.consoleEditMode);
@@ -114,6 +120,7 @@ export function Pane({
   const dragRef = useRef<DragState | null>(null);
   const sizeRef = useRef<SizeState | null>(null);
   const flightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverPausedRef = useRef(false);
   const posRef = useRef<PaneFraction>(defaultPos);
   const widthRef = useRef<number | undefined>(width);
@@ -123,15 +130,18 @@ export function Pane({
   const [dragging, setDragging] = useState(false);
   const [sizing, setSizing] = useState(false);
   const [parking, setParking] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const [hiding, setHiding] = useState(false);
   const [flight, setFlight] = useState<{ dx: number; dy: number } | null>(null);
 
-  // Restore the persisted position/width/mode whenever the project changes.
+  // Restore the persisted position/width/mode/hidden whenever the project changes.
   useEffect(() => {
     const layout = projectId ? loadPaneLayout(projectId, paneId) : null;
     const next = layout ?? defaultPos;
     posRef.current = next;
     setPos(next);
     setMode(layout?.mode ?? defaultMode);
+    setHidden(layout?.hidden ?? false);
     widthRef.current = layout?.width ?? width;
     setWidthPx(layout?.width ?? width);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -146,6 +156,7 @@ export function Pane({
         useStudyLoopStore.getState().setAutoPaused(false);
       }
       if (flightTimerRef.current) clearTimeout(flightTimerRef.current);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     },
     []
   );
@@ -275,6 +286,7 @@ export function Pane({
     widthRef.current = width;
     setWidthPx(width);
     setMode(defaultMode);
+    setHidden(false);
     if (projectId) clearPaneLayout(projectId, paneId);
   };
 
@@ -282,6 +294,30 @@ export function Pane({
     const next: PaneMode = mode === "bare" ? "glassy" : "bare";
     setMode(next);
     if (projectId) savePaneMode(projectId, paneId, posRef.current, next);
+  };
+
+  /** Mock's hidePane (index.html lines 1082-1086): fade out, then drop from
+   *  the layout and persist — reopen path is edit mode's ghosted .was-hidden. */
+  const handleHide = (): void => {
+    // Hiding mid-hover would strand the hover-pause (no pointerleave fires
+    // once the pane leaves the hit-test tree) — release it first.
+    if (hoverPausedRef.current) {
+      hoverPausedRef.current = false;
+      useStudyLoopStore.getState().controller?.play();
+      useStudyLoopStore.getState().setAutoPaused(false);
+    }
+    setHiding(true);
+    hideTimerRef.current = setTimeout(() => {
+      hideTimerRef.current = null;
+      setHiding(false);
+      setHidden(true);
+      if (projectId) savePaneHidden(projectId, paneId, posRef.current, true);
+    }, HIDE_FADE_MS);
+  };
+
+  const handleUnhide = (): void => {
+    setHidden(false);
+    if (projectId) savePaneHidden(projectId, paneId, posRef.current, false);
   };
 
   // Hover-pause with auto-resume (mock lines 1065-1074, Language Reactor) —
@@ -314,9 +350,15 @@ export function Pane({
     arriving ? styles.arriving : "",
     flight ? styles.flying : "",
     editing ? styles.editing : "",
+    hidden && editing ? styles.wasHidden : "",
   ]
     .filter(Boolean)
     .join(" ");
+
+  // Mock's applyPane (index.html line 993): a hidden pane stays out of the
+  // layout — except in edit mode, where it reappears ghosted (.wasHidden) so
+  // the chrome's eye tool can bring it back.
+  if (hidden && !editing) return null;
 
   return (
     <div
@@ -326,7 +368,7 @@ export function Pane({
         left: `${pos.fx * 100}%`,
         top: `${pos.fy * 100}%`,
         width: widthPx != null ? `${widthPx}px` : undefined,
-        opacity: flight ? 0 : opacity,
+        opacity: flight || hiding ? 0 : opacity,
         transform: flight ? `translate(${flight.dx}px, ${flight.dy}px) scale(0.04)` : undefined,
       }}
       data-pane={dataPane}
@@ -366,6 +408,34 @@ export function Pane({
                 <path d="M2 12.5h10" />
               </svg>
             </button>
+          )}
+          {hidden ? (
+            <button
+              type="button"
+              className={styles.tool}
+              title="Show this pane again"
+              aria-label="Unhide pane"
+              onClick={handleUnhide}
+            >
+              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3">
+                <path d="M1.5 7s2-3.5 5.5-3.5S12.5 7 12.5 7 10.5 10.5 7 10.5 1.5 7 1.5 7Z" />
+                <circle cx="7" cy="7" r="1.6" />
+              </svg>
+            </button>
+          ) : (
+            !parkAnchor && (
+              <button
+                type="button"
+                className={styles.tool}
+                title="Hide (reopen in edit mode · E)"
+                aria-label="Hide pane"
+                onClick={handleHide}
+              >
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
+                  <path d="M3 3l8 8M11 3l-8 8" />
+                </svg>
+              </button>
+            )
           )}
           {editing && (
             <button

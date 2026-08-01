@@ -239,6 +239,13 @@
   opacity: 0.8;
 }
 
+/* Mock line 194: a hidden pane reappears ghosted in edit mode (pinkish dashed
+   outline, 55%) so the chrome's eye tool can unhide it. */
+.pane.editing.wasHidden {
+  outline-color: oklch(0.7 0.1 320 / 55%);
+  opacity: 0.55 !important;
+}
+
 .ghostText {
   font-size: 12.5px;
   font-style: italic;

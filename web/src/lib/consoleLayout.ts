@@ -23,15 +23,17 @@ export const PANE_MAX_WIDTH_PX = 640;
 
 /**
  * Console slice D: extends the slice-8 fx/fy-only shape with the pane's
- * resized width and bare/glassy mode, both optional so a pane that never
- * touched its grip or mode toggle still round-trips cleanly. Backward
+ * resized width, bare/glassy mode, and hidden flag (the chrome's × button —
+ * mock's hidePane, index.html line 1082), all optional so a pane that never
+ * touched its grip, mode toggle, or hide still round-trips cleanly. Backward
  * compatible with everything slice 8 already wrote to localStorage — those
- * entries simply have `width`/`mode` come back `undefined`, and callers fall
- * back to their own defaults exactly like a missing key would.
+ * entries simply have `width`/`mode`/`hidden` come back `undefined`, and
+ * callers fall back to their own defaults exactly like a missing key would.
  */
 export interface PaneLayout extends PaneFraction {
   width?: number;
   mode?: PaneMode;
+  hidden?: boolean;
 }
 
 /** Clamp a fraction into [0, 1]; NaN (e.g. from corrupt JSON) falls back to 0. */
@@ -69,6 +71,7 @@ function readRaw(projectId: string, paneId: string): PaneLayout | null {
     const layout: PaneLayout = { fx: clampFraction(v.fx as number), fy: clampFraction(v.fy as number) };
     if (typeof v.width === "number") layout.width = clampPaneWidth(v.width);
     if (v.mode === "bare" || v.mode === "glassy") layout.mode = v.mode;
+    if (v.hidden === true) layout.hidden = true;
     return layout;
   } catch {
     return null;
@@ -107,7 +110,7 @@ export function savePaneLayout(projectId: string, paneId: string, pos: PaneFract
 export function savePaneWidth(projectId: string, paneId: string, currentPos: PaneFraction, width: number): void {
   const existing = readRaw(projectId, paneId);
   const base = existing ?? currentPos;
-  writeRaw(projectId, paneId, { fx: clampFraction(base.fx), fy: clampFraction(base.fy), mode: existing?.mode, width: clampPaneWidth(width) });
+  writeRaw(projectId, paneId, { fx: clampFraction(base.fx), fy: clampFraction(base.fy), mode: existing?.mode, hidden: existing?.hidden, width: clampPaneWidth(width) });
 }
 
 /** Console slice D: persists the bare/glassy toggle — same currentPos
@@ -115,7 +118,17 @@ export function savePaneWidth(projectId: string, paneId: string, currentPos: Pan
 export function savePaneMode(projectId: string, paneId: string, currentPos: PaneFraction, mode: PaneMode): void {
   const existing = readRaw(projectId, paneId);
   const base = existing ?? currentPos;
-  writeRaw(projectId, paneId, { fx: clampFraction(base.fx), fy: clampFraction(base.fy), width: existing?.width, mode });
+  writeRaw(projectId, paneId, { fx: clampFraction(base.fx), fy: clampFraction(base.fy), width: existing?.width, hidden: existing?.hidden, mode });
+}
+
+/** Console slice D: persists the chrome × button's hidden flag (mock's
+ *  hidePane, index.html line 1082) — same currentPos requirement as
+ *  savePaneWidth. Unhiding drops the key (undefined) rather than storing
+ *  `hidden: false`, so a visible pane's blob stays minimal. */
+export function savePaneHidden(projectId: string, paneId: string, currentPos: PaneFraction, hidden: boolean): void {
+  const existing = readRaw(projectId, paneId);
+  const base = existing ?? currentPos;
+  writeRaw(projectId, paneId, { fx: clampFraction(base.fx), fy: clampFraction(base.fy), width: existing?.width, mode: existing?.mode, hidden: hidden ? true : undefined });
 }
 
 /** Edit mode's per-pane reset — forget the stored position so the pane returns

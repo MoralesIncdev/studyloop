@@ -6,6 +6,7 @@ import {
   clampPaneWidth,
   clearPaneLayout,
   loadPaneLayout,
+  savePaneHidden,
   savePaneLayout,
   savePaneMode,
   savePaneWidth,
@@ -181,6 +182,36 @@ describe("savePaneWidth / savePaneMode (slice D schema extension)", () => {
   it("reads a slice-8-era entry (fx/fy only) with width/mode simply absent", () => {
     vi.stubGlobal("window", fakeWindow({ "studyloop:console-layout:p1:p-note": JSON.stringify({ fx: 0.4, fy: 0.5 }) }));
     expect(loadPaneLayout("p1", "p-note")).toEqual({ fx: 0.4, fy: 0.5 });
+  });
+});
+
+describe("savePaneHidden (mock's hidePane)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("persists hidden without disturbing position/width/mode", () => {
+    vi.stubGlobal("window", fakeWindow());
+    savePaneLayout("p1", "p-note", { fx: 0.2, fy: 0.3 });
+    savePaneWidth("p1", "p-note", { fx: 0.2, fy: 0.3 }, 400);
+    savePaneMode("p1", "p-note", { fx: 0.2, fy: 0.3 }, "glassy");
+    savePaneHidden("p1", "p-note", { fx: 0.2, fy: 0.3 }, true);
+    expect(loadPaneLayout("p1", "p-note")).toEqual({ fx: 0.2, fy: 0.3, width: 400, mode: "glassy", hidden: true });
+  });
+
+  it("unhiding drops the key rather than storing hidden:false", () => {
+    vi.stubGlobal("window", fakeWindow());
+    savePaneHidden("p1", "p-note", { fx: 0.2, fy: 0.3 }, true);
+    savePaneHidden("p1", "p-note", { fx: 0.2, fy: 0.3 }, false);
+    expect(loadPaneLayout("p1", "p-note")).toEqual({ fx: 0.2, fy: 0.3 });
+  });
+
+  it("width and mode writes preserve an existing hidden flag", () => {
+    vi.stubGlobal("window", fakeWindow());
+    savePaneHidden("p1", "p-note", { fx: 0.2, fy: 0.3 }, true);
+    savePaneWidth("p1", "p-note", { fx: 0.2, fy: 0.3 }, 400);
+    savePaneMode("p1", "p-note", { fx: 0.2, fy: 0.3 }, "glassy");
+    expect(loadPaneLayout("p1", "p-note")).toEqual({ fx: 0.2, fy: 0.3, width: 400, mode: "glassy", hidden: true });
   });
 });
 
