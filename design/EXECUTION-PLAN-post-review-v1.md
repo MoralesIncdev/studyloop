@@ -23,7 +23,7 @@
 | 8 | Document mode | DONE (331 web tests + 2 e2e; read-and-claim document surface, clinical defaults to it, console/document toggle in Session cabinet, video PiP, UnitProposalCard reused unchanged + cluster member fold) |
 | 9 | Lens autogeneration for unknown subjects | DONE (827 server tests; none-fits router → meta-schema draft → create-only write to user lens dir, origin:generated; safetyTier structurally impossible; generic fallback never fails analysis) |
 | 10 | Transcript source chain (sidecars + YouTube pull) | DONE (868 server tests; live library 995→1054/1100 resolved — +59 sidecars, 19 lazy-YouTube, 27 truly transcribable; terms apply to all sources via resolveEffectiveTranscript) |
-| 11 | Bring-your-own local ASR adapters | TODO |
+| 11 | Bring-your-own local ASR adapters | DONE (957 server tests; command adapter via execFile w/ metachar rejection + OpenAI-compatible endpoint adapter; FIFO transcribe jobs w/ cancel; cache feeds chain step 4; Settings ASR section + Transcribe row + README; fixed shallow-partial config bug that nulled saved asr.apiKey) |
 
 ---
 
