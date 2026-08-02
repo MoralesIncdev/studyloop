@@ -13,6 +13,7 @@ import {
 } from "../src/lib/transcriptChain.js";
 import { pathExists, writeJsonAtomic, writeProject } from "../src/lib/store.js";
 import { writeTerms } from "../src/lib/terms.js";
+import { asrCachePath, writeAsrCache } from "../src/lib/asr.js";
 
 const noRoots: ResolvedRoots = { libraryRoots: [], transcriptRoots: [], conceptDocs: [] };
 
@@ -201,6 +202,49 @@ describe("resolveEffectiveTranscript (Phase 10 chain)", () => {
     // Not re-attempted — negative cache is in-memory for the session.
     expect(calls).toBe(1);
     expect(await pathExists(path.join(dataDir, "transcripts", "nCaptionsHr.json"))).toBe(false);
+  });
+
+  it("step 4 (Phase 11 ASR cache) resolves when nothing else in the chain matched, and applies Phase 2 terms correction", async () => {
+    const videoPath = path.join(libDir, "OpenGuardSeatedVolume2.mp4");
+    await fs.writeFile(videoPath, "fake video bytes");
+    const project = baseProject({
+      id: "proj-asr",
+      source: { type: "local", path: videoPath },
+      transcript: { type: "none" },
+    });
+    await writeProject(dataDir, project);
+    await writeTerms(dataDir, project.id, {
+      "metro pro law": { correct: "metoprolol", source: "user", createdAt: new Date().toISOString() },
+    });
+    await writeAsrCache(dataDir, videoPath, [{ start: 0, end: 1, text: "give metro pro law now" }], "command");
+
+    const result = await resolveEffectiveTranscript(dataDir, noRoots, project);
+    expect(result.source).toBe("asr");
+    expect(result.transcribable).toBe(false);
+    expect(result.segments).toEqual([{ start: 0, end: 1, text: "give metoprolol now" }]);
+  });
+
+  it("step 4 (ASR cache) is skipped for a project with no local video path (nothing to key the cache by)", async () => {
+    const project = baseProject({
+      id: "proj-asr-youtube-source",
+      source: { type: "youtube", videoId: "noCaptionsHere", url: "https://youtu.be/noCaptionsHere" },
+      transcript: { type: "none" },
+    });
+    await writeProject(dataDir, project);
+    __setInnertubeClientForTests(fakeClient({ throwOnTranscript: true }));
+
+    const result = await resolveEffectiveTranscript(dataDir, noRoots, project);
+    expect(result.transcribable).toBe(true);
+    expect(result.source).toBeNull();
+  });
+
+  it("step 4 lives in the exact same <dataDir>/transcripts/ directory the youtube cache (step 3) uses", async () => {
+    const videoPath = path.join(libDir, "another-lesson.mp4");
+    await fs.writeFile(videoPath, "fake video bytes");
+    await writeAsrCache(dataDir, videoPath, [{ start: 0, end: 1, text: "x" }], "endpoint");
+    const cachePath = asrCachePath(dataDir, videoPath);
+    expect(path.dirname(cachePath)).toBe(path.join(dataDir, "transcripts"));
+    expect(await pathExists(cachePath)).toBe(true);
   });
 
   it("marks transcribable when no pipeline transcript, no sidecar, and no derivable youtube id exist", async () => {

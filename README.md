@@ -123,6 +123,57 @@ Disabled while typing in an input, textarea, select, or contenteditable element.
 | `N` | Open the notation modal (pauses, captures a frame, prefills the active transcript line) |
 | `S` | Screenshot-only capture (no pause, no modal — toasts a confirmation) |
 
+## Transcripts
+
+A video's transcript is resolved through an ordered chain, first hit wins: a matched
+pipeline transcript JSON (`transcriptRoots`), a same-directory `.srt`/`.vtt` sidecar file
+next to a local video (including yt-dlp's `.en.srt`/`.en-orig.srt` naming), a
+lazily-pulled YouTube caption track (fetched once, then cached to
+`<dataDir>/transcripts/<videoId>.json` so it never re-fetches), and — if none of those
+find anything — your own bring-your-own ASR adapter. Whichever step wins, the result
+normalizes to the same segment shape, so terminology corrections, search, and analysis
+all work identically regardless of source.
+
+### Bring-your-own ASR
+
+Two adapter styles, both entirely local — no cloud dependency, no bundled model. Set
+`asr.mode` to `"command"` or `"endpoint"` in Settings (or directly in
+`~/.studyloop/config.json`), then a **Transcribe** button appears on any local video
+project with no transcript anywhere.
+
+**Command adapter** — runs a local binary via a template with `{input}`/`{output}`
+placeholders, executed directly (never through a shell — no pipes, redirects, or
+chaining). Accepts whatever lands at `{output}`: `.srt`, `.vtt`, or `.json` (canonical or
+whisper-style segments). Example, [whisper.cpp](https://github.com/ggerganov/whisper.cpp):
+
+```json
+{
+  "asr": {
+    "mode": "command",
+    "command": "whisper-cli -m models/ggml-base.en.bin -f {input} -of {output} -osrt"
+  }
+}
+```
+
+**Endpoint adapter** — POSTs the video (or, when `ffmpeg` is on `PATH`, its extracted
+audio — a smaller upload) to an OpenAI-compatible `/v1/audio/transcriptions` server.
+Example, a local [speaches](https://github.com/speaches-ai/speaches) instance:
+
+```json
+{
+  "asr": {
+    "mode": "endpoint",
+    "endpoint": "http://localhost:8000",
+    "model": "Systran/faster-whisper-base.en"
+  }
+}
+```
+
+`apiKey` and `language` are optional on both: set `apiKey` if your endpoint requires a
+bearer token, and `language` to skip auto-detection. Only one transcription runs at a
+time, server-wide — clicking Transcribe on a second project while one is already
+running queues it (FIFO) instead of racing it for the same CPU/GPU.
+
 ## Transcript formats
 
 `GET /api/transcript` dispatches by file extension. Supported shapes:

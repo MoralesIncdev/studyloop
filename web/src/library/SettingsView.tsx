@@ -1,7 +1,14 @@
 // GET/PUT /api/config editor. Roots are edited as comma/newline-separated text and
 // split client-side — simplest possible form per SPEC, no fancy list UI needed.
 import { useEffect, useState } from "react";
-import { LLM_PROVIDERS, LLM_PROVIDER_IDS, type AnthropicAuthMode, type LlmProviderId, type StudyLoopConfig } from "../lib/types";
+import {
+  LLM_PROVIDERS,
+  LLM_PROVIDER_IDS,
+  type AnthropicAuthMode,
+  type AsrMode,
+  type LlmProviderId,
+  type StudyLoopConfig,
+} from "../lib/types";
 import { useStudyLoopStore } from "../state/store";
 import styles from "./SettingsView.module.css";
 
@@ -53,6 +60,14 @@ export function SettingsView(): JSX.Element {
   const [apiKey, setApiKey] = useState("");
   const [analysisModel, setAnalysisModel] = useState("");
   const [shareHandle, setShareHandle] = useState("");
+  // Phase 11 "Bring-your-own local ASR adapters".
+  const [asrMode, setAsrMode] = useState<AsrMode>("off");
+  const [asrCommand, setAsrCommand] = useState("");
+  const [asrEndpoint, setAsrEndpoint] = useState("");
+  // Same "server never echoes the key back, field always starts empty" convention as the LLM provider apiKey field above.
+  const [asrApiKey, setAsrApiKey] = useState("");
+  const [asrModel, setAsrModel] = useState("");
+  const [asrLanguage, setAsrLanguage] = useState("");
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -70,6 +85,11 @@ export function SettingsView(): JSX.Element {
     setAnthropicAuthMode(config.anthropicAuthMode);
     setAnalysisModel(config.analysisModel ?? "");
     setShareHandle(config.shareHandle);
+    setAsrMode(config.asr.mode);
+    setAsrCommand(config.asr.command ?? "");
+    setAsrEndpoint(config.asr.endpoint ?? "");
+    setAsrModel(config.asr.model ?? "");
+    setAsrLanguage(config.asr.language ?? "");
     setLoaded(true);
   }, [config, loaded]);
 
@@ -78,6 +98,7 @@ export function SettingsView(): JSX.Element {
     setSaving(true);
     try {
       const trimmedKey = apiKey.trim();
+      const trimmedAsrKey = asrApiKey.trim();
       await saveConfig({
         dataDir: dataDir.trim() || "~/StudyLoopData",
         libraryRoots: splitPaths(libraryRoots),
@@ -91,8 +112,21 @@ export function SettingsView(): JSX.Element {
         ...(trimmedKey ? { [`${llmProvider}ApiKey`]: trimmedKey } : {}),
         analysisModel: analysisModel.trim() || null,
         shareHandle: shareHandle.trim() || "anonymous",
+        // Phase 11 "Bring-your-own local ASR adapters": sent as one whole
+        // object (server/src/config.ts's updateConfig shallow-merges it over
+        // the existing asr config), same "omit apiKey to keep it" rule as
+        // the LLM provider key above.
+        asr: {
+          mode: asrMode,
+          command: asrCommand.trim() || null,
+          endpoint: asrEndpoint.trim() || null,
+          model: asrModel.trim() || null,
+          language: asrLanguage.trim() || null,
+          ...(trimmedAsrKey ? { apiKey: trimmedAsrKey } : {}),
+        },
       });
       setApiKey("");
+      setAsrApiKey("");
       pushToast("Settings saved", "success");
       await rescanLibrary();
       navigate({ view: "library" });
@@ -108,6 +142,16 @@ export function SettingsView(): JSX.Element {
       await saveConfig({ [`${llmProvider}ApiKey`]: null });
       setApiKey("");
       pushToast("API key cleared", "success");
+    } catch {
+      // store already toasted the error
+    }
+  };
+
+  const handleClearAsrKey = async () => {
+    try {
+      await saveConfig({ asr: { apiKey: null } });
+      setAsrApiKey("");
+      pushToast("ASR API key cleared", "success");
     } catch {
       // store already toasted the error
     }
@@ -276,6 +320,109 @@ export function SettingsView(): JSX.Element {
             placeholder="anonymous"
           />
         </label>
+
+        {/* Phase 11 "Bring-your-own local ASR adapters" (design/EXECUTION-PLAN-post-review-v1.md):
+            two adapter styles — a local command (whisper.cpp, faster-whisper,
+            mlx-whisper, ...) or an OpenAI-compatible endpoint (speaches,
+            LocalAI, a hosted Whisper) — mirroring the AI provider section
+            above. Entirely optional: transcript-less local videos work fine
+            without this, they just show no "Transcribe" affordance. */}
+        <label className={styles.field}>
+          <span className={styles.label}>Transcription (bring-your-own ASR)</span>
+          <span className={styles.hint}>
+            No cloud dependency, no bundled model. When a local video has no captions anywhere (no pipeline transcript, no
+            same-dir .srt/.vtt, no YouTube captions), a "Transcribe" button appears on that project and runs whichever adapter
+            you configure here.
+          </span>
+          <select className={styles.input} value={asrMode} onChange={(e) => setAsrMode(e.target.value as typeof asrMode)}>
+            <option value="off">Off</option>
+            <option value="command">Local command (whisper.cpp, faster-whisper, mlx-whisper, ...)</option>
+            <option value="endpoint">Endpoint (OpenAI-compatible server)</option>
+          </select>
+        </label>
+
+        {asrMode === "command" && (
+          <label className={styles.field}>
+            <span className={styles.label}>Command template</span>
+            <span className={styles.hint}>
+              Must contain both <code>{"{input}"}</code> and <code>{"{output}"}</code> — run directly (never through a shell),
+              so pipes/redirects/chaining aren&apos;t supported. Example (whisper.cpp):{" "}
+              <code>whisper-cli -m models/ggml-base.en.bin -f {"{input}"} -of {"{output}"} -osrt</code>
+            </span>
+            <textarea
+              className={styles.textarea}
+              value={asrCommand}
+              onChange={(e) => setAsrCommand(e.target.value)}
+              rows={2}
+              placeholder="whisper-cli -m models/ggml-base.en.bin -f {input} -of {output} -osrt"
+            />
+          </label>
+        )}
+
+        {asrMode === "endpoint" && (
+          <>
+            <label className={styles.field}>
+              <span className={styles.label}>Endpoint URL</span>
+              <span className={styles.hint}>
+                Base URL of an OpenAI-compatible server — <code>{"{endpoint}"}/v1/audio/transcriptions</code> is POSTed to.
+                Example: a local speaches server at <code>http://localhost:8000</code>.
+              </span>
+              <input
+                type="text"
+                className={styles.input}
+                value={asrEndpoint}
+                onChange={(e) => setAsrEndpoint(e.target.value)}
+                placeholder="http://localhost:8000"
+              />
+            </label>
+
+            <label className={styles.field}>
+              <span className={styles.label}>Endpoint API key</span>
+              <span className={styles.hint}>
+                {config?.asr.apiKeySet
+                  ? "A key is currently saved — leave blank to keep it, or type a new one to replace it."
+                  : "Optional — only needed if your endpoint requires one."}
+              </span>
+              <input
+                type="password"
+                className={styles.input}
+                value={asrApiKey}
+                onChange={(e) => setAsrApiKey(e.target.value)}
+                placeholder={config?.asr.apiKeySet ? "•••••••• (leave blank to keep)" : "not required by most local servers"}
+                autoComplete="off"
+              />
+              {config?.asr.apiKeySet && (
+                <button type="button" className={styles.secondaryButton} onClick={() => void handleClearAsrKey()}>
+                  Clear key
+                </button>
+              )}
+            </label>
+
+            <label className={styles.field}>
+              <span className={styles.label}>Model</span>
+              <span className={styles.hint}>Forwarded as the multipart `model` field, when set.</span>
+              <input
+                type="text"
+                className={styles.input}
+                value={asrModel}
+                onChange={(e) => setAsrModel(e.target.value)}
+                placeholder="whisper-1"
+              />
+            </label>
+
+            <label className={styles.field}>
+              <span className={styles.label}>Language</span>
+              <span className={styles.hint}>Optional ISO 639-1 code (e.g. "en") — forwarded when set, auto-detected otherwise.</span>
+              <input
+                type="text"
+                className={styles.input}
+                value={asrLanguage}
+                onChange={(e) => setAsrLanguage(e.target.value)}
+                placeholder="en"
+              />
+            </label>
+          </>
+        )}
 
         <div className={styles.actions}>
           <button type="submit" className={styles.primaryButton} disabled={saving}>

@@ -17,6 +17,14 @@
 //      never re-attempted this process's lifetime after a genuine miss (no
 //      captions available) so a caption-less video doesn't get hammered on
 //      every page load.
+//   4. asr: Phase 11 "Bring-your-own local ASR adapters" — a prior
+//      POST /api/projects/:id/transcribe job's cached output, keyed by a
+//      stable hash of the local video's own path (lib/asr.ts's
+//      asrCachePath), living in this exact same `<dataDir>/transcripts/`
+//      directory the youtube cache (step 3) uses. Local-source projects
+//      only — there is no local media file to run an ASR adapter against
+//      for a youtube-source project (see routes/transcribe.ts's "not_local"
+//      guard, which is why this is never attempted for one).
 // Phase 2's terms rewrite (lib/terms.ts's correctTranscriptSegments) is
 // applied uniformly before returning, regardless of which step produced the
 // segments — this is the one function every read site (routes/transcript.ts,
@@ -25,6 +33,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ResolvedRoots } from "../config.js";
+import { readAsrCache } from "./asr.js";
 import type { Project } from "./models.js";
 import { resolveVideo } from "./innertube.js";
 import { findSidecarTranscript, deriveYoutubeVideoId } from "./sidecar.js";
@@ -33,7 +42,7 @@ import { correctTranscriptSegments } from "./terms.js";
 import { loadTranscriptFromText, type TranscriptSegment } from "./transcripts.js";
 import { resolveTranscriptPath } from "./transcriptResolve.js";
 
-export type TranscriptSource = "pipeline" | "sidecar" | "youtube";
+export type TranscriptSource = "pipeline" | "sidecar" | "youtube" | "asr";
 
 export interface EffectiveTranscriptResult {
   segments: TranscriptSegment[];
@@ -190,6 +199,16 @@ export async function resolveEffectiveTranscript(
     }
   }
 
-  // Step 4 is Phase 11's ASR slot — nothing hit.
+  // Step 4: Phase 11 "Bring-your-own local ASR adapters" — a prior
+  // transcribe job's cached output (see this module's header comment).
+  if (project.source.type === "local") {
+    const cached = await readAsrCache(dataDir, project.source.path);
+    if (cached) {
+      const corrected = await correctTranscriptSegments(dataDir, project.id, cached, project.domain);
+      return { segments: corrected, source: "asr", transcribable: false };
+    }
+  }
+
+  // Nothing in the chain resolved.
   return { segments: [], source: null, transcribable: true };
 }

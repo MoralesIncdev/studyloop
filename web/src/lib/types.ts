@@ -136,8 +136,8 @@ export interface TranscriptSegment {
   text: string;
 }
 
-/** Phase 10 "Transcript source chain": absent means "pipeline" (backward compat with responses from before this phase). */
-export type TranscriptSource = "pipeline" | "sidecar" | "youtube";
+/** Phase 10 "Transcript source chain": absent means "pipeline" (backward compat with responses from before this phase). Phase 11 adds "asr" — a prior POST /api/projects/:id/transcribe job's cached output. */
+export type TranscriptSource = "pipeline" | "sidecar" | "youtube" | "asr";
 
 export interface TranscriptResponse {
   segments: TranscriptSegment[];
@@ -239,6 +239,31 @@ export const LLM_PROVIDERS: Record<LlmProviderId, { label: string; keyPlaceholde
 
 export const LLM_PROVIDER_IDS = Object.keys(LLM_PROVIDERS) as LlmProviderId[];
 
+// --- Phase 11 "Bring-your-own local ASR adapters" (design/EXECUTION-PLAN-post-review-v1.md) ---
+// Mirrors server/src/config.ts's AsrModeSchema/AsrConfigSchema/PublicAsrConfig.
+
+export type AsrMode = "off" | "command" | "endpoint";
+
+/** GET /api/config's redacted `asr` shape — `apiKey` never travels back over the wire, only `apiKeySet`. */
+export interface AsrConfig {
+  mode: AsrMode;
+  command: string | null;
+  endpoint: string | null;
+  apiKeySet: boolean;
+  model: string | null;
+  language: string | null;
+}
+
+/** PUT /api/config's `asr` patch shape — the only place the plaintext ASR key travels. Omit `apiKey` entirely to keep whatever's already saved (same "leave blank to keep" convention as the top-level provider `…ApiKey` fields). */
+export interface AsrConfigPatch {
+  mode?: AsrMode;
+  command?: string | null;
+  endpoint?: string | null;
+  apiKey?: string | null;
+  model?: string | null;
+  language?: string | null;
+}
+
 /** GET/PUT /api/config response shape — the server never echoes actual keys back, only per-provider `…ApiKeySet` booleans. */
 export interface StudyLoopConfig {
   dataDir: string;
@@ -262,6 +287,8 @@ export interface StudyLoopConfig {
   shareHandle: string;
   /** V3-C C1: Concept Continuity scorer weights (hot-reloadable via PUT /api/config). */
   continuityWeights: ContinuityWeights;
+  /** Phase 11 "Bring-your-own local ASR adapters". */
+  asr: AsrConfig;
 }
 
 /** True when the selected provider has (or plausibly has, for OAuth) credentials — the client-side gate before Analyze/Improve calls. */
@@ -304,6 +331,8 @@ export interface StudyLoopConfigPatch {
   analysisModel?: string | null;
   shareHandle?: string;
   continuityWeights?: ContinuityWeights;
+  /** Phase 11 "Bring-your-own local ASR adapters" — sent as a whole object; see AsrConfigPatch's "leave blank to keep" note for `apiKey`. */
+  asr?: AsrConfigPatch;
 }
 
 // --- V2-C: Analysis engine (SPEC "Analysis engine ('pearls & concept breakdown')") ---
@@ -525,6 +554,29 @@ export type AnalyzeStatus =
   | { state: "running"; pct: number }
   | { state: "done" }
   | { state: "error"; message: string };
+
+// --- Phase 11 "Bring-your-own local ASR adapters" (design/EXECUTION-PLAN-post-review-v1.md) ---
+// Mirrors server/src/lib/asrJobs.ts's AsrJobStatusView.
+
+/** GET (and POST's 202 body) /api/projects/:id/transcribe — one flat status shape rather than a discriminated union, since every field beyond `state` is optional and the server already resolves elapsed/started/finished once per request. */
+export interface TranscribeStatus {
+  state: "idle" | "queued" | "running" | "done" | "failed";
+  startedAt?: string;
+  finishedAt?: string;
+  elapsedMs?: number;
+  message?: string;
+}
+
+/** POST /api/projects/:id/transcribe's 200 (idempotent, already-cached) response — SPEC: "never re-run when cached". */
+export interface TranscribePostResponse extends TranscribeStatus {
+  cached?: boolean;
+}
+
+/** DELETE /api/projects/:id/transcribe response. */
+export interface CancelTranscribeResponse {
+  ok: true;
+  cancelled: boolean;
+}
 
 // --- V2-C / V3-C C5: Heatmap + shareable analysis (SPEC) ---
 
