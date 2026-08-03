@@ -100,7 +100,22 @@ export function TestPane({ frameRef }: Props): JSX.Element | null {
         <>
           <p className={styles.prompt}>{active.unit.label}</p>
           <div className={`${styles.sealed} ${revealed ? styles.revealed : ""}`}>
-            <p className={styles.answer}>{entry?.userBody?.trim() || active.unit.body}</p>
+            {active.unit.type === "CLUSTER" && active.unit.members && active.unit.members.length > 0 ? (
+              // Phase 4 "Cluster unit type": one attempt/reveal for the
+              // whole cluster (same `entry`/attestation as any other unit —
+              // unchanged), but every member's body seals/reveals together
+              // via the existing `.sealed .answer` blur rule below, since
+              // each member reuses that same `.answer` class.
+              <ul className={styles.memberList}>
+                {active.unit.members.map((m, i) => (
+                  <li key={i} className={styles.answer}>
+                    <strong>{m.label}:</strong> {m.body}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className={styles.answer}>{entry?.userBody?.trim() || active.unit.body}</p>
+            )}
             <span className={styles.sealLabel}>Sealed · attempt first</span>
           </div>
           {attempting && !revealed && (

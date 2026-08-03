@@ -11,6 +11,7 @@ import { Icon } from "../components/icons";
 import { api } from "../lib/api";
 import { formatTimestamp } from "../lib/time";
 import { lapseTier } from "../lib/lapseTier";
+import { FRONT_DOOR_ARRIVAL_NOTE_KEY } from "../lib/reviewFrontDoor";
 import { ReviewClipPlayer } from "./ReviewClipPlayer";
 import type { ReviewCard } from "../lib/types";
 import styles from "./ReviewView.module.css";
@@ -101,6 +102,17 @@ function CardFront({ card }: { card: ReviewCard }): JSX.Element {
       </>
     );
   }
+  // Phase 4 "Cluster unit type": one derived card per cluster member —
+  // cloze-style, the member's own label as the prompt, the cluster's parent
+  // label as context (mirrors the pearl branch's projectTitle line).
+  if (card.kind === "clusterMember") {
+    return (
+      <>
+        <p className={styles.pearlLabel}>{card.clusterLabel}</p>
+        <p className={styles.prompt}>{card.label}</p>
+      </>
+    );
+  }
   return (
     <>
       <div className={styles.media}>
@@ -123,12 +135,14 @@ function CardFront({ card }: { card: ReviewCard }): JSX.Element {
  * (state/store.ts improveCurrentReviewCard applies the same gate
  * startAnalyze uses). Unit cards have nothing to regenerate (their front is
  * a client-composed "your take" prompt, not an LLM transform), so this
- * never renders for them.
+ * never renders for them — same reasoning for a cluster-member card (Phase
+ * 4): its front/back are the member's own label/body, not an LLM transform,
+ * so routes/review.ts's transformCandidates never has an entry for it.
  */
 function ImproveCardButton({ card }: { card: ReviewCard }): JSX.Element | null {
   const improving = useStudyLoopStore((s) => s.reviewImproving);
   const improveCurrentReviewCard = useStudyLoopStore((s) => s.improveCurrentReviewCard);
-  if (card.kind === "unit") return null;
+  if (card.kind === "unit" || card.kind === "clusterMember") return null;
   return (
     <button type="button" className={styles.improveButton} disabled={improving} onClick={() => void improveCurrentReviewCard()}>
       {improving ? "Improving…" : "Improve this card"}
@@ -146,6 +160,17 @@ function CardBack({ card }: { card: ReviewCard }): JSX.Element {
       </>
     );
   }
+  // Phase 4: the member's own body is the sealed answer — no LLM transform,
+  // no "your take" (attestation lives on the parent cluster unit, not per
+  // member).
+  if (card.kind === "clusterMember") {
+    return (
+      <>
+        <p className={styles.backText}>{card.body}</p>
+        <LapseMediaAction card={card} />
+      </>
+    );
+  }
   const backText = card.kind === "bubble" ? (card.transformed?.back ?? card.text) : (card.transformed?.back ?? card.insight);
   return (
     <>
@@ -154,6 +179,44 @@ function CardBack({ card }: { card: ReviewCard }): JSX.Element {
       <LapseMediaAction card={card} />
       <ImproveCardButton card={card} />
     </>
+  );
+}
+
+/**
+ * Phase 7 "Front door" (SPEC move 3): a single neutral-phrasing line — "n
+ * due", no urgency theatrics (PEDAGOGY §5 forbids guilt mechanics) — shown
+ * only when this mount was reached via App.tsx's auto-redirect (sees
+ * lib/reviewFrontDoor.ts's one-shot sessionStorage note). Consumed exactly
+ * once: read on mount, then the key is removed, so navigating away and back
+ * into Review normally afterward shows nothing.
+ */
+function FrontDoorNote(): JSX.Element | null {
+  const [due, setDue] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.sessionStorage.getItem(FRONT_DOOR_ARRIVAL_NOTE_KEY);
+    if (raw === null) return;
+    window.sessionStorage.removeItem(FRONT_DOOR_ARRIVAL_NOTE_KEY);
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) setDue(parsed);
+  }, []);
+
+  if (due === null) return null;
+  return (
+    <p className={styles.frontDoorNote}>
+      {due} due
+    </p>
+  );
+}
+
+/** Phase 7 "CSV export": a plain download anchor (no fetch/blob juggling) — matches how videoStreamUrl/shotUrl are consumed elsewhere in this view. Always available, not gated on session state, since it exports the full due-or-tracked deck, not just the current session's cards. */
+function ExportCsvButton(): JSX.Element {
+  return (
+    <a className={styles.exportButton} href={api.reviewExportCsvUrl()} download>
+      <Icon name="download" size={16} />
+      Export CSV
+    </a>
   );
 }
 
@@ -167,7 +230,23 @@ function StreakLine(): JSX.Element | null {
   );
 }
 
-function CaughtUpState({ heading, body }: { heading: string; body: string }): JSX.Element {
+/**
+ * Phase 3 "Streak demotion" (PEDAGOGY §5 / SPEC B4): the day-streak may only
+ * ever appear as a footnote next to the mastery count at true session end —
+ * not on the "nothing due yet" / "all caught up" landing states, which are
+ * arrival states rather than a completed session's summary. `showStreak`
+ * defaults to false so callers must opt in explicitly for the one state that
+ * qualifies (see the `heading={`Concepts locked in: ...`}` call site below).
+ */
+function CaughtUpState({
+  heading,
+  body,
+  showStreak = false,
+}: {
+  heading: string;
+  body: string;
+  showStreak?: boolean;
+}): JSX.Element {
   const navigate = useStudyLoopStore((s) => s.navigate);
   return (
     <div className={styles.stateCard}>
@@ -176,7 +255,7 @@ function CaughtUpState({ heading, body }: { heading: string; body: string }): JS
       </span>
       <h2>{heading}</h2>
       <p>{body}</p>
-      <StreakLine />
+      {showStreak && <StreakLine />}
       <button type="button" className={styles.primaryButton} onClick={() => navigate({ view: "library" })}>
         Back to StudyLoop
       </button>
@@ -247,6 +326,9 @@ export function ReviewView(): JSX.Element {
         <Icon name="close" size={20} />
       </button>
 
+      <ExportCsvButton />
+      <FrontDoorNote />
+
       <div className={styles.content}>
         {(sessionLoading || (!session && !sessionLoading)) && (
           <div className={styles.skeletonCard} aria-hidden="true">
@@ -276,6 +358,7 @@ export function ReviewView(): JSX.Element {
           <CaughtUpState
             heading={`Concepts locked in: ${masteryCount ?? 0}`}
             body={`Reviewed ${session.clearedCount} card${session.clearedCount === 1 ? "" : "s"} this session.`}
+            showStreak
           />
         )}
 

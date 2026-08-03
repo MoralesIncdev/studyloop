@@ -144,9 +144,24 @@ function captionsPath(dataDir: string, id: string): string {
   return path.join(projectDir(dataDir, id), "captions.json");
 }
 
+/** Phase 2 "Terminology layer v1": `<project>/terms.json` — see lib/terms.ts for read/write + the rewrite pass itself. */
+export function termsJsonPath(dataDir: string, id: string): string {
+  return path.join(projectDir(dataDir, id), "terms.json");
+}
+
+/** Phase 2: `<project>/termCorrections.json` — the read-time rewrite's diff log (see lib/terms.ts recordTermCorrections). */
+export function termCorrectionsJsonPath(dataDir: string, id: string): string {
+  return path.join(projectDir(dataDir, id), "termCorrections.json");
+}
+
 /** V2-C: server-computed analysis (pearls/concepts/themes) — see lib/analysis.ts. */
 export function analysisJsonPath(dataDir: string, id: string): string {
   return path.join(projectDir(dataDir, id), "analysis.json");
+}
+
+/** Phase 6 "Slide-text channel": `<project>/slides.json` — see lib/slides.ts for read/write/extract. */
+export function slidesJsonPath(dataDir: string, id: string): string {
+  return path.join(projectDir(dataDir, id), "slides.json");
 }
 
 /** V2-C: imported `.studyloop.json` overlay bundles from other viewers — see lib/shareBundle.ts. */

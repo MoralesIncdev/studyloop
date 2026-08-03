@@ -33,6 +33,10 @@ export function TranscriptPane({ segments, loading }: Props): JSX.Element {
   const controller = useStudyLoopStore((s) => s.controller);
   const lastUserScrollAt = useStudyLoopStore((s) => s.lastUserScrollAt);
   const markUserScroll = useStudyLoopStore((s) => s.markUserScroll);
+  // Phase 2 "Terminology layer v1": read directly off the store (same
+  // pattern as controller/markUserScroll above) rather than prop-drilling
+  // through RightRail/StudyView for one small affordance.
+  const correctTranscriptTerm = useStudyLoopStore((s) => s.correctTranscriptTerm);
 
   const activeIndex = useMemo(() => activeSegmentIndex(segments, currentTime), [segments, currentTime]);
 
@@ -93,6 +97,27 @@ export function TranscriptPane({ segments, loading }: Props): JSX.Element {
     }
     markUserScroll();
   }, [markUserScroll]);
+
+  // Phase 2 "Terminology layer v1": double-click a word to correct it — a
+  // single click stays reserved for seek-to-segment (the row's existing,
+  // widely-relied-on click behavior), so this is additive rather than a
+  // reinterpretation of click. `stopPropagation` keeps the dblclick from
+  // also being treated as "click the row" by anything listening for
+  // bubbled clicks; the two individual clicks that make up the double-click
+  // still reach the row's own onClick first (harmless — they just re-seek
+  // to the same segment.start).
+  const handleCorrectWord = useCallback(
+    (rawWord: string) => {
+      const cleaned = rawWord.replace(/^[^\w]+|[^\w]+$/g, "");
+      if (!cleaned) return;
+      const correct = window.prompt(`Correct term for "${cleaned}":`, "");
+      if (correct === null) return; // cancelled
+      const trimmed = correct.trim();
+      if (!trimmed || trimmed === cleaned) return;
+      void correctTranscriptTerm(cleaned, trimmed);
+    },
+    [correctTranscriptTerm]
+  );
 
   const handleSearchKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -163,7 +188,25 @@ export function TranscriptPane({ segments, loading }: Props): JSX.Element {
                     onClick={() => controller?.seek(segment.start)}
                   >
                     <span className={styles.rowTime}>{formatTimestamp(segment.start)}</span>
-                    <span className={styles.rowText}>{segment.text}</span>
+                    <span className={styles.rowText}>
+                      {segment.text.split(/(\s+)/).map((token, i) =>
+                        token.trim() ? (
+                          <span
+                            key={i}
+                            className={styles.word}
+                            title="Double-click to correct this term"
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              handleCorrectWord(token);
+                            }}
+                          >
+                            {token}
+                          </span>
+                        ) : (
+                          <span key={i}>{token}</span>
+                        )
+                      )}
+                    </span>
                   </button>
                 );
               })}

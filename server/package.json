@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && mkdir -p dist/lib/glossary && cp src/lib/glossary/*.json dist/lib/glossary/",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
@@ -17,11 +17,13 @@
     "@fastify/multipart": "^8.3.0",
     "@fastify/static": "^7.0.4",
     "fastify": "^4.28.1",
+    "pdf-parse": "^1.1.1",
     "youtubei.js": "^17.2.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
+    "@types/pdf-parse": "^1.1.5",
     "tsx": "^4.16.2",
     "typescript": "^5.5.3",
     "vitest": "^1.6.0"

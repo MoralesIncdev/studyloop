@@ -104,6 +104,17 @@ export interface EvaluateUnitParams {
   unit: AnalysisUnit;
   nowIso: string;
   newId: () => string;
+  /**
+   * Phase 5 "Lens registry + clinical as first data-driven lens" (safety
+   * tier, item 5): unit types the ACTIVE LENS flags as safety-critical
+   * (server/lenses/clinical.json's `safetyTier`, e.g. DOSAGE/
+   * CONTRAINDICATION/LAB_VALUE) — extends the pre-existing "BOUNDARY or
+   * threshold never auto-merges" rule to cover these too. A lens only ever
+   * REFERENCES this set (its `safetyTier` field); the never-auto-merge
+   * behavior itself stays a code path here, not lens-authored data. Absent
+   * (or empty) preserves the exact pre-Phase-5 behavior.
+   */
+  safetyUnitTypes?: ReadonlySet<string>;
 }
 
 export type EvaluateUnitOutcome = "auto-merged" | "candidate" | "registered" | "already-known";
@@ -127,7 +138,7 @@ function isAlreadyKnown(registry: ConceptRegistryFile, projectId: string, unitId
  * (e.g. a re-analyze) is a no-op once it's already registered/candidated.
  */
 export function evaluateNewUnit(registry: ConceptRegistryFile, params: EvaluateUnitParams): EvaluateUnitResult {
-  const { projectId, domain, unit, nowIso, newId } = params;
+  const { projectId, domain, unit, nowIso, newId, safetyUnitTypes } = params;
 
   if (isAlreadyKnown(registry, projectId, unit.id)) {
     return { registry, outcome: "already-known" };
@@ -135,8 +146,10 @@ export function evaluateNewUnit(registry: ConceptRegistryFile, params: EvaluateU
 
   const fp = unitFingerprint(unit.label, unit.summary, domain);
   const incomingTokens = tokenize(`${unit.label} ${firstSentence(unit.summary)}`);
-  // SPEC D3: "never auto-merge BOUNDARY or threshold units" — even on an exact fingerprint match.
-  const autoMergeBlocked = unit.type === "BOUNDARY" || unit.threshold === true;
+  // SPEC D3: "never auto-merge BOUNDARY or threshold units" — even on an
+  // exact fingerprint match. Phase 5 "Safety tier" extends this to whichever
+  // unit types the active lens flags as safety-critical.
+  const autoMergeBlocked = unit.type === "BOUNDARY" || unit.threshold === true || Boolean(safetyUnitTypes?.has(unit.type));
 
   let best: { registryUnit: RegistryUnit; similarity: number; exact: boolean } | null = null;
   for (const candidate of Object.values(registry.units)) {
@@ -186,11 +199,13 @@ export function updateRegistryForProject(
   domain: Domain,
   units: readonly AnalysisUnit[],
   nowIso: string,
-  newId: () => string
+  newId: () => string,
+  /** Phase 5 "Safety tier" — see EvaluateUnitParams.safetyUnitTypes. */
+  safetyUnitTypes?: ReadonlySet<string>
 ): ConceptRegistryFile {
   let next = registry;
   for (const unit of units) {
-    next = evaluateNewUnit(next, { projectId, domain, unit, nowIso, newId }).registry;
+    next = evaluateNewUnit(next, { projectId, domain, unit, nowIso, newId, safetyUnitTypes }).registry;
   }
   return next;
 }

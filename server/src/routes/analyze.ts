@@ -14,6 +14,9 @@ import { AnalysisJobManager, evaluateAnalyzeGuard } from "../lib/analysisJobs.js
 import { missingCredentialMessage, resolveAnalysisModel, resolveProviderAuth } from "../lib/providers.js";
 import { updateRegistryForProject } from "../lib/conceptRegistry.js";
 import { readConceptRegistry, withConceptRegistryLock, writeConceptRegistry } from "../lib/conceptRegistryStore.js";
+import { getLens } from "../lib/lenses.js";
+import { correctTranscriptSegments } from "../lib/terms.js";
+import { readSlides } from "../lib/slides.js";
 import { resolveTranscriptPath } from "../lib/transcriptResolve.js";
 import { loadTranscriptFromText, type TranscriptSegment } from "../lib/transcripts.js";
 import { ProjectIdParamSchema } from "../lib/models.js";
@@ -29,7 +32,8 @@ async function loadProjectTranscriptSegments(
   dataDir: string,
   roots: ReturnType<typeof resolveRoots>,
   projectId: string,
-  transcript: { type: "file"; path: string } | { type: "none" }
+  transcript: { type: "file"; path: string } | { type: "none" },
+  domain: string | undefined
 ): Promise<TranscriptSegment[]> {
   if (transcript.type !== "file") return [];
   const resolved = await resolveTranscriptPath(dataDir, roots, transcript.path, projectId);
@@ -41,7 +45,12 @@ async function loadProjectTranscriptSegments(
     return [];
   }
   try {
-    return loadTranscriptFromText(resolved.filePath, raw).segments;
+    const segments = loadTranscriptFromText(resolved.filePath, raw).segments;
+    // Phase 2 "Terminology layer v1": corrections must apply before the
+    // transcript ever reaches the chunk/extract pipeline — this is the exact
+    // read site the four reviews called out ("ASR-mangled terms poison
+    // extraction"). The transcript file read above is untouched on disk.
+    return await correctTranscriptSegments(dataDir, projectId, segments, domain);
   } catch {
     return [];
   }
@@ -87,10 +96,15 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const roots = resolveRoots(config);
-    const segments = await loadProjectTranscriptSegments(dataDir, roots, params.data.id, project.transcript);
+    const segments = await loadProjectTranscriptSegments(dataDir, roots, params.data.id, project.transcript, project.domain);
     if (segments.length === 0) {
       return reply.status(400).send({ error: "This project has no transcript to analyze", code: "no_transcript" });
     }
+
+    // Phase 6 "Slide-text channel": absent (undefined pages) when no PDF has
+    // been attached — runAnalysisJobV3 treats that as "no slide context" for
+    // every chunk, so this is a no-op for every project predating this phase.
+    const slidesFile = await readSlides(dataDir, params.data.id);
 
     const model = resolveAnalysisModel(config);
     const projectId = params.data.id;
@@ -101,13 +115,14 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
     // its own in-memory status as it goes, and writes analysis.json on success.
     void (async () => {
       try {
-        const client = resolveAnalysisClientV3(providerAuth);
+        const client = resolveAnalysisClientV3(providerAuth, dataDir);
         const analysis = await runAnalysisJobV3({
           segments,
           model,
           client,
           source: fakeMode ? "stub" : "model",
           onProgress: (pct) => analysisJobs.progress(projectId, pct),
+          slidePages: slidesFile?.pages,
         });
         await writeJsonAtomic(analysisPath, analysis);
         // V3-B B1: "domain ... stored on the project (editable chip near the
@@ -131,13 +146,19 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
           try {
             await withConceptRegistryLock(async () => {
               const registry = await readConceptRegistry(dataDir);
+              const resolvedDomain = analysis.domain ?? "generic";
+              // Phase 5 "Safety tier": the active lens's safetyTier (e.g.
+              // clinical's DOSAGE/CONTRAINDICATION/LAB_VALUE) extends the
+              // never-auto-merge rule below, alongside BOUNDARY/threshold.
+              const safetyUnitTypes = new Set(getLens(dataDir, resolvedDomain)?.safetyTier ?? []);
               const next = updateRegistryForProject(
                 registry,
                 projectId,
-                analysis.domain ?? "generic",
+                resolvedDomain,
                 analysis.units!,
                 new Date().toISOString(),
-                newId
+                newId,
+                safetyUnitTypes
               );
               await writeConceptRegistry(dataDir, next);
             });

@@ -1,0 +1,12 @@
+{
+  "id": "music",
+  "label": "Music",
+  "routerDescription": "music theory, notation, ear training",
+  "unitTypeEmphasis": "Domain lens: music theory. Favor CLAIM units for theory statements and EXAMPLE units for the passages/sounds that illustrate them; use EXAMPLE_OF edges to link a specific example to the concept it demonstrates, and note notation-to-sound pairings in the body where audible. Where supported, fill in overlay.schema (the theory schema/pattern named), overlay.notation (how it would appear notated), and overlay.keyContext (the key/mode in play) — leave every other overlay field empty.",
+  "overlayFields": [
+    { "key": "schema", "label": "Schema", "hint": "the theory schema/pattern named" },
+    { "key": "notation", "label": "Notation", "hint": "how it would appear notated" },
+    { "key": "keyContext", "label": "Key context", "hint": "the key/mode in play" }
+  ],
+  "questionStyle": "default"
+}

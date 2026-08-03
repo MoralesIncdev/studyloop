@@ -426,3 +426,13 @@
   text-transform: uppercase;
   color: var(--ice-dim);
 }
+
+/* Phase 3 "Restated vs claimed counts": quiet, neutral footnote under the
+   Attested stat — plain phrasing, no guilt styling, shown only when the two
+   numbers actually differ (see SessionCabinet.tsx). */
+.countSplit {
+  margin-top: 2px;
+  font-size: 8.5px;
+  font-weight: 400;
+  color: var(--ice-dim);
+}

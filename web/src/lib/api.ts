@@ -10,6 +10,8 @@ import type {
   ConceptProfile,
   ContinuityResponse,
   CreateProjectBody,
+  DeleteSlidesResponse,
+  GetSlidesResponse,
   HealthResponse,
   HeatmapResponse,
   LibraryResponse,
@@ -18,7 +20,10 @@ import type {
   MergeResolveAction,
   OverlayMeta,
   PatchProjectBody,
+  PatchTermsBody,
+  PatchTermsResponse,
   PearlReviewAddsResponse,
+  PostSlidesResponse,
   Project,
   RevealResponse,
   ReviewCardTransform,
@@ -29,6 +34,7 @@ import type {
   ShareBundle,
   StudyLoopConfig,
   StudyLoopConfigPatch,
+  TermsResponse,
   TranscriptResponse,
   YoutubeResolveResponse,
 } from "./types";
@@ -177,6 +183,8 @@ export const api = {
   getReviewQueue: () => request<ReviewQueueResponse>("/api/review/queue"),
   gradeReviewCard: (cardId: string, grade: ReviewGrade) =>
     request<ReviewQueueResponse>("/api/review/grade", { method: "POST", body: JSON.stringify({ cardId, grade }) }),
+  /** Phase 7 "CSV export": a plain URL (not a `request()` call) — the Review view links to this directly via an anchor's `download` attribute so the browser handles the file save, matching videoStreamUrl/shotUrl below. */
+  reviewExportCsvUrl: () => "/api/review/export.csv",
 
   // --- V3-B B2: attestation + reveal-gating ----------------------------------------
   getAttestations: (id: string) => request<AttestationsFile>(`/api/projects/${encodeURIComponent(id)}/attestations`),
@@ -206,6 +214,27 @@ export const api = {
       body: JSON.stringify({ action }),
     }),
   getMergedConcepts: (id: string) => request<MergedConceptsResponse>(`/api/projects/${encodeURIComponent(id)}/merged-concepts`),
+
+  // --- Phase 2: terminology corrections ---------------------------------------
+  getTerms: (id: string) => request<TermsResponse>(`/api/projects/${encodeURIComponent(id)}/terms`),
+  patchTerms: (id: string, body: PatchTermsBody) =>
+    request<PatchTermsResponse>(`/api/projects/${encodeURIComponent(id)}/terms`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  // --- Phase 6: slide-text channel (PDF) -------------------------------------------
+  getSlides: (id: string) => request<GetSlidesResponse>(`/api/projects/${encodeURIComponent(id)}/slides`),
+  uploadSlides: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    // `request()` only sets Content-Type itself for a string body — a
+    // FormData body is left alone so fetch sets the correct
+    // multipart/form-data boundary header on its own.
+    return request<PostSlidesResponse>(`/api/projects/${encodeURIComponent(id)}/slides`, { method: "POST", body: formData });
+  },
+  deleteSlides: (id: string) =>
+    request<DeleteSlidesResponse>(`/api/projects/${encodeURIComponent(id)}/slides`, { method: "DELETE" }),
 
   // --- V3-D D4: domain-routed card transformation — "improve this card" -----------
   improveReviewCard: (cardId: string) =>

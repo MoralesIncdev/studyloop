@@ -22,10 +22,13 @@ import { analyzeRoutes } from "./routes/analyze.js";
 import { heatmapRoutes } from "./routes/heatmap.js";
 import { shareRoutes } from "./routes/share.js";
 import { reviewRoutes } from "./routes/review.js";
+import { reviewExportRoutes } from "./routes/reviewExport.js";
 import { attestationRoutes } from "./routes/attestation.js";
 import { continuityRoutes } from "./routes/continuity.js";
 import { pearlReviewRoutes } from "./routes/pearlReview.js";
 import { registryRoutes } from "./routes/registry.js";
+import { termsRoutes } from "./routes/terms.js";
+import { slidesRoutes } from "./routes/slides.js";
 import { getHealth } from "./lib/health.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -81,10 +84,15 @@ async function main(): Promise<void> {
   await app.register(heatmapRoutes);
   await app.register(shareRoutes);
   await app.register(reviewRoutes);
+  await app.register(reviewExportRoutes);
   await app.register(attestationRoutes);
   await app.register(continuityRoutes);
   await app.register(pearlReviewRoutes);
   await app.register(registryRoutes);
+  await app.register(termsRoutes);
+  // Phase 6 "Slide-text channel": relies on the multipart plugin registered
+  // above (alongside routes/share.ts's import-analysis) for its PDF upload.
+  await app.register(slidesRoutes);
 
   // Out-of-box polish: lets the web app disable screenshot controls with a
   // clear tooltip instead of a failed request when ffmpeg/yt-dlp aren't on

@@ -24,8 +24,16 @@ export type TranscriptRef = { type: "file"; path: string } | { type: "none" };
 
 export type ConceptProfile = "bjj-curriculum" | "headings";
 
-/** V3-B B1: router-classified (then user-editable) subject-matter domain — mirrors server/src/lib/models.ts DomainSchema. */
-export type Domain = "biology" | "history" | "music" | "physical_skill" | "generic";
+/**
+ * V3-B B1: router-classified (then user-editable) subject-matter domain —
+ * mirrors server/src/lib/models.ts DomainSchema. Phase 5 "Lens registry +
+ * clinical as first data-driven lens" (AMENDED spec): the server's
+ * DomainSchema is a plain validated string now (lenses are data files, see
+ * server/src/lib/lenses.ts), not a closed enum — widened to `string` here
+ * for the same reason (any lens id is valid, including a future
+ * user-authored/generated one), keeping the shipped ids as inline docs.
+ */
+export type Domain = "biology" | "history" | "music" | "physical_skill" | "generic" | "clinical" | (string & {});
 
 export interface ConceptDocRef {
   path?: string;
@@ -296,12 +304,46 @@ export interface AnalysisTheme {
 
 // --- V3-B B1: typed spine (units/edges) — see PEDAGOGY.md §2 ---------------
 
-export type UnitType = "CLAIM" | "MECHANISM" | "PROCEDURE" | "EXAMPLE" | "BOUNDARY";
+/**
+ * Phase 4 "Cluster unit type" (design/EXECUTION-PLAN-post-review-v1.md) adds
+ * "CLUSTER" — see AnalysisUnit's `members` field below. Phase 5 "Lens
+ * registry + clinical as first data-driven lens" adds DOSAGE/
+ * CONTRAINDICATION/LAB_VALUE/PRIORITIZATION — spine-level (usable by any
+ * lens, not clinical-exclusive); DOSAGE/CONTRAINDICATION/LAB_VALUE are also
+ * the clinical lens's `safetyTier` (see lib/safetyTier.ts).
+ */
+export type UnitType =
+  | "CLAIM"
+  | "MECHANISM"
+  | "PROCEDURE"
+  | "EXAMPLE"
+  | "BOUNDARY"
+  | "CLUSTER"
+  | "DOSAGE"
+  | "CONTRAINDICATION"
+  | "LAB_VALUE"
+  | "PRIORITIZATION";
 export type EdgeType = "REQUIRES" | "PART_OF" | "EXAMPLE_OF" | "PROCEDURE_STEP";
+
+/**
+ * Phase 6 "Slide-text channel, smallest slice (PDF)"
+ * (design/EXECUTION-PLAN-post-review-v1.md) — mirrors
+ * server/src/lib/analysis.ts's UnitEvidenceSchema. Absent means "transcript"
+ * (SPEC: "defaulting absent = transcript") — treat a missing `evidence`
+ * field the same as `"transcript"` wherever this is read.
+ */
+export type UnitEvidence = "transcript" | "slides" | "both";
 
 export interface UnitAnchor {
   t: number;
   quote: string;
+}
+
+/** Phase 4: one atomic fact within a CLUSTER unit's `members` array — mirrors server/src/lib/analysis.ts's ClusterMemberSchema. */
+export interface ClusterMember {
+  label: string;
+  body: string;
+  anchorSec?: number;
 }
 
 /**
@@ -329,6 +371,13 @@ export interface UnitOverlay {
   triggers?: string[];
   failureModes?: string[];
   drillPairing?: string;
+  // Phase 5 "Clinical lens" overlay fields (server/lenses/clinical.json's overlayFields).
+  drugClass?: string;
+  genericName?: string;
+  brandName?: string;
+  route?: string;
+  normalRange?: string;
+  nclexCategory?: string;
 }
 
 export interface AnalysisUnit {
@@ -343,6 +392,10 @@ export interface AnalysisUnit {
   overlay?: UnitOverlay;
   /** V3-D D2 "Threshold-concept tagging": true when this unit "unlocks later material" (PEDAGOGY). */
   threshold: boolean;
+  /** Phase 4: present iff `type === "CLUSTER"` — 2..12 atomic facts sharing this unit's parent concept. Absent on every other unit type. */
+  members?: ClusterMember[];
+  /** Phase 6 "Slide-text channel" provenance — absent means "transcript" (see UnitEvidence). */
+  evidence?: UnitEvidence;
 }
 
 export interface AnalysisEdge {
@@ -368,6 +421,71 @@ export interface Analysis {
   domain?: Domain;
   units?: AnalysisUnit[];
   edges?: AnalysisEdge[];
+  /**
+   * Phase 2 "Terminology layer v1": set when a term mapping changed since
+   * this analysis ran (PATCH /api/projects/:id/terms) — the web app's cue
+   * for a "re-analyze" note. `null`/absent means not stale. Phase 6
+   * "Slide-text channel" adds `"slides-changed"` — set the same way when a
+   * slide deck is attached/removed (POST or DELETE /api/projects/:id/slides).
+   */
+  staleReason?: "terms-changed" | "slides-changed" | null;
+}
+
+// --- Phase 2 "Terminology layer v1" (design/EXECUTION-PLAN-post-review-v1.md) ---
+// Mirrors server/src/lib/models.ts's TermEntrySchema/TermsFileSchema/PatchTermsBodySchema.
+
+/** One garbled->correct mapping entry — `source` distinguishes a learner's own correction from a domain-glossary default (merged in server-side for clinical projects, Phase 5). */
+export interface TermEntry {
+  correct: string;
+  source: "user" | "glossary";
+  createdAt: string;
+}
+
+/** GET /api/projects/:id/terms's `terms` field, and PATCH's request/response shape — `{[garbledText]: TermEntry}`. */
+export type TermsFile = Record<string, TermEntry>;
+
+export interface TermsResponse {
+  terms: TermsFile;
+}
+
+/** PATCH /api/projects/:id/terms body — `upsert` adds/edits mappings (always persisted as `source: "user"`), `remove` deletes by garbled key. */
+export interface PatchTermsBody {
+  upsert?: Record<string, string>;
+  remove?: string[];
+}
+
+export interface PatchTermsResponse {
+  terms: TermsFile;
+  /** True when this project already had an analysis that just got flagged stale (see Analysis.staleReason). */
+  analysisMarkedStale: boolean;
+}
+
+// --- Phase 6 "Slide-text channel, smallest slice (PDF)" (design/EXECUTION-PLAN-post-review-v1.md) ---
+// Mirrors server/src/lib/models.ts's SlidesMetaSchema/SlidesFileSchema.
+
+/** Upload metadata for a project's attached slide deck — mirrors server SlidesMeta. The web app never fetches the extracted page text itself, only this. */
+export interface SlidesMeta {
+  filename: string;
+  pageCount: number;
+  uploadedAt: string;
+}
+
+/** GET /api/projects/:id/slides — `meta` is `null` when no deck is attached. */
+export interface GetSlidesResponse {
+  meta: SlidesMeta | null;
+}
+
+/** POST /api/projects/:id/slides (multipart PDF upload) response. */
+export interface PostSlidesResponse {
+  meta: SlidesMeta;
+  /** True when this project already had an analysis that just got flagged stale (see Analysis.staleReason). */
+  analysisMarkedStale: boolean;
+}
+
+/** DELETE /api/projects/:id/slides response. */
+export interface DeleteSlidesResponse {
+  ok: true;
+  analysisMarkedStale: boolean;
 }
 
 export type AnalyzeStatus =
@@ -520,10 +638,10 @@ export interface ReviewPearlCard extends ReviewCardBase {
   importance: 1 | 2 | 3;
 }
 
-/** V3-B B4: "Attested units become reviewable as generation cards: front = 'your take' prompt for the unit, back = unit summary + user's own take." */
+/** V3-B B4: "Attested units become reviewable as generation cards: front = 'your take' prompt for the unit, back = unit summary + user's own take." A CLUSTER unit never produces this card kind — it fans out to ReviewClusterMemberCard instead (see below), so "CLUSTER" is deliberately excluded here. */
 export interface ReviewUnitCard extends ReviewCardBase {
   kind: "unit";
-  unitType: UnitType;
+  unitType: Exclude<UnitType, "CLUSTER">;
   label: string;
   summary: string;
   userTake: string | null;
@@ -531,7 +649,22 @@ export interface ReviewUnitCard extends ReviewCardBase {
   threshold: boolean;
 }
 
-export type ReviewCard = ReviewBubbleCard | ReviewPearlCard | ReviewUnitCard;
+/**
+ * Phase 4 "Cluster unit type": one member of a feedable CLUSTER unit, fanned
+ * out into its own review card — cloze-style, member `label` as the prompt,
+ * member `body` as the sealed answer. Mirrors server/src/lib/review.ts's
+ * ReviewClusterMemberCard. Card ids are `${unitId}::m${index}`.
+ */
+export interface ReviewClusterMemberCard extends ReviewCardBase {
+  kind: "clusterMember";
+  unitId: string;
+  memberIndex: number;
+  clusterLabel: string;
+  label: string;
+  body: string;
+}
+
+export type ReviewCard = ReviewBubbleCard | ReviewPearlCard | ReviewUnitCard | ReviewClusterMemberCard;
 
 export interface ReviewQueueCounts {
   due: number;

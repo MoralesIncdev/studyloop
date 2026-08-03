@@ -47,6 +47,48 @@
   transform: scale(.92);
 }
 
+/* Phase 7 "CSV export" — mirrors mediaActionButton's outlined-pill styling
+   (this is a link, not a button, so it needs its own class rather than
+   `composes: mediaActionButton` across an <a>/<button> element mismatch),
+   pinned opposite the exit control so both top-corner affordances read as a
+   pair. */
+.exportButton {
+  position: absolute;
+  top: 16px;
+  left: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+  font-size: var(--type-13);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.exportButton:hover {
+  background: var(--hover-overlay);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+/* Phase 7 "Front door" arrival note — neutral phrasing, neutral color (no
+   accent-red/urgency treatment): PEDAGOGY §5 forbids guilt mechanics, so
+   this reads as a plain fact ("n due"), not a nudge. */
+.frontDoorNote {
+  margin: 12px 0 0;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--type-13);
+}
+
 .content {
   flex: 1;
   display: flex;

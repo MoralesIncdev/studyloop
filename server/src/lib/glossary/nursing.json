@@ -1,0 +1,1633 @@
+[
+  {
+    "correct": "metoprolol",
+    "variants": [
+      "metro pro law",
+      "metra prolol"
+    ]
+  },
+  {
+    "correct": "lisinopril",
+    "variants": [
+      "lie sin o pril",
+      "lisa noprel"
+    ]
+  },
+  {
+    "correct": "atorvastatin",
+    "variants": [
+      "a tor vast a tin",
+      "atter vastatin"
+    ]
+  },
+  {
+    "correct": "levothyroxine",
+    "variants": [
+      "lee vo thy roxine",
+      "leva thyroxin"
+    ]
+  },
+  {
+    "correct": "hydrochlorothiazide",
+    "variants": [
+      "hydro chloro thigh a zide",
+      "hydrochlorathizide"
+    ]
+  },
+  {
+    "correct": "acetaminophen",
+    "variants": [
+      "a seat a min o fen",
+      "asetameinofin"
+    ]
+  },
+  {
+    "correct": "furosemide",
+    "variants": [
+      "fur o sem ide",
+      "frusemide"
+    ]
+  },
+  {
+    "correct": "amoxicillin",
+    "variants": [
+      "a mox i sill in",
+      "amoxycillin"
+    ]
+  },
+  {
+    "correct": "albuterol",
+    "variants": [
+      "al bu ter all",
+      "alberterol"
+    ]
+  },
+  {
+    "correct": "gabapentin",
+    "variants": [
+      "gaba pen tin",
+      "gabbapentin"
+    ]
+  },
+  {
+    "correct": "metformin",
+    "variants": [
+      "metf orm in"
+    ]
+  },
+  {
+    "correct": "Glucophage",
+    "variants": [
+      "gluc oph age"
+    ]
+  },
+  {
+    "correct": "warfarin",
+    "variants": [
+      "warf ar in"
+    ]
+  },
+  {
+    "correct": "Coumadin",
+    "variants": [
+      "coum ad in"
+    ]
+  },
+  {
+    "correct": "heparin",
+    "variants": [
+      "hep ar in"
+    ]
+  },
+  {
+    "correct": "insulin",
+    "variants": [
+      "ins ul in"
+    ]
+  },
+  {
+    "correct": "prednisone",
+    "variants": [
+      "predn is one"
+    ]
+  },
+  {
+    "correct": "prednisolone",
+    "variants": [
+      "predn is ol one"
+    ]
+  },
+  {
+    "correct": "methylprednisolone",
+    "variants": [
+      "meth ylpr edn is ol one"
+    ]
+  },
+  {
+    "correct": "hydrocortisone",
+    "variants": [
+      "hydr oc ort is one"
+    ]
+  },
+  {
+    "correct": "sertraline",
+    "variants": [
+      "sertr al ine",
+      "sertr al een"
+    ]
+  },
+  {
+    "correct": "Zoloft",
+    "variants": [
+      "zol oft"
+    ]
+  },
+  {
+    "correct": "escitalopram",
+    "variants": [
+      "esc it al opr am"
+    ]
+  },
+  {
+    "correct": "Lexapro",
+    "variants": [
+      "lex apro"
+    ]
+  },
+  {
+    "correct": "citalopram",
+    "variants": [
+      "cit al opr am"
+    ]
+  },
+  {
+    "correct": "fluoxetine",
+    "variants": [
+      "fluox et ine",
+      "fluoz et een"
+    ]
+  },
+  {
+    "correct": "Prozac",
+    "variants": [
+      "proz ac"
+    ]
+  },
+  {
+    "correct": "alprazolam",
+    "variants": [
+      "alpr az ol am"
+    ]
+  },
+  {
+    "correct": "lorazepam",
+    "variants": [
+      "lor az ep am"
+    ]
+  },
+  {
+    "correct": "Ativan",
+    "variants": [
+      "at iv an"
+    ]
+  },
+  {
+    "correct": "diazepam",
+    "variants": [
+      "diaz ep am"
+    ]
+  },
+  {
+    "correct": "Valium",
+    "variants": [
+      "val ium"
+    ]
+  },
+  {
+    "correct": "midazolam",
+    "variants": [
+      "mid az ol am"
+    ]
+  },
+  {
+    "correct": "tramadol",
+    "variants": [
+      "tram ad ol"
+    ]
+  },
+  {
+    "correct": "oxycodone",
+    "variants": [
+      "ox yc od one",
+      "oz yc od one"
+    ]
+  },
+  {
+    "correct": "OxyContin",
+    "variants": [
+      "ox yc ont in"
+    ]
+  },
+  {
+    "correct": "Percocet",
+    "variants": [
+      "perc oc et"
+    ]
+  },
+  {
+    "correct": "hydrocodone",
+    "variants": [
+      "hydr oc od one"
+    ]
+  },
+  {
+    "correct": "morphine",
+    "variants": [
+      "morph ine",
+      "morf een"
+    ]
+  },
+  {
+    "correct": "fentanyl",
+    "variants": [
+      "fent an yl"
+    ]
+  },
+  {
+    "correct": "naloxone",
+    "variants": [
+      "nal ox one",
+      "nal oz one"
+    ]
+  },
+  {
+    "correct": "epinephrine",
+    "variants": [
+      "ep in ephr ine",
+      "ep in efr een"
+    ]
+  },
+  {
+    "correct": "norepinephrine",
+    "variants": [
+      "nor ep in ephr ine",
+      "nor ep in efr een"
+    ]
+  },
+  {
+    "correct": "atropine",
+    "variants": [
+      "atr op ine",
+      "atr op een"
+    ]
+  },
+  {
+    "correct": "dopamine",
+    "variants": [
+      "dop am ine",
+      "dop am een"
+    ]
+  },
+  {
+    "correct": "dobutamine",
+    "variants": [
+      "dob ut am ine",
+      "dob ut am een"
+    ]
+  },
+  {
+    "correct": "digoxin",
+    "variants": [
+      "dig ox in",
+      "dig oz in"
+    ]
+  },
+  {
+    "correct": "amiodarone",
+    "variants": [
+      "am iod ar one"
+    ]
+  },
+  {
+    "correct": "adenosine",
+    "variants": [
+      "ad en os ine",
+      "ad en os een"
+    ]
+  },
+  {
+    "correct": "nitroglycerin",
+    "variants": [
+      "nitr ogl yc er in"
+    ]
+  },
+  {
+    "correct": "clopidogrel",
+    "variants": [
+      "clop id ogr el"
+    ]
+  },
+  {
+    "correct": "Plavix",
+    "variants": [
+      "plav ix"
+    ]
+  },
+  {
+    "correct": "enoxaparin",
+    "variants": [
+      "en ox ap ar in",
+      "en oz ap ar in"
+    ]
+  },
+  {
+    "correct": "vancomycin",
+    "variants": [
+      "vanc om yc in"
+    ]
+  },
+  {
+    "correct": "ceftriaxone",
+    "variants": [
+      "ceftr iax one",
+      "ceftr iaz one"
+    ]
+  },
+  {
+    "correct": "cefazolin",
+    "variants": [
+      "cef az ol in"
+    ]
+  },
+  {
+    "correct": "azithromycin",
+    "variants": [
+      "az ithr om yc in"
+    ]
+  },
+  {
+    "correct": "ciprofloxacin",
+    "variants": [
+      "cipr ofl ox ac in",
+      "cipr ofl oz ac in"
+    ]
+  },
+  {
+    "correct": "levofloxacin",
+    "variants": [
+      "lev ofl ox ac in",
+      "lev ofl oz ac in"
+    ]
+  },
+  {
+    "correct": "doxycycline",
+    "variants": [
+      "dox yc ycl ine",
+      "doz yc ycl een"
+    ]
+  },
+  {
+    "correct": "clindamycin",
+    "variants": [
+      "clind am yc in"
+    ]
+  },
+  {
+    "correct": "metronidazole",
+    "variants": [
+      "metr on id az ole"
+    ]
+  },
+  {
+    "correct": "phenytoin",
+    "variants": [
+      "phen yt oin",
+      "fen yt oin"
+    ]
+  },
+  {
+    "correct": "levetiracetam",
+    "variants": [
+      "lev et ir ac et am"
+    ]
+  },
+  {
+    "correct": "propofol",
+    "variants": [
+      "prop of ol"
+    ]
+  },
+  {
+    "correct": "succinylcholine",
+    "variants": [
+      "succ in ylch ol ine",
+      "succ in ylch ol een"
+    ]
+  },
+  {
+    "correct": "rocuronium",
+    "variants": [
+      "roc ur on ium"
+    ]
+  },
+  {
+    "correct": "vecuronium",
+    "variants": [
+      "vec ur on ium"
+    ]
+  },
+  {
+    "correct": "labetalol",
+    "variants": [
+      "lab et al ol"
+    ]
+  },
+  {
+    "correct": "hydralazine",
+    "variants": [
+      "hydr al az ine",
+      "hydr al az een"
+    ]
+  },
+  {
+    "correct": "verapamil",
+    "variants": [
+      "ver ap am il"
+    ]
+  },
+  {
+    "correct": "diltiazem",
+    "variants": [
+      "dilt iaz em"
+    ]
+  },
+  {
+    "correct": "metoclopramide",
+    "variants": [
+      "met ocl opr am ide"
+    ]
+  },
+  {
+    "correct": "Reglan",
+    "variants": [
+      "regl an"
+    ]
+  },
+  {
+    "correct": "ondansetron",
+    "variants": [
+      "ond ans etr on"
+    ]
+  },
+  {
+    "correct": "Zofran",
+    "variants": [
+      "zofr an"
+    ]
+  },
+  {
+    "correct": "diphenhydramine",
+    "variants": [
+      "diph enh ydr am ine",
+      "dif enh ydr am een"
+    ]
+  },
+  {
+    "correct": "Benadryl",
+    "variants": [
+      "ben adr yl"
+    ]
+  },
+  {
+    "correct": "loratadine",
+    "variants": [
+      "lor at ad ine",
+      "lor at ad een"
+    ]
+  },
+  {
+    "correct": "Claritin",
+    "variants": [
+      "clar it in"
+    ]
+  },
+  {
+    "correct": "famotidine",
+    "variants": [
+      "fam ot id ine",
+      "fam ot id een"
+    ]
+  },
+  {
+    "correct": "Pepcid",
+    "variants": [
+      "pepc id"
+    ]
+  },
+  {
+    "correct": "pantoprazole",
+    "variants": [
+      "pant opr az ole"
+    ]
+  },
+  {
+    "correct": "Protonix",
+    "variants": [
+      "prot on ix"
+    ]
+  },
+  {
+    "correct": "omeprazole",
+    "variants": [
+      "om epr az ole"
+    ]
+  },
+  {
+    "correct": "Prilosec",
+    "variants": [
+      "pril os ec"
+    ]
+  },
+  {
+    "correct": "spironolactone",
+    "variants": [
+      "spir on ol act one"
+    ]
+  },
+  {
+    "correct": "Aldactone",
+    "variants": [
+      "ald act one"
+    ]
+  },
+  {
+    "correct": "losartan",
+    "variants": [
+      "los art an"
+    ]
+  },
+  {
+    "correct": "Cozaar",
+    "variants": [
+      "coz aar"
+    ]
+  },
+  {
+    "correct": "amlodipine",
+    "variants": [
+      "aml od ip ine",
+      "aml od ip een"
+    ]
+  },
+  {
+    "correct": "Norvasc",
+    "variants": [
+      "norv asc"
+    ]
+  },
+  {
+    "correct": "simvastatin",
+    "variants": [
+      "simv ast at in"
+    ]
+  },
+  {
+    "correct": "rosuvastatin",
+    "variants": [
+      "ros uv ast at in"
+    ]
+  },
+  {
+    "correct": "Crestor",
+    "variants": [
+      "crest or"
+    ]
+  },
+  {
+    "correct": "glipizide",
+    "variants": [
+      "glip iz ide"
+    ]
+  },
+  {
+    "correct": "glyburide",
+    "variants": [
+      "glyb ur ide"
+    ]
+  },
+  {
+    "correct": "insulin glargine",
+    "variants": [
+      "ins ul in glarg ine",
+      "ins ul in glarg een"
+    ]
+  },
+  {
+    "correct": "Lantus",
+    "variants": [
+      "lant us"
+    ]
+  },
+  {
+    "correct": "insulin lispro",
+    "variants": [
+      "ins ul in lispro"
+    ]
+  },
+  {
+    "correct": "Humalog",
+    "variants": [
+      "hum al og"
+    ]
+  },
+  {
+    "correct": "docusate",
+    "variants": [
+      "doc us ate"
+    ]
+  },
+  {
+    "correct": "Colace",
+    "variants": [
+      "col ace"
+    ]
+  },
+  {
+    "correct": "bisacodyl",
+    "variants": [
+      "bis ac od yl"
+    ]
+  },
+  {
+    "correct": "Dulcolax",
+    "variants": [
+      "dulc ol ax"
+    ]
+  },
+  {
+    "correct": "lactulose",
+    "variants": [
+      "lact ul ose"
+    ]
+  },
+  {
+    "correct": "polyethylene glycol",
+    "variants": [
+      "pol yeth yl ene glyc ol"
+    ]
+  },
+  {
+    "correct": "Miralax",
+    "variants": [
+      "mir al ax"
+    ]
+  },
+  {
+    "correct": "ferrous sulfate",
+    "variants": [
+      "ferr ous sulf ate"
+    ]
+  },
+  {
+    "correct": "phytonadione",
+    "variants": [
+      "phyt on ad ione",
+      "fyt on ad ione"
+    ]
+  },
+  {
+    "correct": "protamine sulfate",
+    "variants": [
+      "prot am ine sulf ate",
+      "prot am een sulf ate"
+    ]
+  },
+  {
+    "correct": "potassium chloride",
+    "variants": [
+      "pot ass ium chlor ide"
+    ]
+  },
+  {
+    "correct": "magnesium sulfate",
+    "variants": [
+      "magn es ium sulf ate"
+    ]
+  },
+  {
+    "correct": "calcium gluconate",
+    "variants": [
+      "calc ium gluc on ate"
+    ]
+  },
+  {
+    "correct": "sodium bicarbonate",
+    "variants": [
+      "sod ium bic arb on ate"
+    ]
+  },
+  {
+    "correct": "dextrose",
+    "variants": [
+      "dextr ose",
+      "deztr ose"
+    ]
+  },
+  {
+    "correct": "clonazepam",
+    "variants": [
+      "clon az ep am"
+    ]
+  },
+  {
+    "correct": "buspirone",
+    "variants": [
+      "busp ir one"
+    ]
+  },
+  {
+    "correct": "haloperidol",
+    "variants": [
+      "hal op er id ol"
+    ]
+  },
+  {
+    "correct": "Haldol",
+    "variants": [
+      "hald ol"
+    ]
+  },
+  {
+    "correct": "risperidone",
+    "variants": [
+      "risp er id one"
+    ]
+  },
+  {
+    "correct": "Risperdal",
+    "variants": [
+      "risp erd al"
+    ]
+  },
+  {
+    "correct": "quetiapine",
+    "variants": [
+      "quet iap ine",
+      "kwet iap een"
+    ]
+  },
+  {
+    "correct": "Seroquel",
+    "variants": [
+      "ser oq uel"
+    ]
+  },
+  {
+    "correct": "olanzapine",
+    "variants": [
+      "ol anz ap ine",
+      "ol anz ap een"
+    ]
+  },
+  {
+    "correct": "Zyprexa",
+    "variants": [
+      "zypr exa"
+    ]
+  },
+  {
+    "correct": "lithium",
+    "variants": [
+      "lith ium"
+    ]
+  },
+  {
+    "correct": "valproic acid",
+    "variants": [
+      "valpr oic acid"
+    ]
+  },
+  {
+    "correct": "carbamazepine",
+    "variants": [
+      "carb am az ep ine",
+      "carb am az ep een"
+    ]
+  },
+  {
+    "correct": "topiramate",
+    "variants": [
+      "top ir am ate"
+    ]
+  },
+  {
+    "correct": "duloxetine",
+    "variants": [
+      "dul ox et ine",
+      "dul oz et een"
+    ]
+  },
+  {
+    "correct": "Cymbalta",
+    "variants": [
+      "cymb alta"
+    ]
+  },
+  {
+    "correct": "venlafaxine",
+    "variants": [
+      "venl af ax ine",
+      "venl af az een"
+    ]
+  },
+  {
+    "correct": "Effexor",
+    "variants": [
+      "eff ex or"
+    ]
+  },
+  {
+    "correct": "bupropion",
+    "variants": [
+      "bupr op ion"
+    ]
+  },
+  {
+    "correct": "Wellbutrin",
+    "variants": [
+      "wellb utr in"
+    ]
+  },
+  {
+    "correct": "trazodone",
+    "variants": [
+      "traz od one"
+    ]
+  },
+  {
+    "correct": "Desyrel",
+    "variants": [
+      "des yr el"
+    ]
+  },
+  {
+    "correct": "mirtazapine",
+    "variants": [
+      "mirt az ap ine",
+      "mirt az ap een"
+    ]
+  },
+  {
+    "correct": "Remeron",
+    "variants": [
+      "rem er on"
+    ]
+  },
+  {
+    "correct": "tamsulosin",
+    "variants": [
+      "tams ul os in"
+    ]
+  },
+  {
+    "correct": "Flomax",
+    "variants": [
+      "flom ax"
+    ]
+  },
+  {
+    "correct": "finasteride",
+    "variants": [
+      "fin ast er ide"
+    ]
+  },
+  {
+    "correct": "Proscar",
+    "variants": [
+      "prosc ar"
+    ]
+  },
+  {
+    "correct": "sildenafil",
+    "variants": [
+      "sild en af il"
+    ]
+  },
+  {
+    "correct": "allopurinol",
+    "variants": [
+      "all op ur in ol"
+    ]
+  },
+  {
+    "correct": "Zyloprim",
+    "variants": [
+      "zyl opr im"
+    ]
+  },
+  {
+    "correct": "colchicine",
+    "variants": [
+      "colch ic ine",
+      "colch ic een"
+    ]
+  },
+  {
+    "correct": "methotrexate",
+    "variants": [
+      "meth otr ex ate",
+      "meth otr ez ate"
+    ]
+  },
+  {
+    "correct": "Trexall",
+    "variants": [
+      "trex all"
+    ]
+  },
+  {
+    "correct": "azathioprine",
+    "variants": [
+      "az ath iopr ine",
+      "az ath iopr een"
+    ]
+  },
+  {
+    "correct": "cyclosporine",
+    "variants": [
+      "cycl osp or ine",
+      "cycl osp or een"
+    ]
+  },
+  {
+    "correct": "tacrolimus",
+    "variants": [
+      "tacr ol im us"
+    ]
+  },
+  {
+    "correct": "Prograf",
+    "variants": [
+      "progr af"
+    ]
+  },
+  {
+    "correct": "mycophenolate",
+    "variants": [
+      "myc oph en ol ate",
+      "myc of en ol ate"
+    ]
+  },
+  {
+    "correct": "budesonide",
+    "variants": [
+      "bud es on ide"
+    ]
+  },
+  {
+    "correct": "Pulmicort",
+    "variants": [
+      "pulm ic ort"
+    ]
+  },
+  {
+    "correct": "fluticasone",
+    "variants": [
+      "flut ic as one"
+    ]
+  },
+  {
+    "correct": "Flonase",
+    "variants": [
+      "flon ase"
+    ]
+  },
+  {
+    "correct": "Flovent",
+    "variants": [
+      "flov ent"
+    ]
+  },
+  {
+    "correct": "montelukast",
+    "variants": [
+      "mont el uk ast"
+    ]
+  },
+  {
+    "correct": "Singulair",
+    "variants": [
+      "sing ul air"
+    ]
+  },
+  {
+    "correct": "ipratropium",
+    "variants": [
+      "ipr atr op ium"
+    ]
+  },
+  {
+    "correct": "Atrovent",
+    "variants": [
+      "atr ov ent"
+    ]
+  },
+  {
+    "correct": "tiotropium",
+    "variants": [
+      "tiotr op ium"
+    ]
+  },
+  {
+    "correct": "Spiriva",
+    "variants": [
+      "spir iva"
+    ]
+  },
+  {
+    "correct": "theophylline",
+    "variants": [
+      "theoph yll ine",
+      "theof yll een"
+    ]
+  },
+  {
+    "correct": "complete blood count",
+    "variants": [
+      "CBC",
+      "see bee see"
+    ]
+  },
+  {
+    "correct": "basic metabolic panel",
+    "variants": [
+      "BMP",
+      "bee em pee"
+    ]
+  },
+  {
+    "correct": "comprehensive metabolic panel",
+    "variants": [
+      "CMP",
+      "see em pee"
+    ]
+  },
+  {
+    "correct": "blood urea nitrogen",
+    "variants": [
+      "BUN",
+      "bee you en"
+    ]
+  },
+  {
+    "correct": "creatinine",
+    "variants": [
+      "cre at a nine",
+      "creatanin"
+    ]
+  },
+  {
+    "correct": "glomerular filtration rate",
+    "variants": [
+      "GFR",
+      "gee ef are"
+    ]
+  },
+  {
+    "correct": "international normalized ratio",
+    "variants": [
+      "INR",
+      "eye en are"
+    ]
+  },
+  {
+    "correct": "prothrombin time",
+    "variants": [
+      "PT",
+      "pro thrombin"
+    ]
+  },
+  {
+    "correct": "partial thromboplastin time",
+    "variants": [
+      "PTT",
+      "partial throm bo plastin time"
+    ]
+  },
+  {
+    "correct": "hemoglobin a1c",
+    "variants": [
+      "A1C",
+      "hemoglobin ay one see"
+    ]
+  },
+  {
+    "correct": "troponin",
+    "variants": [
+      "tro po nin",
+      "troponen"
+    ]
+  },
+  {
+    "correct": "brain natriuretic peptide",
+    "variants": [
+      "BNP",
+      "bee en pee"
+    ]
+  },
+  {
+    "correct": "arterial blood gas",
+    "variants": [
+      "ABG",
+      "ay bee gee"
+    ]
+  },
+  {
+    "correct": "lipid panel",
+    "variants": [
+      "lipid pannel"
+    ]
+  },
+  {
+    "correct": "liver function tests",
+    "variants": [
+      "LFTs",
+      "el eff tees"
+    ]
+  },
+  {
+    "correct": "alanine aminotransferase",
+    "variants": [
+      "ALT",
+      "alanine amino transferase"
+    ]
+  },
+  {
+    "correct": "aspartate aminotransferase",
+    "variants": [
+      "AST",
+      "aspartate amino transferase"
+    ]
+  },
+  {
+    "correct": "bilirubin",
+    "variants": [
+      "bili rue bin",
+      "billyrubin"
+    ]
+  },
+  {
+    "correct": "albumin",
+    "variants": [
+      "al byoo min",
+      "albyumin"
+    ]
+  },
+  {
+    "correct": "sodium",
+    "variants": [
+      "so dee um",
+      "sodeum"
+    ]
+  },
+  {
+    "correct": "potassium",
+    "variants": [
+      "po tass ee um",
+      "potasium"
+    ]
+  },
+  {
+    "correct": "chloride",
+    "variants": [
+      "klor ide",
+      "chlorid"
+    ]
+  },
+  {
+    "correct": "bicarbonate",
+    "variants": [
+      "bi car bon ate",
+      "bicarbanate"
+    ]
+  },
+  {
+    "correct": "calcium",
+    "variants": [
+      "kal see um",
+      "calceum"
+    ]
+  },
+  {
+    "correct": "magnesium",
+    "variants": [
+      "mag knee zee um",
+      "magneseum"
+    ]
+  },
+  {
+    "correct": "phosphate",
+    "variants": [
+      "fos fate",
+      "fosfate"
+    ]
+  },
+  {
+    "correct": "glucose",
+    "variants": [
+      "gloo kose",
+      "glukose"
+    ]
+  },
+  {
+    "correct": "hemoglobin",
+    "variants": [
+      "hee mo glow bin",
+      "hemaglobin"
+    ]
+  },
+  {
+    "correct": "hematocrit",
+    "variants": [
+      "hee mat o krit",
+      "hematacrit"
+    ]
+  },
+  {
+    "correct": "platelet count",
+    "variants": [
+      "plate let count"
+    ]
+  },
+  {
+    "correct": "white blood cell count",
+    "variants": [
+      "WBC",
+      "double you bee see"
+    ]
+  },
+  {
+    "correct": "erythrocyte sedimentation rate",
+    "variants": [
+      "ESR",
+      "ee es are"
+    ]
+  },
+  {
+    "correct": "c-reactive protein",
+    "variants": [
+      "CRP",
+      "see are pee"
+    ]
+  },
+  {
+    "correct": "blood culture",
+    "variants": [
+      "blood culcher"
+    ]
+  },
+  {
+    "correct": "urinalysis",
+    "variants": [
+      "urine analysis",
+      "you're in analysis"
+    ]
+  },
+  {
+    "correct": "d-dimer",
+    "variants": [
+      "dee dimer",
+      "d dimmer"
+    ]
+  },
+  {
+    "correct": "lactate",
+    "variants": [
+      "lack tate",
+      "lactic"
+    ]
+  },
+  {
+    "correct": "ammonia level",
+    "variants": [
+      "a moan ya level"
+    ]
+  },
+  {
+    "correct": "thyroid stimulating hormone",
+    "variants": [
+      "TSH",
+      "tee ess aitch"
+    ]
+  },
+  {
+    "correct": "cortisol",
+    "variants": [
+      "kor ti soul",
+      "cortasol"
+    ]
+  },
+  {
+    "correct": "prostate specific antigen",
+    "variants": [
+      "PSA",
+      "pee es ay"
+    ]
+  },
+  {
+    "correct": "human chorionic gonadotropin",
+    "variants": [
+      "HCG",
+      "aitch see gee"
+    ]
+  },
+  {
+    "correct": "occult blood",
+    "variants": [
+      "a cult blood",
+      "oh cult blood"
+    ]
+  },
+  {
+    "correct": "sputum culture",
+    "variants": [
+      "spu tum culture"
+    ]
+  },
+  {
+    "correct": "type and screen",
+    "variants": [
+      "type in screen"
+    ]
+  },
+  {
+    "correct": "by mouth",
+    "variants": [
+      "PO",
+      "pee oh"
+    ]
+  },
+  {
+    "correct": "intravenous",
+    "variants": [
+      "IV",
+      "eye vee",
+      "in tra vee nus"
+    ]
+  },
+  {
+    "correct": "intramuscular",
+    "variants": [
+      "IM",
+      "eye em",
+      "in tra muscular"
+    ]
+  },
+  {
+    "correct": "subcutaneous",
+    "variants": [
+      "subQ",
+      "sub cutaneous",
+      "sub kyu tainious"
+    ]
+  },
+  {
+    "correct": "sublingual",
+    "variants": [
+      "SL",
+      "ess el",
+      "sub lingwal"
+    ]
+  },
+  {
+    "correct": "per rectum",
+    "variants": [
+      "PR",
+      "pee are"
+    ]
+  },
+  {
+    "correct": "nasogastric tube",
+    "variants": [
+      "NG tube",
+      "en gee tube"
+    ]
+  },
+  {
+    "correct": "percutaneous endoscopic gastrostomy",
+    "variants": [
+      "PEG tube",
+      "peg toob"
+    ]
+  },
+  {
+    "correct": "every four hours",
+    "variants": [
+      "q4h",
+      "cue four h"
+    ]
+  },
+  {
+    "correct": "every six hours",
+    "variants": [
+      "q6h",
+      "cue six h"
+    ]
+  },
+  {
+    "correct": "every eight hours",
+    "variants": [
+      "q8h",
+      "cue eight h"
+    ]
+  },
+  {
+    "correct": "twice daily",
+    "variants": [
+      "BID",
+      "bee eye dee"
+    ]
+  },
+  {
+    "correct": "three times daily",
+    "variants": [
+      "TID",
+      "tee eye dee"
+    ]
+  },
+  {
+    "correct": "four times daily",
+    "variants": [
+      "QID",
+      "cue eye dee"
+    ]
+  },
+  {
+    "correct": "once daily",
+    "variants": [
+      "QD",
+      "cue dee"
+    ]
+  },
+  {
+    "correct": "as needed",
+    "variants": [
+      "PRN",
+      "pee are en"
+    ]
+  },
+  {
+    "correct": "immediately",
+    "variants": [
+      "STAT"
+    ]
+  },
+  {
+    "correct": "nothing by mouth",
+    "variants": [
+      "NPO",
+      "en pee oh"
+    ]
+  },
+  {
+    "correct": "before meals",
+    "variants": [
+      "ac",
+      "ay see"
+    ]
+  },
+  {
+    "correct": "after meals",
+    "variants": [
+      "pc",
+      "pee see"
+    ]
+  },
+  {
+    "correct": "at bedtime",
+    "variants": [
+      "HS",
+      "aitch ess"
+    ]
+  },
+  {
+    "correct": "drops",
+    "variants": [
+      "gtt",
+      "gee tee tee"
+    ]
+  },
+  {
+    "correct": "normal saline",
+    "variants": [
+      "NS",
+      "en ess"
+    ]
+  },
+  {
+    "correct": "lactated ringers",
+    "variants": [
+      "LR",
+      "lactated ringer's solution"
+    ]
+  },
+  {
+    "correct": "dextrose five percent in water",
+    "variants": [
+      "D5W",
+      "dee five double you"
+    ]
+  },
+  {
+    "correct": "keep vein open",
+    "variants": [
+      "KVO",
+      "kay vee oh"
+    ]
+  },
+  {
+    "correct": "intravenous piggyback",
+    "variants": [
+      "IVPB",
+      "eye vee pee bee"
+    ]
+  },
+  {
+    "correct": "peripherally inserted central catheter",
+    "variants": [
+      "PICC line",
+      "pick line"
+    ]
+  },
+  {
+    "correct": "central line",
+    "variants": [
+      "central venous catheter",
+      "central lyne"
+    ]
+  },
+  {
+    "correct": "foley catheter",
+    "variants": [
+      "foaly catheter",
+      "folly catheter"
+    ]
+  },
+  {
+    "correct": "endotracheal tube",
+    "variants": [
+      "ETT",
+      "ee tee tee",
+      "endo tracheal toob"
+    ]
+  },
+  {
+    "correct": "tracheostomy",
+    "variants": [
+      "trach",
+      "trake"
+    ]
+  },
+  {
+    "correct": "do not resuscitate",
+    "variants": [
+      "DNR",
+      "dee en are"
+    ]
+  },
+  {
+    "correct": "activities of daily living",
+    "variants": [
+      "ADL",
+      "ay dee el"
+    ]
+  },
+  {
+    "correct": "vital signs",
+    "variants": [
+      "VS",
+      "vee ess"
+    ]
+  },
+  {
+    "correct": "intake and output",
+    "variants": [
+      "I&O",
+      "eye and oh"
+    ]
+  },
+  {
+    "correct": "personal protective equipment",
+    "variants": [
+      "PPE",
+      "pee pee ee"
+    ]
+  },
+  {
+    "correct": "nothing per rectum",
+    "variants": [
+      "NPR",
+      "en pee are"
+    ]
+  }
+]

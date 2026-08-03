@@ -16,6 +16,7 @@ import { useStudyLoopStore } from "../state/store";
 import { Icon } from "../components/icons";
 import { formatTimestamp } from "../lib/time";
 import { pickPrompt, promptPoolFor } from "../lib/notationPrompts";
+import { isSafetyTierUnitType } from "../lib/safetyTier";
 import type { AnalysisUnit, UnitOverlay } from "../lib/types";
 import styles from "./UnitProposalCard.module.css";
 
@@ -25,6 +26,16 @@ const UNIT_TYPE_LABEL: Record<AnalysisUnit["type"], string> = {
   PROCEDURE: "Procedure",
   EXAMPLE: "Example",
   BOUNDARY: "Boundary",
+  // Phase 4 "Cluster unit type": a CLUSTER's own proposal card still renders
+  // through this same rail component (attest/dismiss are unit-id-level,
+  // unchanged) — its members list renders below, see the CLUSTER branch in
+  // the body section.
+  CLUSTER: "Cluster",
+  // Phase 5 "Lens registry": spine-level additions (clinical is the first lens to emphasize them).
+  DOSAGE: "Dosage",
+  CONTRAINDICATION: "Contraindication",
+  LAB_VALUE: "Lab value",
+  PRIORITIZATION: "Prioritization",
 };
 
 /** V3-D D1 "Advanced fold" — human labels for UnitOverlaySchema's flat field set. */
@@ -42,6 +53,13 @@ const OVERLAY_FIELD_LABEL: Record<keyof UnitOverlay, string> = {
   triggers: "Triggers",
   failureModes: "Failure modes",
   drillPairing: "Drill pairing",
+  // Phase 5 "Clinical lens" overlay fields (server/lenses/clinical.json's overlayFields).
+  drugClass: "Drug class",
+  genericName: "Generic name",
+  brandName: "Brand name",
+  route: "Route",
+  normalRange: "Normal range",
+  nclexCategory: "NCLEX category",
 };
 
 /**
@@ -228,6 +246,23 @@ export function UnitProposalCard({ unit }: Props): JSX.Element {
             >
               also in {ref.projectTitle}
             </button>
+          ))}
+        </div>
+      )}
+
+      {/* Phase 5 "Safety tier", item 5(a): units whose type is in the active
+          lens's safetyTier ALWAYS render their verbatim transcript quote —
+          never paraphrase-only. Deliberately placed OUTSIDE the reveal
+          gate/attestation flow below (unconditional, regardless of
+          `revealed`/novice-mode/editing state) — the pedagogy reveal gate
+          governs the AI's paraphrase (summary/body), not the safety-critical
+          source evidence backing it. */}
+      {isSafetyTierUnitType(unit.type) && unit.anchors.length > 0 && (
+        <div className={styles.safetyQuotes} aria-label="Verbatim source quote">
+          {unit.anchors.map((a, i) => (
+            <p key={i} className={styles.safetyQuote}>
+              &ldquo;{a.quote}&rdquo;
+            </p>
           ))}
         </div>
       )}

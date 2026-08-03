@@ -27,7 +27,8 @@ import crypto from "node:crypto";
 import { createStructuredCaller, type ProviderAuth, type StructuredLLMCaller } from "./providers.js";
 import { z } from "zod";
 import { formatTimestamp } from "./time.js";
-import { DomainSchema, type Domain } from "./models.js";
+import { DomainSchema, type Domain, type Lens } from "./models.js";
+import { listLensesOrFallback, resolveLensOrGeneric } from "./lenses.js";
 import type { TranscriptSegment } from "./transcripts.js";
 
 // --- Public analysis.json shape (SPEC) --------------------------------------
@@ -64,7 +65,39 @@ export type AnalysisSource = z.infer<typeof AnalysisSourceSchema>;
 
 // --- V3-B B1: typed spine (units/edges) — see PEDAGOGY.md §2 ---------------
 
-export const UnitTypeSchema = z.enum(["CLAIM", "MECHANISM", "PROCEDURE", "EXAMPLE", "BOUNDARY"]);
+/**
+ * Phase 4 "Cluster unit type" (design/EXECUTION-PLAN-post-review-v1.md):
+ * `CLUSTER` added alongside the original five — answers the unanimous
+ * attestation-fatigue finding (30-50 atoms/nursing-lecture makes
+ * one-restatement-per-atom untenable). A CLUSTER unit is attested exactly
+ * like any other unit (attestation.ts's isUnitFeedable is untouched — the
+ * cluster's own id is what gets attested), but carries `members` (see
+ * AnalysisUnitSchema below) instead of standing for one atomic fact, and
+ * review.ts fans a feedable CLUSTER out into one review card per member
+ * rather than one card for the whole unit.
+ */
+/**
+ * Phase 5 "Lens registry + clinical as first data-driven lens": DOSAGE,
+ * CONTRAINDICATION, LAB_VALUE, and PRIORITIZATION are spine-level additions
+ * (usable by ANY lens, not clinical-exclusive) — the clinical lens
+ * (server/lenses/clinical.json) is simply the first to actually emphasize
+ * them via its `unitTypeEmphasis` prompt text, and the first to flag
+ * DOSAGE/CONTRAINDICATION/LAB_VALUE as `safetyTier` (see
+ * lib/conceptRegistry.ts's never-auto-merge extension and the web unit
+ * card's unconditional verbatim-quote display).
+ */
+export const UnitTypeSchema = z.enum([
+  "CLAIM",
+  "MECHANISM",
+  "PROCEDURE",
+  "EXAMPLE",
+  "BOUNDARY",
+  "CLUSTER",
+  "DOSAGE",
+  "CONTRAINDICATION",
+  "LAB_VALUE",
+  "PRIORITIZATION",
+]);
 export type UnitType = z.infer<typeof UnitTypeSchema>;
 
 export const EdgeTypeSchema = z.enum(["REQUIRES", "PART_OF", "EXAMPLE_OF", "PROCEDURE_STEP"]);
@@ -73,14 +106,48 @@ export type EdgeType = z.infer<typeof EdgeTypeSchema>;
 export const UnitAnchorSchema = z.object({ t: z.number().nonnegative(), quote: z.string() });
 export type UnitAnchor = z.infer<typeof UnitAnchorSchema>;
 
+/**
+ * Phase 4 "Cluster unit type": one atomic fact within a CLUSTER unit's
+ * `members` array (e.g. one side effect within a "side effects of
+ * metoprolol" cluster). `anchorSec` is optional — a member usually inherits
+ * its parent unit's anchors for seek/provenance purposes; it's only set when
+ * the model (or a hand-authored cluster) can point to a more precise moment
+ * for that specific member.
+ */
+export const ClusterMemberSchema = z.object({
+  label: z.string(),
+  body: z.string(),
+  anchorSec: z.number().nonnegative().optional(),
+});
+export type ClusterMember = z.infer<typeof ClusterMemberSchema>;
+
+/** SPEC: "2..12 members" — small enough that attest-once still fans out to a legible review set, large enough to cover a real nursing side-effect list. */
+export const CLUSTER_MIN_MEMBERS = 2;
+export const CLUSTER_MAX_MEMBERS = 12;
+
+/**
+ * Phase 6 "Slide-text channel, smallest slice (PDF)": which source plausibly
+ * contributed a unit's content — "transcript" (spoken/shown-in-video content
+ * only; the default), "slides" (this unit's content came primarily from the
+ * supplementary slide-deck text block folded into the chunk prompt, not
+ * something actually said), or "both". This is the simplest honest
+ * provenance mechanism the phase spec asks for: a self-reported signal from
+ * the model, not a verified fact — see `effectiveEvidence` below for the
+ * "absent = transcript" default every reader should apply.
+ */
+export const UnitEvidenceSchema = z.enum(["transcript", "slides", "both"]);
+export type UnitEvidence = z.infer<typeof UnitEvidenceSchema>;
+
 // --- V3-D D1: domain overlay fields — PEDAGOGY §2 "domain lenses are prompt
 // modules + optional overlay fields, not separate engines" ------------------
 //
 // One flat schema shared across every domain (SPEC: "zod optional
 // everywhere") rather than a per-domain discriminated union — a unit only
-// ever gets the subset of fields its project's domain module asked for
-// (DOMAIN_MODULES below tells the model which ones), everything else stays
-// undefined and is stripped before being persisted (see mergeOverlayFields).
+// ever gets the subset of fields its project's lens asked for (the active
+// lens's `unitTypeEmphasis` prompt text tells the model which ones — Phase 5
+// "Lens registry", see lib/lenses.ts/buildChunkV3SystemPrompt below),
+// everything else stays undefined and is stripped before being persisted
+// (see mergeOverlayFields).
 // This is also the wire-level shape (ChunkUnitRawSchema.overlay below) —
 // unlike unitLabel's "" sentinel convention, there's no need for a separate
 // raw/clean pair here: a present-but-empty string from a structured-output
@@ -105,6 +172,13 @@ export const UnitOverlaySchema = z.object({
   triggers: z.array(z.string()).optional(),
   failureModes: z.array(z.string()).optional(),
   drillPairing: z.string().optional(),
+  // Phase 5 "Clinical lens" overlay fields (server/lenses/clinical.json's overlayFields).
+  drugClass: z.string().optional(),
+  genericName: z.string().optional(),
+  brandName: z.string().optional(),
+  route: z.string().optional(),
+  normalRange: z.string().optional(),
+  nclexCategory: z.string().optional(),
 });
 export type UnitOverlay = z.infer<typeof UnitOverlaySchema>;
 
@@ -118,6 +192,12 @@ const OVERLAY_STRING_KEYS = [
   "notation",
   "keyContext",
   "drillPairing",
+  "drugClass",
+  "genericName",
+  "brandName",
+  "route",
+  "normalRange",
+  "nclexCategory",
 ] as const satisfies readonly (keyof UnitOverlay)[];
 
 const OVERLAY_ARRAY_KEYS = ["entities", "actors", "triggers", "failureModes"] as const satisfies readonly (keyof UnitOverlay)[];
@@ -140,8 +220,54 @@ export const AnalysisUnitSchema = z.object({
    * call site — legacy analysis.json files simply backfill to false on read.
    */
   threshold: z.boolean().default(false),
+  /**
+   * Phase 4 "Cluster unit type": present iff `type === "CLUSTER"` — 2..12
+   * atomic facts sharing this unit's parent concept (canonical example:
+   * "side effects of metoprolol"). Kept as a plain optional field on the
+   * SAME flat object shape every other unit type already uses (not a
+   * discriminated union keyed on `type`) so every existing caller that
+   * treats `AnalysisUnit` uniformly (mergeUnitsByFingerprint,
+   * unitsToConceptsMirror, deriveLiveCards, every web pane that reads
+   * `analysis.units`) keeps compiling and iterating unchanged — members are
+   * an extra field on a unit, not a second kind of top-level array entry, so
+   * nothing that counts/lists `analysis.units` needs to know about them.
+   * Cross-field bounds (present+2..12 iff CLUSTER, absent otherwise) are
+   * enforced below via `.superRefine` rather than a union, for the same
+   * reason.
+   */
+  members: z.array(ClusterMemberSchema).optional(),
+  /**
+   * Phase 6 "Slide-text channel" provenance (see UnitEvidenceSchema above).
+   * Optional and loosely validated (SPEC: "Loose validation, defaulting
+   * absent = transcript") — absent on every unit from a pre-Phase-6 analysis
+   * run and on any run for a project with no slides.json at all. Read
+   * through `effectiveEvidence` rather than this field directly wherever the
+   * "absent means transcript" default matters.
+   */
+  evidence: UnitEvidenceSchema.optional(),
+}).superRefine((unit, ctx) => {
+  if (unit.type === "CLUSTER") {
+    if (!unit.members || unit.members.length < CLUSTER_MIN_MEMBERS || unit.members.length > CLUSTER_MAX_MEMBERS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `CLUSTER units must carry between ${CLUSTER_MIN_MEMBERS} and ${CLUSTER_MAX_MEMBERS} members`,
+        path: ["members"],
+      });
+    }
+  } else if (unit.members !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Only CLUSTER units may carry members",
+      path: ["members"],
+    });
+  }
 });
 export type AnalysisUnit = z.infer<typeof AnalysisUnitSchema>;
+
+/** Phase 6: absent `evidence` means "transcript" (SPEC: "defaulting absent = transcript") — read through this helper rather than `unit.evidence` directly wherever provenance display/logic matters. */
+export function effectiveEvidence(unit: Pick<AnalysisUnit, "evidence">): UnitEvidence {
+  return unit.evidence ?? "transcript";
+}
 
 export const AnalysisEdgeSchema = z.object({
   source: z.string(),
@@ -183,6 +309,23 @@ export const AnalysisSchema = z.object({
   units: z.array(AnalysisUnitSchema).optional(),
   /** V3-B B1: typed spine edges — present on v3 analyses only. */
   edges: z.array(AnalysisEdgeSchema).optional(),
+  /**
+   * Phase 2 "Terminology layer v1" downstream invalidation: set by
+   * PATCH /api/projects/:id/terms (see routes/terms.ts) whenever a term
+   * mapping changes for a project that already has an analysis — "this
+   * transcript was corrected since the last analyze run" — so the web app
+   * can surface a re-analyze banner. Deliberately the smallest honest
+   * mechanism: nothing here ever *triggers* a re-run; a fresh
+   * POST /api/projects/:id/analyze naturally clears this by writing a whole
+   * new analysis.json (via writeJsonAtomic in routes/analyze.ts) that simply
+   * doesn't carry the field forward. `null`/absent means "not stale".
+   *
+   * Phase 6 "Slide-text channel" (design/EXECUTION-PLAN-post-review-v1.md)
+   * adds `"slides-changed"` — set by routes/slides.ts (via lib/terms.ts's
+   * now-generalized `markAnalysisStale`) whenever a slide deck is attached
+   * or removed, mirroring exactly how a terms.json edit already flags this.
+   */
+  staleReason: z.enum(["terms-changed", "slides-changed"]).nullable().optional(),
 });
 export type Analysis = z.infer<typeof AnalysisSchema>;
 
@@ -238,6 +381,66 @@ export function chunkTranscript(
     windowStart += stride;
   }
   return chunks;
+}
+
+// --- Phase 6 "Slide-text channel, smallest slice (PDF)": per-chunk slide
+// context assembly -----------------------------------------------------------
+//
+// NAIVE MAPPING ONLY (SPEC: "exact slide-sync is future work"). A chunk's
+// transcript window and its mapped slide-page range are each computed
+// independently — equal-width time buckets vs. equal-width page buckets —
+// and lined up purely by INDEX (chunk 0 -> the deck's first slice, the last
+// chunk -> its last slice, evenly in between). There is no real signal here
+// (OCR, slide-change timestamps, speaker cues) tying "the lecturer is
+// showing slide 7 right now" to a specific transcript moment. This is good
+// enough to hand the model plausibly-relevant supplementary text on a deck
+// presented roughly linearly alongside the video, and will misalign on a
+// deck presented out of order or heavily front/back-loaded relative to the
+// talking — the chunk prompt says as much, and a unit's `evidence` field
+// (see UnitEvidenceSchema) is the model's own signal for whether the
+// supplementary text actually mattered, not a guarantee that it lines up.
+
+/** A few thousand chars per chunk (SPEC: "cap the slide text per chunk") — keeps one slide-heavy chunk from ballooning past the real transcript text in prompt size. */
+export const SLIDE_CONTEXT_MAX_CHARS = 4000;
+
+/**
+ * Maps chunk `index` (of `totalChunks`) to a 1-indexed, inclusive page range
+ * out of `totalPages`, proportionally by index. Returns `null` when there's
+ * nothing sensible to map (no pages, or a non-positive chunk/page count).
+ */
+export function mapChunkToSlidePages(
+  index: number,
+  totalChunks: number,
+  totalPages: number
+): { startPage: number; endPage: number } | null {
+  if (totalPages <= 0 || totalChunks <= 0) return null;
+  const perChunk = totalPages / totalChunks;
+  const startPage = Math.max(1, Math.floor(index * perChunk) + 1);
+  const endPage = Math.min(totalPages, Math.max(startPage, Math.ceil((index + 1) * perChunk)));
+  return { startPage, endPage };
+}
+
+/**
+ * Builds the "Slide deck text (pages n–m)" supplementary block folded into
+ * one chunk's system prompt (see buildChunkV3SystemPrompt's `slideContext`
+ * param), or `undefined` when there's no deck at all, or nothing landed in
+ * this chunk's mapped page range (a blank/image-only slide range, or a
+ * chunk count that outnumbers the deck's pages). Truncated to
+ * SLIDE_CONTEXT_MAX_CHARS.
+ */
+export function buildSlideContextBlock(
+  pages: readonly { page: number; text: string }[],
+  chunkIndex: number,
+  totalChunks: number
+): string | undefined {
+  if (pages.length === 0) return undefined;
+  const range = mapChunkToSlidePages(chunkIndex, totalChunks, pages.length);
+  if (!range) return undefined;
+  const inRange = pages.filter((p) => p.page >= range.startPage && p.page <= range.endPage && p.text.trim().length > 0);
+  if (inRange.length === 0) return undefined;
+  let body = inRange.map((p) => `[Slide ${p.page}]\n${p.text.trim()}`).join("\n\n");
+  if (body.length > SLIDE_CONTEXT_MAX_CHARS) body = `${body.slice(0, SLIDE_CONTEXT_MAX_CHARS)}\n…(truncated)`;
+  return `Slide deck text (pages ${range.startPage}–${range.endPage} of the deck, mapped to this segment by chunk index only — NOT synced to actual transcript timing; treat as supplementary context that MAY be relevant here, not a guarantee):\n${body}`;
 }
 
 // --- Per-chunk / merge wire shapes (raw, pre-id-assignment) -----------------
@@ -363,6 +566,18 @@ const ChunkUnitRawSchema = z.object({
   overlay: UnitOverlaySchema.optional(),
   /** V3-D D2 — optional (absent treated as false, see mergeUnitsByFingerprint) for the same reason. */
   threshold: z.boolean().optional(),
+  /**
+   * Phase 4 "Cluster unit type" — raw member list at the wire level. Kept
+   * loosely bounded here (no 2..12 check — that's AnalysisUnitSchema's job on
+   * the FINAL merged unit); mergeUnitsByFingerprint's mergeClusterMembers
+   * dedups/caps across a fingerprint group before the result ever reaches
+   * AnalysisUnitSchema's stricter check, and demotes a CLUSTER whose members
+   * collapse below the minimum after dedup rather than emitting an invalid
+   * one (see resolveClusterType).
+   */
+  members: z.array(ClusterMemberSchema).optional(),
+  /** Phase 6 "Slide-text channel" — optional at the wire level too (not just the final AnalysisUnit), same "pre-Phase-6 fixtures/callers keep compiling" reasoning as overlay/threshold above. */
+  evidence: UnitEvidenceSchema.optional(),
 });
 type ChunkUnitRaw = z.infer<typeof ChunkUnitRawSchema>;
 
@@ -391,19 +606,45 @@ export type MergeV3Result = z.infer<typeof MergeV3ResultSchema>;
 const ROUTER_RESULT_SCHEMA = z.object({ domain: DomainSchema });
 export type RouterResult = z.infer<typeof ROUTER_RESULT_SCHEMA>;
 
-const ROUTER_JSON_SCHEMA = {
-  type: "object",
-  properties: {
-    domain: { type: "string", enum: ["biology", "history", "music", "physical_skill", "generic"] },
-  },
-  required: ["domain"],
-  additionalProperties: false,
-} as const;
+/**
+ * Phase 5 "Lens registry": the router's structured-output enum used to be a
+ * static 5-item list — it's now built from whichever lenses are actually
+ * loaded (repo + user dir), so a project can route to "clinical" (or any
+ * future/generated lens) the moment its lens file exists.
+ */
+function buildRouterJsonSchema(ids: readonly string[]): Record<string, unknown> {
+  return {
+    type: "object",
+    properties: {
+      domain: { type: "string", enum: [...ids] },
+    },
+    required: ["domain"],
+    additionalProperties: false,
+  };
+}
 
 const UNIT_ANCHOR_JSON_SCHEMA = {
   type: "object",
   properties: { t: { type: "number" }, quote: { type: "string" } },
   required: ["t", "quote"],
+  additionalProperties: false,
+} as const;
+
+/**
+ * Phase 4 "Cluster unit type": one member of a CLUSTER unit's `members`
+ * array. `anchorSec` is required at the wire level (structured-output mode
+ * wants every property present — same convention as every other "genuinely
+ * optional" field in this file); the model should repeat the parent unit's
+ * own anchor second when it has nothing more precise for this member.
+ */
+const CLUSTER_MEMBER_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    label: { type: "string" },
+    body: { type: "string" },
+    anchorSec: { type: "number" },
+  },
+  required: ["label", "body", "anchorSec"],
   additionalProperties: false,
 } as const;
 
@@ -430,6 +671,12 @@ const OVERLAY_JSON_SCHEMA = {
     triggers: { type: "array", items: { type: "string" } },
     failureModes: { type: "array", items: { type: "string" } },
     drillPairing: { type: "string" },
+    drugClass: { type: "string" },
+    genericName: { type: "string" },
+    brandName: { type: "string" },
+    route: { type: "string" },
+    normalRange: { type: "string" },
+    nclexCategory: { type: "string" },
   },
   required: [
     "levelOfOrganization",
@@ -445,6 +692,12 @@ const OVERLAY_JSON_SCHEMA = {
     "triggers",
     "failureModes",
     "drillPairing",
+    "drugClass",
+    "genericName",
+    "brandName",
+    "route",
+    "normalRange",
+    "nclexCategory",
   ],
   additionalProperties: false,
 } as const;
@@ -472,7 +725,21 @@ const CHUNK_V3_JSON_SCHEMA = {
       items: {
         type: "object",
         properties: {
-          type: { type: "string", enum: ["CLAIM", "MECHANISM", "PROCEDURE", "EXAMPLE", "BOUNDARY"] },
+          type: {
+            type: "string",
+            enum: [
+              "CLAIM",
+              "MECHANISM",
+              "PROCEDURE",
+              "EXAMPLE",
+              "BOUNDARY",
+              "CLUSTER",
+              "DOSAGE",
+              "CONTRAINDICATION",
+              "LAB_VALUE",
+              "PRIORITIZATION",
+            ],
+          },
           label: { type: "string" },
           summary: { type: "string" },
           body: { type: "string" },
@@ -480,8 +747,29 @@ const CHUNK_V3_JSON_SCHEMA = {
           confidence: { type: "number" },
           overlay: OVERLAY_JSON_SCHEMA,
           threshold: { type: "boolean" },
+          // Phase 4: required at the wire level, empty when type !== "CLUSTER"
+          // (same []/"" sentinel convention overlay/unitLabel already use) —
+          // mergeUnitsByFingerprint enforces the real 2..12 bound post-merge.
+          members: { type: "array", items: CLUSTER_MEMBER_JSON_SCHEMA },
+          // Phase 6 "Slide-text channel": required at the wire level (same
+          // "structured outputs want every property present" convention as
+          // every other field here) — "transcript" is always a valid value,
+          // so there's no need for an empty-string sentinel the way
+          // unitLabel/overlay need one.
+          evidence: { type: "string", enum: ["transcript", "slides", "both"] },
         },
-        required: ["type", "label", "summary", "body", "anchors", "confidence", "overlay", "threshold"],
+        required: [
+          "type",
+          "label",
+          "summary",
+          "body",
+          "anchors",
+          "confidence",
+          "overlay",
+          "threshold",
+          "members",
+          "evidence",
+        ],
         additionalProperties: false,
       },
     },
@@ -549,8 +837,26 @@ function buildMergeUserPrompt(pearls: readonly ChunkPearl[], concepts: readonly 
 }
 
 // --- V3-B B1: router + typed-spine prompts ----------------------------------
+// Phase 5 "Lens registry": both prompts below used to be static strings
+// hardcoded against the fixed five-domain enum. They're now assembled from
+// whichever lenses are actually loaded (repo server/lenses/*.json + user
+// `<dataDir>/lenses/*.json` — see lib/lenses.ts), so a new lens file (Phase
+// 5's clinical.json, or a Phase 9 generated one) participates in routing and
+// per-chunk extraction without any code change here.
 
-const ROUTER_SYSTEM_PROMPT = `Classify the dominant subject-matter domain of an instructional video from a sample of its transcript. Choose exactly one of: "biology" (life sciences, physiology, systems/mechanisms), "history" (historical events, causation, sourcing), "music" (music theory, notation, ear training), "physical_skill" (martial arts, sports, dance, or other physical technique/movement instruction), or "generic" (anything else, mixed subject matter, or unclear from the sample). This is a coarse routing signal, not a final judgment — the learner can change it later, so prefer your best single guess over hedging.`;
+/**
+ * Classifies the dominant subject-matter domain from a sample of the
+ * transcript. `lenses` should be non-empty (callers fall back to
+ * `listLensesOrFallback`/a hardcoded generic lens if the registry somehow
+ * came back empty) — each lens contributes one `"id" (routerDescription)`
+ * clause, in the same order as the JSON schema's enum (see
+ * `buildRouterJsonSchema`), so the model's choices and the schema's allowed
+ * values always agree.
+ */
+function buildRouterSystemPrompt(lenses: readonly Lens[]): string {
+  const options = lenses.map((l) => `"${l.id}" (${l.routerDescription})`).join(", ");
+  return `Classify the dominant subject-matter domain of an instructional video from a sample of its transcript. Choose exactly one of: ${options}. This is a coarse routing signal, not a final judgment — the learner can change it later, so prefer your best single guess over hedging.`;
+}
 
 function buildRouterUserPrompt(sampleText: string): string {
   return `Transcript sample:\n\n${sampleText}`;
@@ -558,39 +864,21 @@ function buildRouterUserPrompt(sampleText: string): string {
 
 /**
  * PEDAGOGY §2 "domain lenses are prompt modules, not separate engines" — one
- * line of emphasis appended to the shared v3 chunk system prompt per domain.
- * The JSON schema stays identical across domains (CHUNK_V3_JSON_SCHEMA);
- * only this text changes which unit types/edge types the model reaches for.
+ * paragraph of emphasis (the lens's own `unitTypeEmphasis`, verbatim) appended
+ * to the shared v3 chunk system prompt. The JSON schema stays identical
+ * across lenses (CHUNK_V3_JSON_SCHEMA); only this text changes which unit
+ * types/edge types/overlay fields the model reaches for.
  */
-/**
- * V3-D D1: each module now also names the `overlay` sub-fields this domain
- * cares about (everything else on the unit's `overlay` stays empty — the
- * JSON schema is identical across domains, per the comment above; only this
- * text changes which fields get filled in).
- */
-const DOMAIN_MODULES: Record<Domain, string> = {
-  biology:
-    'Domain lens: biology/systems. Favor MECHANISM units for causal chains, feedback loops, and levels of organization; use REQUIRES/PART_OF edges to connect a mechanism to the components or prerequisite mechanisms it depends on. Where the transcript supports it, fill in overlay.levelOfOrganization (e.g. "cell", "organ system"), overlay.mechanismType (e.g. "feedback loop", "causal chain"), and overlay.entities (the components/molecules/organs involved) — leave every other overlay field empty.',
-  history:
-    'Domain lens: history. Favor CLAIM units, and in each unit\'s body note who is claiming it and on what basis (primary/secondary sourcing, corroboration, perspective) where the transcript supports it; use REQUIRES edges for causal chains between events. Where supported, fill in overlay.sourceType (e.g. "primary", "secondary"), overlay.causationType (e.g. "proximate", "structural", "contingent"), overlay.actors (who is involved), and overlay.perspectiveFlag (whose viewpoint this reflects) — leave every other overlay field empty.',
-  music:
-    "Domain lens: music theory. Favor CLAIM units for theory statements and EXAMPLE units for the passages/sounds that illustrate them; use EXAMPLE_OF edges to link a specific example to the concept it demonstrates, and note notation-to-sound pairings in the body where audible. Where supported, fill in overlay.schema (the theory schema/pattern named), overlay.notation (how it would appear notated), and overlay.keyContext (the key/mode in play) — leave every other overlay field empty.",
-  physical_skill:
-    "Domain lens: physical skill. Favor PROCEDURE units for ordered steps, triggers, and failure modes; use PROCEDURE_STEP edges between consecutive steps of the same procedure. Where supported, fill in overlay.triggers (what cue starts this step), overlay.failureModes (common ways it goes wrong), and overlay.drillPairing (a drill that isolates it) — leave every other overlay field empty.",
-  generic:
-    "No specific domain lens applies — keep unit-type emphasis balanced across CLAIM/MECHANISM/PROCEDURE/EXAMPLE/BOUNDARY rather than favoring one. Leave every overlay field empty; this lens doesn't use them.",
-};
-
-function buildChunkV3SystemPrompt(domain: Domain): string {
+function buildChunkV3SystemPrompt(lens: Lens, slideContext?: string): string {
   return `You are analyzing one segment of an instructional video's transcript to help a learner study it later. The subject matter could be anything — cooking, martial arts, software, history, music theory, a lecture — extract what is actually being taught in THIS segment, never assume a fixed domain or template beyond the lens noted below.
 
 Extract:
 - "pearls": specific, memorable insights worth remembering, each anchored to the timestamp (in seconds) where it's said. A label under 60 characters, a 1-3 sentence insight, an importance rating (3 = critical/central point, 2 = useful supporting point, 1 = minor/incidental detail), and "unitLabel": the exact label of the unit below this pearl illustrates, or "" if none fits.
-- "units": typed knowledge units on a universal spine — each is exactly one of CLAIM (an assertion), MECHANISM (how/why something works), PROCEDURE (an ordered how-to), EXAMPLE (a concrete instance), or BOUNDARY (a limit, exception, or "this doesn't apply when…"). Each unit has a short "label" (used to link edges/pearls to it — keep it stable and specific, not a generic phrase), a 1-2 sentence "summary", a longer markdown "body", one or more "anchors" (each an exact "quote" from the transcript plus its timestamp "t" in seconds), a "confidence" 0-1 for how clearly the transcript supports this unit as extracted, an "overlay" object of domain-specific structured fields (which ones to fill in is named by the domain lens below — leave the rest as "" or []), and "threshold": true only when this unit is a transformative/integrative/troublesome idea — one that later material genuinely depends on understanding, a concept that "unlocks" the rest of the video once grasped (most units are NOT threshold — false otherwise).
+- "units": typed knowledge units on a universal spine — each is exactly one of CLAIM (an assertion), MECHANISM (how/why something works), PROCEDURE (an ordered how-to), EXAMPLE (a concrete instance), BOUNDARY (a limit, exception, or "this doesn't apply when…"), CLUSTER (a parent concept covering 3 or more closely-related atomic facts — e.g. "side effects of metoprolol" listing bradycardia, hypotension, fatigue, etc. as separate facts), DOSAGE (a medication amount/frequency), CONTRAINDICATION (when NOT to do/give something), LAB_VALUE (a normal/abnormal test range or result), or PRIORITIZATION ("what do you do first" judgment material). Each unit has a short "label" (used to link edges/pearls to it — keep it stable and specific, not a generic phrase), a 1-2 sentence "summary", a longer markdown "body", one or more "anchors" (each an exact "quote" from the transcript plus its timestamp "t" in seconds), a "confidence" 0-1 for how clearly the transcript supports this unit as extracted, an "overlay" object of domain-specific structured fields (which ones to fill in is named by the lens below — leave the rest as "" or []), "threshold": true only when this unit is a transformative/integrative/troublesome idea — one that later material genuinely depends on understanding, a concept that "unlocks" the rest of the video once grasped (most units are NOT threshold — false otherwise), "evidence": one of "transcript" (default — this unit's content came from what was actually said/shown in the video), "slides" (this unit's content came primarily from the supplementary slide-deck text below, not something actually said), or "both" — use "transcript" unless slide deck text was supplied below AND plausibly contributed to this specific unit, and "members": for a CLUSTER unit ONLY, 2 to 12 objects each with its own short "label" (the specific fact, e.g. "Bradycardia"), a 1-2 sentence "body" (that fact alone, phrased so it stands on its own as a flashcard answer), and "anchorSec" (seconds — reuse this unit's own anchor time if you have nothing more precise); for every non-CLUSTER unit, "members" MUST be an empty array. IMPORTANT: whenever the transcript states 3 or more closely-related atomic facts under one shared parent concept, emit ONE CLUSTER unit with those facts as members rather than 3+ separate CLAIM units for the same facts — this is what lets a learner attest the parent concept once instead of restating every fact individually. Use individual CLAIM (or other) units as usual for anything that isn't part of such a group.
 - "edges": relationships between two units you extracted THIS segment — "sourceLabel"/"targetLabel" must exactly match "label" fields above, "type" is one of REQUIRES (source requires target as a prerequisite), PART_OF (source is part of target), EXAMPLE_OF (source is an example of target), or PROCEDURE_STEP (source is the step before target in the same procedure), plus the supporting "quote" and a "confidence" 0-1. Only emit edges between two units both present in this same segment's "units" list.
 
-${DOMAIN_MODULES[domain]}
-
+${lens.unitTypeEmphasis}
+${slideContext ? `\nThe learner also attached a slide deck (PDF) alongside this video. ${slideContext}\n` : ""}
 Every timestamp you output MUST fall within this segment's own time range — never extrapolate a timestamp from outside what you were given. If the segment has little of substance, return short (or empty) arrays rather than inventing content.`;
 }
 
@@ -628,7 +916,14 @@ export interface AnalysisLLMClient {
  */
 export interface AnalysisLLMClientV3 {
   runRouter(sampleText: string, model: string): Promise<AnalysisOutcome<RouterResult>>;
-  runChunkV3(chunk: TranscriptChunk, domain: Domain, model: string): Promise<AnalysisOutcome<ChunkV3Result>>;
+  /**
+   * `slideContext` (Phase 6 "Slide-text channel"): the pre-built "Slide deck
+   * text (pages n–m)" block for THIS chunk (see buildSlideContextBlock),
+   * folded into the system prompt when present. Optional so every existing
+   * test double built against the pre-Phase-6 3-arg signature (see
+   * test/analysis.test.ts) keeps compiling unchanged.
+   */
+  runChunkV3(chunk: TranscriptChunk, domain: Domain, model: string, slideContext?: string): Promise<AnalysisOutcome<ChunkV3Result>>;
   runMergeV3(pearls: readonly ChunkPearlV3[], model: string): Promise<AnalysisOutcome<MergeV3Result>>;
 }
 
@@ -646,7 +941,16 @@ export const ANALYSIS_MAX_TOKENS = 16000;
  * gate regardless of provider.
  */
 export class LLMAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV3 {
-  constructor(private readonly caller: StructuredLLMCaller) {}
+  /**
+   * Phase 5 "Lens registry": `dataDir` resolves the lens registry once at
+   * construction (loadLensRegistry itself memoizes per dataDir, so this is
+   * cheap even across many short-lived clients) — v2's runChunk/runMerge
+   * never touch it; only the v3 router/chunk methods below do.
+   */
+  constructor(
+    private readonly caller: StructuredLLMCaller,
+    private readonly dataDir: string = ""
+  ) {}
 
   private async runStructured<T>(
     system: string,
@@ -682,19 +986,21 @@ export class LLMAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV3
   // --- V3-B B1: typed-spine methods -----------------------------------------
 
   async runRouter(sampleText: string, model: string): Promise<AnalysisOutcome<RouterResult>> {
+    const lenses = listLensesOrFallback(this.dataDir);
     return this.runStructured(
-      ROUTER_SYSTEM_PROMPT,
+      buildRouterSystemPrompt(lenses),
       buildRouterUserPrompt(sampleText),
       ROUTER_RESULT_SCHEMA,
-      ROUTER_JSON_SCHEMA,
+      buildRouterJsonSchema(lenses.map((l) => l.id)),
       model,
       ROUTER_MAX_TOKENS
     );
   }
 
-  async runChunkV3(chunk: TranscriptChunk, domain: Domain, model: string): Promise<AnalysisOutcome<ChunkV3Result>> {
+  async runChunkV3(chunk: TranscriptChunk, domain: Domain, model: string, slideContext?: string): Promise<AnalysisOutcome<ChunkV3Result>> {
+    const lens = resolveLensOrGeneric(this.dataDir, domain);
     return this.runStructured(
-      buildChunkV3SystemPrompt(domain),
+      buildChunkV3SystemPrompt(lens, slideContext),
       buildChunkUserPrompt(chunk),
       ChunkV3ResultSchema,
       CHUNK_V3_JSON_SCHEMA,
@@ -709,10 +1015,15 @@ export class LLMAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV3
 
 /**
  * V3-D D1: deterministic domain-shaped overlay for FakeAnalysisClient's
- * primary unit — mirrors DOMAIN_MODULES' "which fields this domain fills in"
+ * primary unit — mirrors each lens's "which fields this domain fills in"
  * without ever hitting the network. Purely a function of (domain, label,
  * chunk.index) so two runs over the same input produce byte-identical
  * output, matching this class's own doc comment below.
+ *
+ * Phase 5 "Lens registry": `domain` is a plain string now (any lens id, not
+ * just the original five), so this switch needs a `default` — an unknown/
+ * future/generated lens id falls back to the same "no overlay" behavior as
+ * "generic" rather than erroring.
  */
 function fakeOverlayFor(domain: Domain, label: string, chunk: TranscriptChunk): UnitOverlay {
   switch (domain) {
@@ -741,7 +1052,16 @@ function fakeOverlayFor(domain: Domain, label: string, chunk: TranscriptChunk): 
         failureModes: [`losing ${label.toLowerCase()}`],
         drillPairing: `Drill: isolate ${label}`,
       };
+    case "clinical":
+      return {
+        drugClass: chunk.index % 2 === 0 ? "beta blocker" : "ACE inhibitor",
+        genericName: label,
+        route: chunk.index % 2 === 0 ? "PO" : "IV",
+        normalRange: "60-100 bpm",
+        nclexCategory: "pharmacological therapies",
+      };
     case "generic":
+    default:
       return {};
   }
 }
@@ -816,18 +1136,19 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
 
   // --- V3-B B1: typed-spine methods (also deterministic, no randomness) ----
 
-  /** Simple keyword-count heuristic — deterministic, no network call, mirrors the real router's five-way classification without needing a model. */
+  /** Simple keyword-count heuristic — deterministic, no network call, mirrors the real router's classification without needing a model. Phase 5 "Lens registry": `clinical` keywords added alongside the original five — any domain string not covered here (a future/generated lens with no keyword list) simply never wins the count and the default "generic" is kept. */
   async runRouter(sampleText: string, _model?: string): Promise<AnalysisOutcome<RouterResult>> {
     const lower = sampleText.toLowerCase();
-    const keywordsByDomain: Record<Exclude<Domain, "generic">, string[]> = {
+    const keywordsByDomain: Record<string, string[]> = {
       biology: ["cell", "organism", "enzyme", "protein", "mechanism", "biology", "dna", "tissue", "membrane"],
       history: ["century", "war", "empire", "revolution", "treaty", "historian", "era", "dynasty"],
       music: ["chord", "scale", "note", "melody", "rhythm", "harmony", "key signature", "cadence"],
       physical_skill: ["grip", "stance", "technique", "drill", "posture", "balance", "guard", "submission", "takedown"],
+      clinical: ["patient", "nurse", "nursing", "dosage", "medication", "diagnosis", "vital signs", "nclex", "contraindication", "assessment"],
     };
     let best: Domain = "generic";
     let bestCount = 0;
-    for (const [domain, keywords] of Object.entries(keywordsByDomain) as [Exclude<Domain, "generic">, string[]][]) {
+    for (const [domain, keywords] of Object.entries(keywordsByDomain)) {
       const count = keywords.reduce((sum, kw) => sum + (lower.includes(kw) ? 1 : 0), 0);
       if (count > bestCount) {
         best = domain;
@@ -837,7 +1158,7 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
     return { kind: "ok", data: { domain: best } };
   }
 
-  async runChunkV3(chunk: TranscriptChunk, domain: Domain, _model?: string): Promise<AnalysisOutcome<ChunkV3Result>> {
+  async runChunkV3(chunk: TranscriptChunk, domain: Domain, _model?: string, slideContext?: string): Promise<AnalysisOutcome<ChunkV3Result>> {
     const mid = chunk.startSec + (chunk.endSec - chunk.startSec) / 2;
     const words = chunk.text.replace(/\[[^\]]*\]/g, "").trim().split(/\s+/).filter(Boolean);
     const labelSeed = words.slice(0, 6).join(" ").trim();
@@ -854,6 +1175,11 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
     const tailQuote = words.slice(-12).join(" ") || secondaryLabel;
     // V3-D D2: every third chunk's primary unit is flagged threshold — deterministic (no randomness), and frequent enough that a short fake-mode transcript still exercises the REINFORCE-step/priority-scheduling paths.
     const threshold = chunk.index % 3 === 0;
+    // Phase 6 "Slide-text channel": deterministic (no network, no randomness)
+    // evidence signal — only set when this chunk actually got a slide
+    // context block, cycling through "slides"/"both" so fake mode exercises
+    // both non-default branches without ever claiming "transcript" is wrong.
+    const primaryEvidence: UnitEvidence | undefined = slideContext ? (chunk.index % 2 === 0 ? "both" : "slides") : undefined;
     return {
       kind: "ok",
       data: {
@@ -876,6 +1202,7 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
             confidence,
             overlay: fakeOverlayFor(domain, primaryLabel, chunk),
             threshold,
+            evidence: primaryEvidence,
           },
           {
             type: "EXAMPLE",
@@ -971,12 +1298,19 @@ export function __setAnalysisClientV3ForTests(client: AnalysisLLMClientV3 | null
   injectedClientForTestsV3 = client;
 }
 
-/** V3-B B1 counterpart to `resolveAnalysisClient` — same priority order, resolving the typed-spine interface instead. */
-export function resolveAnalysisClientV3(auth: LLMClientAuth): AnalysisLLMClientV3 {
+/**
+ * V3-B B1 counterpart to `resolveAnalysisClient` — same priority order,
+ * resolving the typed-spine interface instead. Phase 5 "Lens registry":
+ * `dataDir` (default "" — harmless: repo lenses load regardless, only a
+ * user-authored lens override would be missed) is threaded into the real
+ * client so its router/chunk prompts are built from the actual lens
+ * registry rather than a hardcoded five-domain list.
+ */
+export function resolveAnalysisClientV3(auth: LLMClientAuth, dataDir: string = ""): AnalysisLLMClientV3 {
   if (injectedClientForTestsV3) return injectedClientForTestsV3;
   if (process.env.STUDYLOOP_FAKE_ANALYSIS === "1") return new FakeAnalysisClient();
   if (!auth) throw new NoApiKeyError();
-  return new LLMAnalysisClient(callerFromAuth(auth));
+  return new LLMAnalysisClient(callerFromAuth(auth), dataDir);
 }
 
 export function isFakeAnalysisMode(): boolean {
@@ -1140,6 +1474,75 @@ function mergeOverlayFields(group: readonly ChunkUnitRaw[]): UnitOverlay {
   return result;
 }
 
+/**
+ * Phase 4 "Cluster unit type": unions a fingerprint-group's raw `members`
+ * arrays, deduped by (case/whitespace-insensitive) label — first occurrence
+ * wins, same "identify duplicates, keep the first" rule the rest of this
+ * merge already applies to anchors. Capped at CLUSTER_MAX_MEMBERS
+ * defensively (schema enforces 2..12 on the final unit; this keeps the
+ * pre-schema value from ever exceeding it in the first place).
+ */
+function mergeClusterMembers(group: readonly ChunkUnitRaw[]): ClusterMember[] {
+  const seen = new Map<string, ClusterMember>();
+  for (const g of group) {
+    for (const m of g.members ?? []) {
+      const key = m.label.trim().toLowerCase();
+      if (key && !seen.has(key)) seen.set(key, m);
+    }
+  }
+  return [...seen.values()].slice(0, CLUSTER_MAX_MEMBERS);
+}
+
+/**
+ * Phase 4: resolves the final (type, members) pair for a fingerprint group
+ * whose majority-vote type is CLUSTER. The common case just merges members
+ * and keeps CLUSTER; the rare edge case — overlapping/duplicate chunks whose
+ * combined, deduped member set collapses below CLUSTER_MIN_MEMBERS — demotes
+ * the unit to the group's next most-common NON-cluster type (CLAIM if the
+ * group has none) rather than ever persisting a CLUSTER unit that would fail
+ * AnalysisUnitSchema's members bound the next time analysis.json is read
+ * (routes/review.ts, routes/analyze.ts, etc. all `AnalysisSchema.safeParse`
+ * the whole file — one malformed unit would make the ENTIRE analysis
+ * unreadable, not just that one unit).
+ */
+function resolveClusterType(group: readonly ChunkUnitRaw[]): { type: UnitType; members: ClusterMember[] | undefined } {
+  const merged = mergeClusterMembers(group);
+  if (merged.length >= CLUSTER_MIN_MEMBERS) return { type: "CLUSTER", members: merged };
+
+  const nonClusterCounts = new Map<UnitType, number>();
+  for (const g of group) {
+    if (g.type !== "CLUSTER") nonClusterCounts.set(g.type, (nonClusterCounts.get(g.type) ?? 0) + 1);
+  }
+  let bestType: UnitType = "CLAIM";
+  let bestCount = 0;
+  for (const [type, count] of nonClusterCounts) {
+    if (count > bestCount) {
+      bestType = type;
+      bestCount = count;
+    }
+  }
+  return { type: bestType, members: undefined };
+}
+
+/**
+ * Phase 6 "Slide-text channel": merges a fingerprint-group's raw `evidence`
+ * values into one — "both" if the group has support for both transcript and
+ * slides (across separate raw units, not just a single "both" value),
+ * "slides" if only slide-attributed, "transcript" if only transcript-
+ * attributed, and `undefined` (collapses to the "transcript" default via
+ * `effectiveEvidence`) when nothing in the group ever set the field at all —
+ * mirrors mergeOverlayFields' "don't persist a value nobody actually emitted"
+ * rule above.
+ */
+function mergeEvidence(group: readonly ChunkUnitRaw[]): UnitEvidence | undefined {
+  const values = group.map((g) => g.evidence).filter((v): v is UnitEvidence => v !== undefined);
+  if (values.length === 0) return undefined;
+  const hasSlides = values.some((v) => v === "slides" || v === "both");
+  const hasTranscript = values.some((v) => v === "transcript" || v === "both");
+  if (hasSlides && hasTranscript) return "both";
+  return hasSlides ? "slides" : "transcript";
+}
+
 export function mergeUnitsByFingerprint(units: readonly ChunkUnitRaw[]): AnalysisUnit[] {
   const order: string[] = [];
   const groups = new Map<string, ChunkUnitRaw[]>();
@@ -1171,9 +1574,14 @@ export function mergeUnitsByFingerprint(units: readonly ChunkUnitRaw[]): Analysi
     for (const g of group) for (const a of g.anchors) if (!anchorByT.has(a.t)) anchorByT.set(a.t, a.quote);
     const anchors = [...anchorByT.entries()].sort((a, b) => a[0] - b[0]).map(([t, quote]) => ({ t, quote }));
     const mergedOverlay = mergeOverlayFields(group);
+    // Phase 4: only resolve cluster members when the majority-vote type is
+    // actually CLUSTER — a group where CLUSTER lost the vote just drops any
+    // stray `members` a minority raw unit carried, same as any other field
+    // that only makes sense on the winning type.
+    const { type: finalType, members } = bestType === "CLUSTER" ? resolveClusterType(group) : { type: bestType, members: undefined };
     return {
       id: fp,
-      type: bestType,
+      type: finalType,
       label: group[0].label,
       summary,
       body,
@@ -1184,6 +1592,10 @@ export function mergeUnitsByFingerprint(units: readonly ChunkUnitRaw[]): Analysi
       // group was flagged (never "average away" a threshold signal).
       overlay: Object.keys(mergedOverlay).length > 0 ? mergedOverlay : undefined,
       threshold: group.some((g) => g.threshold === true),
+      // Phase 4: present only when finalType === "CLUSTER" (see resolveClusterType).
+      members,
+      // Phase 6: undefined (not "transcript") when nothing in the group ever set it — see mergeEvidence.
+      evidence: mergeEvidence(group),
     };
   });
 }
@@ -1246,6 +1658,14 @@ export interface AnalysisJobParamsV3 {
   onProgress?: (pct: number) => void;
   /** Provenance to stamp on the resulting analysis.json (default "model" — see AnalysisSchema). */
   source?: AnalysisSource;
+  /**
+   * Phase 6 "Slide-text channel": this project's uploaded slide deck pages
+   * (from slides.json, see lib/slides.ts), if any — absent/empty for a
+   * project with no deck attached. Naively distributed across chunks by
+   * index (see buildSlideContextBlock) rather than synced to actual
+   * transcript timing; that's future work, not this slice.
+   */
+  slidePages?: readonly { page: number; text: string }[];
 }
 
 /**
@@ -1283,8 +1703,15 @@ export async function runAnalysisJobV3(params: AnalysisJobParamsV3): Promise<Ana
 
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
+    // Phase 6 "Slide-text channel": undefined when there's no deck (or
+    // nothing landed in this chunk's mapped page range) — runChunkV3/
+    // buildChunkV3SystemPrompt both treat undefined as "no slide context".
+    const slideContext =
+      params.slidePages && params.slidePages.length > 0
+        ? buildSlideContextBlock(params.slidePages, i, chunks.length)
+        : undefined;
     // eslint-disable-next-line no-await-in-loop -- chunks are analyzed sequentially by design (progress reporting, bounded concurrency to the API)
-    const outcome = await params.client.runChunkV3(chunk, domain, params.model);
+    const outcome = await params.client.runChunkV3(chunk, domain, params.model, slideContext);
     if (outcome.kind === "ok") {
       succeeded++;
       collectedPearls.push(...outcome.data.pearls);

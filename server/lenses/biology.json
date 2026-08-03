@@ -1,0 +1,12 @@
+{
+  "id": "biology",
+  "label": "Biology",
+  "routerDescription": "life sciences, physiology, systems/mechanisms",
+  "unitTypeEmphasis": "Domain lens: biology/systems. Favor MECHANISM units for causal chains, feedback loops, and levels of organization; use REQUIRES/PART_OF edges to connect a mechanism to the components or prerequisite mechanisms it depends on. Where the transcript supports it, fill in overlay.levelOfOrganization (e.g. \"cell\", \"organ system\"), overlay.mechanismType (e.g. \"feedback loop\", \"causal chain\"), and overlay.entities (the components/molecules/organs involved) — leave every other overlay field empty.",
+  "overlayFields": [
+    { "key": "levelOfOrganization", "label": "Level of organization", "hint": "e.g. cell, organ system" },
+    { "key": "mechanismType", "label": "Mechanism type", "hint": "e.g. feedback loop, causal chain" },
+    { "key": "entities", "label": "Entities", "hint": "components/molecules/organs involved" }
+  ],
+  "questionStyle": "default"
+}

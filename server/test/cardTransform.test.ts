@@ -9,12 +9,14 @@ import {
   FakeCardTransformClient,
   hashCardTransformInput,
   isWeakBubbleText,
+  LLMCardTransformClient,
   resolveCardTransformClient,
   type CachedCardTransform,
   withTransformResult,
   type CardTransformInput,
   type CardTransformLLMClient,
 } from "../src/lib/cardTransform.js";
+import type { StructuredLLMCaller, StructuredLLMRequest, StructuredCallResult } from "../src/lib/providers.js";
 
 describe("isWeakBubbleText", () => {
   it("is weak for empty/whitespace-only text", () => {
@@ -305,5 +307,95 @@ describe("FakeCardTransformClient — V3-D D4 domain-routed question style", () 
     const a = await new FakeCardTransformClient().transform(input, "model");
     const b = await new FakeCardTransformClient().transform(input, "model");
     expect(a).toEqual(b);
+  });
+});
+
+// --- Phase 5 "Lens registry + clinical as first data-driven lens", item 6
+// "Question-style dispatch" — questionStyle "nclex" branches away from the
+// domain-flavored modules above entirely; absent/"default" preserves the
+// pre-Phase-5 behavior exactly (golden-tested above already; re-asserted
+// here as the explicit "default preserves current behavior" contract). -----
+
+describe("FakeCardTransformClient — Phase 5 questionStyle 'nclex' dispatch", () => {
+  it("produces a scenario-with-options front for non-DOSAGE/LAB_VALUE unit types (PRIORITIZATION material)", async () => {
+    const result = await new FakeCardTransformClient().transform(
+      { quote: "Patient reports chest pain.", note: "", kind: "pearl", questionStyle: "nclex", unitType: "PRIORITIZATION" },
+      "claude-opus-5"
+    );
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("unreachable");
+    expect(result.data.front).toMatch(/scenario/i);
+    expect(result.data.front).toMatch(/A\).*B\).*C\).*D\)/s);
+  });
+
+  it("produces an exact-value ('verbatim matters') front for DOSAGE unit types", async () => {
+    const result = await new FakeCardTransformClient().transform(
+      { quote: "Give metoprolol 25mg PO twice daily.", note: "", kind: "pearl", questionStyle: "nclex", unitType: "DOSAGE" },
+      "claude-opus-5"
+    );
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("unreachable");
+    expect(result.data.front).toMatch(/verbatim matters/i);
+  });
+
+  it("produces an exact-value front for LAB_VALUE unit types too", async () => {
+    const result = await new FakeCardTransformClient().transform(
+      { quote: "Normal potassium is 3.5-5.0 mEq/L.", note: "", kind: "pearl", questionStyle: "nclex", unitType: "LAB_VALUE" },
+      "claude-opus-5"
+    );
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("unreachable");
+    expect(result.data.front).toMatch(/verbatim matters/i);
+  });
+
+  it("questionStyle absent (undefined) keeps the exact pre-Phase-5 domain-flavored behavior, even when a unitType happens to be present", async () => {
+    const withNclex = await new FakeCardTransformClient().transform(
+      { quote: "q", note: "", kind: "pearl", domain: "biology" },
+      "claude-opus-5"
+    );
+    const withUnrelatedUnitType = await new FakeCardTransformClient().transform(
+      { quote: "q", note: "", kind: "pearl", domain: "biology", unitType: "DOSAGE" },
+      "claude-opus-5"
+    );
+    expect(withNclex).toEqual(withUnrelatedUnitType);
+    if (withNclex.kind !== "ok") throw new Error("unreachable");
+    expect(withNclex.data.front).toBe('Why does this happen: "q"?');
+  });
+});
+
+describe("LLMCardTransformClient — Phase 5 questionStyle 'nclex' system-prompt dispatch", () => {
+  function spyCaller(responseText: string): { caller: StructuredLLMCaller; requests: StructuredLLMRequest[] } {
+    const requests: StructuredLLMRequest[] = [];
+    const caller: StructuredLLMCaller = {
+      call: async (request: StructuredLLMRequest): Promise<StructuredCallResult> => {
+        requests.push(request);
+        return { kind: "ok", text: responseText };
+      },
+    };
+    return { caller, requests };
+  }
+
+  const okResponse = JSON.stringify({ front: "f", back: "b", why: "w" });
+
+  it("uses the scenario module for a non-DOSAGE/LAB_VALUE unit type under questionStyle 'nclex'", async () => {
+    const { caller, requests } = spyCaller(okResponse);
+    await new LLMCardTransformClient(caller).transform(
+      { quote: "q", note: "", kind: "pearl", questionStyle: "nclex", unitType: "PRIORITIZATION" },
+      "model"
+    );
+    expect(requests[0].system).toContain("NCLEX-style scenario");
+  });
+
+  it("uses the verbatim module for DOSAGE/LAB_VALUE unit types under questionStyle 'nclex'", async () => {
+    const { caller, requests } = spyCaller(okResponse);
+    await new LLMCardTransformClient(caller).transform({ quote: "q", note: "", kind: "pearl", questionStyle: "nclex", unitType: "DOSAGE" }, "model");
+    expect(requests[0].system).toContain("verbatim matters");
+  });
+
+  it("falls back to the domain-flavored module when questionStyle is absent (default preserved)", async () => {
+    const { caller, requests } = spyCaller(okResponse);
+    await new LLMCardTransformClient(caller).transform({ quote: "q", note: "", kind: "pearl", domain: "biology" }, "model");
+    expect(requests[0].system).toContain("mechanistic why");
+    expect(requests[0].system).not.toContain("NCLEX-style scenario");
   });
 });

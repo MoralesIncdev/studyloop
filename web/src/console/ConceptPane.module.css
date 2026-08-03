@@ -25,3 +25,26 @@
   filter: blur(var(--scaffold-blur, 0px));
   transition: filter 0.4s var(--ease);
 }
+
+/* Phase 4 "Cluster unit type": a CLUSTER unit's members, one per line —
+   same bare-text look as .body/.title above, just list-shaped. */
+.memberList {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.memberItem {
+  font-size: 13px;
+  line-height: 1.4;
+  color: #fff;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 75%), 0 0 14px rgb(0 0 0 / 45%);
+}
+
+.memberItem::before {
+  content: "• ";
+  opacity: 0.7;
+}

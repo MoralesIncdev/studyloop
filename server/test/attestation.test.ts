@@ -10,6 +10,7 @@ import {
   MAX_ATTESTATIONS_PER_PROJECT,
   MAX_USER_BODY_CHARS,
   MAX_USER_TAKE_CHARS,
+  restatedCount,
 } from "../src/lib/attestation.js";
 
 describe("isUnitFeedable", () => {
@@ -61,6 +62,63 @@ describe("attestedCount", () => {
       u3: { status: "dismissed" as const, at: "t" },
     };
     expect(attestedCount(["u1", "u2", "u3", "u4"], attestations)).toBe(1);
+  });
+});
+
+describe("restatedCount", () => {
+  it("counts an attested unit with a non-empty userTake as restated", () => {
+    const attestations = {
+      u1: { status: "attested" as const, userTake: "my own explanation", at: "t" },
+    };
+    expect(restatedCount(["u1"], attestations)).toBe(1);
+  });
+
+  it("does not count an attested unit with an empty-string userTake", () => {
+    const attestations = {
+      u1: { status: "attested" as const, userTake: "", at: "t" },
+    };
+    expect(restatedCount(["u1"], attestations)).toBe(0);
+  });
+
+  it("does not count an attested unit whose userTake is whitespace-only", () => {
+    const attestations = {
+      u1: { status: "attested" as const, userTake: "   ", at: "t" },
+    };
+    expect(restatedCount(["u1"], attestations)).toBe(0);
+  });
+
+  it("does not count an attested unit with no userTake at all (bare Attest click — 'claimed')", () => {
+    const attestations = {
+      u1: { status: "attested" as const, at: "t" },
+    };
+    expect(restatedCount(["u1"], attestations)).toBe(0);
+  });
+
+  it("does not count a dismissed unit, even with a non-empty userTake", () => {
+    const attestations = {
+      u1: { status: "dismissed" as const, userTake: "my own explanation", at: "t" },
+    };
+    expect(restatedCount(["u1"], attestations)).toBe(0);
+  });
+
+  it("does not count a unit with a userTake but no explicit 'attested' status (feedable, but not attested/restated)", () => {
+    const attestations = {
+      u1: { userTake: "my own explanation", at: "t" },
+    };
+    expect(restatedCount(["u1"], attestations)).toBe(0);
+  });
+
+  it("is never greater than attestedCount across a mixed set", () => {
+    const attestations = {
+      u1: { status: "attested" as const, userTake: "restated", at: "t" },
+      u2: { status: "attested" as const, at: "t" },
+      u3: { status: "attested" as const, userTake: "   ", at: "t" },
+      u4: { status: "dismissed" as const, userTake: "restated", at: "t" },
+      u5: { userTake: "restated, no status", at: "t" },
+    };
+    const ids = ["u1", "u2", "u3", "u4", "u5", "u6"];
+    expect(attestedCount(ids, attestations)).toBe(3);
+    expect(restatedCount(ids, attestations)).toBe(1);
   });
 });
 

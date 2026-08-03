@@ -31,6 +31,7 @@ import type {
   ReviewStreak,
   SearchIntent,
   ShareBundle,
+  SlidesMeta,
   StudyLoopConfig,
   StudyLoopConfigPatch,
   TranscriptSegment,
@@ -293,6 +294,23 @@ export interface StudyLoopStore {
   transcriptLoading: boolean;
   loadProjectSession: (id: string) => Promise<void>;
   clearProjectSession: () => void;
+  /**
+   * Phase 2 "Terminology layer v1": TranscriptPane's "correct this term…"
+   * affordance — PATCHes the one mapping, then refetches the transcript so
+   * the corrected reading applies immediately (read-time rewrite; the raw
+   * transcript file itself never changes). A toast reports success/failure,
+   * and notes when the project's existing analysis was just marked stale.
+   */
+  correctTranscriptTerm: (garbled: string, correct: string) => Promise<void>;
+
+  // --- Phase 6 "Slide-text channel, smallest slice (PDF)" ---------------------------
+  /** `null` means no deck attached (or not loaded yet — see `slidesLoading`). */
+  slidesMeta: SlidesMeta | null;
+  slidesLoading: boolean;
+  /** POSTs the PDF, refreshes `slidesMeta`, and locally reflects `analysisMarkedStale` onto `analysis.staleReason` so SlidesRow's inline note appears immediately (matches correctTranscriptTerm's own toast-on-stale pattern). */
+  uploadSlides: (file: File) => Promise<void>;
+  deleteSlides: () => Promise<void>;
+
   /**
    * Returns `true` on success, `false` on failure (a toast is already pushed
    * either way) — never throws. Callers that must not proceed past a failed
@@ -1059,6 +1077,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       pearlReviewAdds: new Set(),
       continuityCandidates: [],
       continuityLoading: false,
+      slidesMeta: null,
+      slidesLoading: false,
     });
     let project: Project;
     try {
@@ -1219,6 +1239,21 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       }
     })();
 
+    // Phase 6 "Slide-text channel": just the upload metadata (never the
+    // extracted page text) — presentational (SlidesRow's "attached" state),
+    // fails quiet the same way pearlReviewAddsPromise/mergedConceptsPromise do.
+    const slidesPromise = (async () => {
+      set({ slidesLoading: true });
+      try {
+        const res = await api.getSlides(id);
+        if (!isCurrent()) return;
+        set({ slidesMeta: res.meta, slidesLoading: false });
+      } catch {
+        if (!isCurrent()) return;
+        set({ slidesLoading: false });
+      }
+    })();
+
     if (project.transcript.type === "file") {
       set({ transcriptLoading: true });
       try {
@@ -1242,6 +1277,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       pearlReviewAddsPromise,
       continuityPromise,
       mergedConceptsPromise,
+      slidesPromise,
     ]);
   },
   clearProjectSession: () => {
@@ -1309,7 +1345,33 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       pearlReviewAdds: new Set(),
       continuityCandidates: [],
       continuityLoading: false,
+      slidesMeta: null,
+      slidesLoading: false,
     }));
+  },
+  correctTranscriptTerm: async (garbled, correct) => {
+    const project = get().currentProject;
+    if (!project || project.transcript.type !== "file") return;
+    try {
+      const res = await api.patchTerms(project.id, { upsert: { [garbled]: correct } });
+      // Refetch (not a local rewrite) — the server is the source of truth
+      // for how corrections apply (case/word-boundary/longest-match, plus
+      // any glossary defaults merged in), same as every other "save then
+      // reload" flow in this store.
+      if (project.transcript.type === "file") {
+        const transcript = await api.getTranscript(project.transcript.path, project.id);
+        if (get().currentProject?.id === project.id) {
+          set({ transcriptSegments: transcript.segments });
+        }
+      }
+      get().pushToast(
+        res.analysisMarkedStale
+          ? `Corrected "${garbled}" → "${correct}" — existing analysis is now stale.`
+          : `Corrected "${garbled}" → "${correct}".`
+      );
+    } catch (err) {
+      get().pushToast(`Could not save term correction: ${errorMessage(err)}`, "error");
+    }
   },
   patchCurrentProject: async (patch) => {
     const project = get().currentProject;
@@ -2001,6 +2063,57 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       if (!res.ok) get().pushToast(res.message ?? "Could not reveal in Finder", "info");
     } catch (err) {
       get().pushToast(`Could not reveal in Finder: ${errorMessage(err)}`, "error");
+    }
+  },
+
+  // --- Phase 6 "Slide-text channel, smallest slice (PDF)" ---------------------------------
+  slidesMeta: null,
+  slidesLoading: false,
+  uploadSlides: async (file) => {
+    const project = get().currentProject;
+    if (!project) return;
+    const projectId = project.id;
+    set({ slidesLoading: true });
+    try {
+      const res = await api.uploadSlides(projectId, file);
+      if (get().currentProject?.id !== projectId) return;
+      set((state) => ({
+        slidesMeta: res.meta,
+        slidesLoading: false,
+        // Same "reflect analysisMarkedStale locally, don't wait for a
+        // reload" convenience correctTranscriptTerm's toast already implies
+        // — here it also drives SlidesRow's inline stale note immediately.
+        analysis: res.analysisMarkedStale && state.analysis ? { ...state.analysis, staleReason: "slides-changed" } : state.analysis,
+      }));
+      get().pushToast(
+        res.analysisMarkedStale
+          ? `Attached "${res.meta.filename}" (${res.meta.pageCount} pages) — existing analysis is now stale.`
+          : `Attached "${res.meta.filename}" (${res.meta.pageCount} pages).`
+      );
+    } catch (err) {
+      if (get().currentProject?.id !== projectId) return;
+      set({ slidesLoading: false });
+      get().pushToast(`Could not attach slides: ${errorMessage(err)}`, "error");
+    }
+  },
+  deleteSlides: async () => {
+    const project = get().currentProject;
+    if (!project) return;
+    const projectId = project.id;
+    set({ slidesLoading: true });
+    try {
+      const res = await api.deleteSlides(projectId);
+      if (get().currentProject?.id !== projectId) return;
+      set((state) => ({
+        slidesMeta: null,
+        slidesLoading: false,
+        analysis: res.analysisMarkedStale && state.analysis ? { ...state.analysis, staleReason: "slides-changed" } : state.analysis,
+      }));
+      get().pushToast(res.analysisMarkedStale ? "Removed slides — existing analysis is now stale." : "Removed slides.");
+    } catch (err) {
+      if (get().currentProject?.id !== projectId) return;
+      set({ slidesLoading: false });
+      get().pushToast(`Could not remove slides: ${errorMessage(err)}`, "error");
     }
   },
 

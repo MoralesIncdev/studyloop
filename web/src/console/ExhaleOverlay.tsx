@@ -42,6 +42,15 @@ export function ExhaleOverlay(): JSX.Element | null {
     () => Object.values(attestations).filter((a) => a.status === "attested").length,
     [attestations]
   );
+  // Phase 3 "Restated vs claimed counts": mirrors server/src/lib/attestation.ts's
+  // restatedCount (attested AND non-empty userTake) — computed client-side
+  // the same way attestedCount already is, since attestations are served as
+  // the raw map rather than pre-aggregated counts.
+  const restatedCount = useMemo(
+    () => Object.values(attestations).filter((a) => a.status === "attested" && Boolean(a.userTake?.trim())).length,
+    [attestations]
+  );
+  const claimedCount = attestedCount - restatedCount;
   const unitCount = analysis?.units?.length ?? 0;
   const thread = useMemo(() => candidates.slice(0, MAX_THREAD), [candidates]);
 
@@ -78,7 +87,11 @@ export function ExhaleOverlay(): JSX.Element | null {
         <span className={styles.kicker}>Session complete</span>
         <h2 className={styles.headline}>The video ends; the knowledge stays.</h2>
         <p className={styles.sum}>
-          {unitCount > 0 ? `${attestedCount} of ${unitCount} concepts attested · ` : ""}
+          {unitCount > 0
+            ? `${attestedCount} of ${unitCount} concepts attested${
+                claimedCount > 0 ? ` (${restatedCount} restated · ${claimedCount} claimed)` : ""
+              } · `
+            : ""}
           {bubbles.length} {bubbles.length === 1 ? "note" : "notes"} pinned.
         </p>
         {thread.length > 0 && (

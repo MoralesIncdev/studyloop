@@ -338,6 +338,27 @@
   font-style: italic;
 }
 
+/* Phase 5 "Safety tier": verbatim transcript quote, unconditionally visible
+   for safety-tier unit types (DOSAGE/CONTRAINDICATION/LAB_VALUE) — quiet but
+   always-on, never gated behind reveal/attestation state. */
+.safetyQuotes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--accent-amber);
+  background: var(--surface-overlay);
+  border-radius: 4px;
+}
+
+.safetyQuote {
+  margin: 0;
+  font-size: var(--type-12);
+  color: var(--text-secondary);
+  font-style: italic;
+  line-height: 1.4;
+}
+
 /* V3-D D1 "Advanced fold": domain overlay fields, collapsed by default,
    dimmed label — never competes visually with the generation slot/body. */
 .advancedFold {
