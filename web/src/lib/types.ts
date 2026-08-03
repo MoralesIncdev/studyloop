@@ -2,11 +2,17 @@
 // Kept as plain interfaces here rather than importing across the workspace boundary —
 // the two packages build independently and the API is the real contract between them.
 
+/** Phase 10 "Transcript source chain": which scan-time step matched this item's `transcriptPath`. Never "youtube" here — that step is a lazy, on-request pull (see TranscriptResponse.transcriptSource), never attempted during a scan. */
+export type LibraryTranscriptSource = "pipeline" | "sidecar";
+
 export interface LibraryItem {
   videoPath: string;
   title: string;
   durationSeconds?: number;
   transcriptPath?: string;
+  transcriptSource?: LibraryTranscriptSource;
+  /** True when nothing in the scan-time chain matched AND no YouTube id could be derived from the filename — i.e. this item's only remaining path to a transcript is Phase 11's bring-your-own ASR. */
+  transcribable?: boolean;
   instructor?: string;
   series?: string;
 }
@@ -34,6 +40,26 @@ export type ConceptProfile = "bjj-curriculum" | "headings";
  * user-authored/generated one), keeping the shipped ids as inline docs.
  */
 export type Domain = "biology" | "history" | "music" | "physical_skill" | "generic" | "clinical" | (string & {});
+
+/**
+ * Phase 9 "Lens autogeneration for unknown subjects": one entry from
+ * GET /api/lenses (server/src/routes/lenses.ts) — a thin summary of the
+ * loaded lens registry (server/src/lib/lenses.ts), not the full lens shape
+ * (prompt text stays server-only). `origin`/`path` are only present for a
+ * lens the router auto-generated on the fly (server/src/lib/lenses.ts's
+ * generateAndPersistLens) — DomainRow.tsx uses them for the
+ * "auto-created lens — review it" note.
+ */
+export interface LensSummary {
+  id: string;
+  label: string;
+  origin?: "generated";
+  path?: string;
+}
+
+export interface LensesResponse {
+  lenses: LensSummary[];
+}
 
 export interface ConceptDocRef {
   path?: string;
@@ -110,8 +136,14 @@ export interface TranscriptSegment {
   text: string;
 }
 
+/** Phase 10 "Transcript source chain": absent means "pipeline" (backward compat with responses from before this phase). Phase 11 adds "asr" — a prior POST /api/projects/:id/transcribe job's cached output. */
+export type TranscriptSource = "pipeline" | "sidecar" | "youtube" | "asr";
+
 export interface TranscriptResponse {
   segments: TranscriptSegment[];
+  transcriptSource?: TranscriptSource;
+  /** True only when GET /api/transcript resolved via the chain (no explicit `path`) and nothing in it matched — Phase 11's ASR slot. */
+  transcribable?: boolean;
 }
 
 export interface ConceptAnchor {
@@ -207,6 +239,31 @@ export const LLM_PROVIDERS: Record<LlmProviderId, { label: string; keyPlaceholde
 
 export const LLM_PROVIDER_IDS = Object.keys(LLM_PROVIDERS) as LlmProviderId[];
 
+// --- Phase 11 "Bring-your-own local ASR adapters" (design/EXECUTION-PLAN-post-review-v1.md) ---
+// Mirrors server/src/config.ts's AsrModeSchema/AsrConfigSchema/PublicAsrConfig.
+
+export type AsrMode = "off" | "command" | "endpoint";
+
+/** GET /api/config's redacted `asr` shape — `apiKey` never travels back over the wire, only `apiKeySet`. */
+export interface AsrConfig {
+  mode: AsrMode;
+  command: string | null;
+  endpoint: string | null;
+  apiKeySet: boolean;
+  model: string | null;
+  language: string | null;
+}
+
+/** PUT /api/config's `asr` patch shape — the only place the plaintext ASR key travels. Omit `apiKey` entirely to keep whatever's already saved (same "leave blank to keep" convention as the top-level provider `…ApiKey` fields). */
+export interface AsrConfigPatch {
+  mode?: AsrMode;
+  command?: string | null;
+  endpoint?: string | null;
+  apiKey?: string | null;
+  model?: string | null;
+  language?: string | null;
+}
+
 /** GET/PUT /api/config response shape — the server never echoes actual keys back, only per-provider `…ApiKeySet` booleans. */
 export interface StudyLoopConfig {
   dataDir: string;
@@ -230,6 +287,8 @@ export interface StudyLoopConfig {
   shareHandle: string;
   /** V3-C C1: Concept Continuity scorer weights (hot-reloadable via PUT /api/config). */
   continuityWeights: ContinuityWeights;
+  /** Phase 11 "Bring-your-own local ASR adapters". */
+  asr: AsrConfig;
 }
 
 /** True when the selected provider has (or plausibly has, for OAuth) credentials — the client-side gate before Analyze/Improve calls. */
@@ -272,6 +331,8 @@ export interface StudyLoopConfigPatch {
   analysisModel?: string | null;
   shareHandle?: string;
   continuityWeights?: ContinuityWeights;
+  /** Phase 11 "Bring-your-own local ASR adapters" — sent as a whole object; see AsrConfigPatch's "leave blank to keep" note for `apiKey`. */
+  asr?: AsrConfigPatch;
 }
 
 // --- V2-C: Analysis engine (SPEC "Analysis engine ('pearls & concept breakdown')") ---
@@ -493,6 +554,29 @@ export type AnalyzeStatus =
   | { state: "running"; pct: number }
   | { state: "done" }
   | { state: "error"; message: string };
+
+// --- Phase 11 "Bring-your-own local ASR adapters" (design/EXECUTION-PLAN-post-review-v1.md) ---
+// Mirrors server/src/lib/asrJobs.ts's AsrJobStatusView.
+
+/** GET (and POST's 202 body) /api/projects/:id/transcribe — one flat status shape rather than a discriminated union, since every field beyond `state` is optional and the server already resolves elapsed/started/finished once per request. */
+export interface TranscribeStatus {
+  state: "idle" | "queued" | "running" | "done" | "failed";
+  startedAt?: string;
+  finishedAt?: string;
+  elapsedMs?: number;
+  message?: string;
+}
+
+/** POST /api/projects/:id/transcribe's 200 (idempotent, already-cached) response — SPEC: "never re-run when cached". */
+export interface TranscribePostResponse extends TranscribeStatus {
+  cached?: boolean;
+}
+
+/** DELETE /api/projects/:id/transcribe response. */
+export interface CancelTranscribeResponse {
+  ok: true;
+  cancelled: boolean;
+}
 
 // --- V2-C / V3-C C5: Heatmap + shareable analysis (SPEC) ---
 

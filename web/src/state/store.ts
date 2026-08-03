@@ -34,12 +34,16 @@ import type {
   SlidesMeta,
   StudyLoopConfig,
   StudyLoopConfigPatch,
+  TranscribeStatus,
   TranscriptSegment,
 } from "../lib/types";
 import { llmConfigured } from "../lib/types";
 import { hasSeenAttentionLegend, markAttentionLegendSeen } from "../lib/attentionHeatmap";
 import { resetAllPaneLayouts as clearStoredPaneLayouts } from "../lib/consoleLayout";
+import { defaultSurfaceForDomain, loadSurfacePreference, saveSurfacePreference, type StudySurface } from "../lib/documentSurface";
 import type { PlayerHandle } from "../player/types";
+
+export type { StudySurface };
 
 // "concepts" moved out of the bottom dock into the V2 right-rail Concepts
 // card (see study/RightRail.tsx) — the description box below the player now
@@ -106,6 +110,19 @@ function clearAnalyzePoll(): void {
   if (analyzePollTimer) {
     clearInterval(analyzePollTimer);
     analyzePollTimer = null;
+  }
+}
+
+// Phase 11 "Bring-your-own local ASR adapters": same "module-level timer,
+// cleared deterministically on project switch/unmount" reasoning as
+// analyzePollTimer above — a transcribe job can genuinely run for hours, so
+// this poll must survive whatever component happens to render TranscribeRow.
+const TRANSCRIBE_POLL_INTERVAL_MS = 2000;
+let transcribePollTimer: ReturnType<typeof setInterval> | null = null;
+function clearTranscribePoll(): void {
+  if (transcribePollTimer) {
+    clearInterval(transcribePollTimer);
+    transcribePollTimer = null;
   }
 }
 function clearHeatmapDebounce(): void {
@@ -292,6 +309,8 @@ export interface StudyLoopStore {
   sessionRequestId: number;
   transcriptSegments: TranscriptSegment[];
   transcriptLoading: boolean;
+  /** Phase 10/11: true only when GET /api/transcript resolved via the chain and nothing in it matched — this project's only remaining path to a transcript is bring-your-own ASR (see TranscribeRow). */
+  transcribable: boolean;
   loadProjectSession: (id: string) => Promise<void>;
   clearProjectSession: () => void;
   /**
@@ -302,6 +321,14 @@ export interface StudyLoopStore {
    * and notes when the project's existing analysis was just marked stale.
    */
   correctTranscriptTerm: (garbled: string, correct: string) => Promise<void>;
+
+  // --- Phase 11 "Bring-your-own local ASR adapters" ---------------------------------
+  transcribeStatus: TranscribeStatus;
+  /** POSTs /transcribe (idempotent — a 200 `cached` response is treated as an immediate "done"), then polls until settled. */
+  startTranscribe: () => Promise<void>;
+  cancelTranscribeJob: () => Promise<void>;
+  /** Internal: begins (or restarts) the poll loop against GET /transcribe for `projectId`. */
+  pollTranscribeStatus: (projectId: string) => void;
 
   // --- Phase 6 "Slide-text channel, smallest slice (PDF)" ---------------------------
   /** `null` means no deck attached (or not loaded yet — see `slidesLoading`). */
@@ -489,6 +516,18 @@ export interface StudyLoopStore {
    *  nothing reads it yet. */
   pressure: number;
   setPressure: (v: number) => void;
+  /**
+   * Phase 8 "Document mode" (design/EXECUTION-PLAN-post-review-v1.md): which
+   * full-page surface the study page renders — the pane-engine console (the
+   * SessionCabinet toggle button labeled "Console") or the transcript-
+   * ordered document surface (study/DocumentView.tsx, "Document"). Defaults
+   * per-project from the project's domain (lib/documentSurface.ts's
+   * defaultSurfaceForDomain, computed once the project fetch resolves in
+   * loadProjectSession) unless the learner already made an explicit choice
+   * for this project, in which case that choice persists and wins.
+   */
+  studySurface: StudySurface;
+  setStudySurface: (surface: StudySurface) => void;
 
   // --- Console slice D: pane engine parity (design/mockups/video-console/index.html
   // lines 1044-1099, "drag-to-park + waiting ticks + undock") ----------------------
@@ -980,6 +1019,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   sessionRequestId: 0,
   transcriptSegments: [],
   transcriptLoading: false,
+  transcribable: false,
+  transcribeStatus: { state: "idle" },
   loadProjectSession: async (id) => {
     // Tag this call with a fresh request id. Every async continuation below
     // checks it's still current before touching state — if the user
@@ -999,6 +1040,7 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     // guards any other caller of loadProjectSession too.
     clearPendingNotesSave();
     clearAnalyzePoll();
+    clearTranscribePoll();
     clearHeatmapDebounce();
     clearPlaybackFocusTimer();
 
@@ -1008,6 +1050,8 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       currentProject: null,
       transcriptSegments: [],
       transcriptLoading: false,
+      transcribable: false,
+      transcribeStatus: { state: "idle" },
       currentTime: 0,
       duration: 0,
       isPlaying: false,
@@ -1030,6 +1074,11 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       condensedPlayback: false,
       consoleMode: true, // slice A: every project session starts in the console shell
       consoleEditMode: false,
+      // Phase 8: placeholder until the project fetch below resolves and its
+      // domain (or a stored per-project preference) is known — mirrors
+      // ccEnabled's own "set again once `project` is available" pattern a
+      // few lines down, not a real decision yet.
+      studySurface: "console",
       focusMode: false,
       keymapOpen: false,
       openCabinet: null,
@@ -1090,7 +1139,12 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       return;
     }
     if (!isCurrent()) return;
-    set({ currentProject: project, currentProjectLoading: false, ccEnabled: readCcEnabled(project.id) });
+    // Phase 8 "Document mode" item 4: an explicit prior choice for this
+    // project always wins; otherwise the domain-driven default (clinical ->
+    // document, everything else -> console).
+    const storedSurface = loadSurfacePreference(project.id);
+    const studySurface = storedSurface ?? defaultSurfaceForDomain(project.domain);
+    set({ currentProject: project, currentProjectLoading: false, ccEnabled: readCcEnabled(project.id), studySurface });
 
     const bubblesPromise = (async () => {
       set({ bubblesLoading: true });
@@ -1254,18 +1308,49 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       }
     })();
 
-    if (project.transcript.type === "file") {
+    // Phase 10 "Transcript source chain": always ask the server, even when
+    // `transcript.type` is "none" — a same-dir sidecar or a lazily-pulled
+    // YouTube caption track can still resolve via GET /api/transcript's
+    // chain fallback (lib/transcriptChain.ts) when only `projectId` is
+    // given. A project that genuinely has nothing (server returns
+    // `transcribable: true`, empty segments) degrades silently — that's the
+    // normal "no transcript yet" state, not an error worth a toast.
+    {
+      const transcriptPath = project.transcript.type === "file" ? project.transcript.path : undefined;
       set({ transcriptLoading: true });
       try {
-        const res = await api.getTranscript(project.transcript.path, project.id);
+        const res = await api.getTranscript(transcriptPath, project.id);
         if (!isCurrent()) return;
-        set({ transcriptSegments: res.segments, transcriptLoading: false });
+        // Phase 11: `transcribable` only ever comes back true on the
+        // no-`path` (chain) branch — a declared-path lookup never sets it,
+        // so `?? false` here is exactly "not applicable" for that branch.
+        set({ transcriptSegments: res.segments, transcriptLoading: false, transcribable: res.transcribable ?? false });
       } catch (err) {
         if (!isCurrent()) return;
         set({ transcriptLoading: false });
-        get().pushToast(`Could not load transcript: ${errorMessage(err)}`, "error");
+        if (transcriptPath) {
+          get().pushToast(`Could not load transcript: ${errorMessage(err)}`, "error");
+        }
+        // No declared transcript path: a chain-resolution failure (network
+        // blocked, no sidecar, no derivable id) is the ordinary "no
+        // transcript" case, not something worth surfacing as an error toast.
       }
     }
+
+    // Phase 11 "Bring-your-own local ASR adapters": picks up a job already
+    // queued/running/finished from before this session loaded (a page
+    // reload mid-transcription, or a job left running from a previous visit
+    // to this project) — presentational, fails quiet like slidesPromise.
+    const transcribeStatusPromise = (async () => {
+      try {
+        const status = await api.getTranscribeStatus(id);
+        if (!isCurrent()) return;
+        set({ transcribeStatus: status });
+        if (status.state === "queued" || status.state === "running") get().pollTranscribeStatus(id);
+      } catch {
+        // ignore — TranscribeRow just starts from "idle"
+      }
+    })();
 
     await Promise.all([
       bubblesPromise,
@@ -1278,17 +1363,21 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
       continuityPromise,
       mergedConceptsPromise,
       slidesPromise,
+      transcribeStatusPromise,
     ]);
   },
   clearProjectSession: () => {
     clearPendingNotesSave();
     clearAnalyzePoll();
+    clearTranscribePoll();
     clearHeatmapDebounce();
     clearPlaybackFocusTimer();
     set((state) => ({
       sessionRequestId: state.sessionRequestId + 1,
       currentProject: null,
       transcriptSegments: [],
+      transcribable: false,
+      transcribeStatus: { state: "idle" },
       controller: null,
       currentTime: 0,
       duration: 0,
@@ -1694,6 +1783,17 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
   setScaffold: (v) => set({ scaffold: Math.min(100, Math.max(0, v)) }),
   pressure: 100,
   setPressure: (v) => set({ pressure: Math.min(100, Math.max(0, v)) }),
+  studySurface: "console",
+  setStudySurface: (surface) => {
+    if (get().studySurface === surface) return;
+    const projectId = get().currentProject?.id;
+    if (projectId) saveSurfacePreference(projectId, surface);
+    // Edit mode is a pane-engine concept (ConsoleLayer isn't even mounted in
+    // document mode — see StudyView.tsx) — leaving it on across a switch to
+    // Document would silently re-arm it for whenever the learner switches
+    // back, which isn't what "toggle to Document" asked for.
+    set({ studySurface: surface, consoleEditMode: surface === "document" ? false : get().consoleEditMode });
+  },
 
   // --- Console slice D: pane engine parity -----------------------------------------
   parkedPanes: {},
@@ -2064,6 +2164,103 @@ export const useStudyLoopStore = create<StudyLoopStore>((set, get) => ({
     } catch (err) {
       get().pushToast(`Could not reveal in Finder: ${errorMessage(err)}`, "error");
     }
+  },
+
+  // --- Phase 11 "Bring-your-own local ASR adapters" ---------------------------------------
+  startTranscribe: async () => {
+    const project = get().currentProject;
+    if (!project) return;
+    // No ASR adapter configured → toast + open Settings, same pattern as
+    // startAnalyze's own "no API key" gate — avoids a wasted round trip to
+    // the server just to get the same 400 back.
+    const config = get().config ?? (await get().loadConfig());
+    if (!config) return; // loadConfig already toasted its own failure
+    if (config.asr.mode === "off") {
+      get().pushToast("Set up bring-your-own ASR in Settings to transcribe this video", "info");
+      get().navigate({ view: "settings" });
+      return;
+    }
+    const projectId = project.id;
+    set({ transcribeStatus: { state: "queued" } });
+    try {
+      const res = await api.startTranscribe(projectId);
+      if (get().currentProject?.id !== projectId) return; // navigated away mid-request
+      if (res.cached) {
+        // SPEC: "never re-run when cached" — the server served the existing
+        // cache without touching the job queue. Reload the transcript
+        // (chain step 4 now resolves it) rather than waiting on a poll that
+        // will never see a "running" state for this call.
+        set({ transcribeStatus: { state: "done" } });
+        const transcript = await api.getTranscript(undefined, projectId);
+        if (get().currentProject?.id !== projectId) return;
+        set({ transcriptSegments: transcript.segments, transcribable: transcript.transcribable ?? false });
+        get().pushToast("Transcript already available — loaded from cache.", "success");
+        return;
+      }
+      set({ transcribeStatus: res });
+      if (res.state === "queued" || res.state === "running") get().pollTranscribeStatus(projectId);
+    } catch (err) {
+      if (get().currentProject?.id !== projectId) return;
+      if (err instanceof ApiError && err.status === 409) {
+        // Another POST already started/queued this project's job (e.g. a
+        // second tab) — just start polling instead of surfacing a failure.
+        get().pollTranscribeStatus(projectId);
+        return;
+      }
+      set({ transcribeStatus: { state: "failed", message: errorMessage(err) } });
+      get().pushToast(`Could not start transcription: ${errorMessage(err)}`, "error");
+    }
+  },
+  cancelTranscribeJob: async () => {
+    const project = get().currentProject;
+    if (!project) return;
+    const projectId = project.id;
+    try {
+      await api.cancelTranscribe(projectId);
+      clearTranscribePoll();
+      if (get().currentProject?.id !== projectId) return;
+      set({ transcribeStatus: { state: "failed", message: "Cancelled" } });
+      get().pushToast("Transcription cancelled.");
+    } catch (err) {
+      get().pushToast(`Could not cancel transcription: ${errorMessage(err)}`, "error");
+    }
+  },
+  pollTranscribeStatus: (projectId) => {
+    clearTranscribePoll();
+    transcribePollTimer = setInterval(() => {
+      if (get().currentProject?.id !== projectId) {
+        clearTranscribePoll();
+        return;
+      }
+      void (async () => {
+        try {
+          const status = await api.getTranscribeStatus(projectId);
+          if (get().currentProject?.id !== projectId) {
+            clearTranscribePoll();
+            return;
+          }
+          set({ transcribeStatus: status });
+          if (status.state === "done") {
+            clearTranscribePoll();
+            try {
+              const transcript = await api.getTranscript(undefined, projectId);
+              if (get().currentProject?.id !== projectId) return;
+              set({ transcriptSegments: transcript.segments, transcribable: transcript.transcribable ?? false });
+              get().pushToast("Transcription complete", "success");
+            } catch (err) {
+              get().pushToast(`Transcription finished but the transcript could not be loaded: ${errorMessage(err)}`, "error");
+            }
+          } else if (status.state === "failed") {
+            clearTranscribePoll();
+            if (status.message !== "Cancelled") {
+              get().pushToast(`Transcription failed: ${status.message ?? "unknown error"}`, "error");
+            }
+          }
+        } catch {
+          // Transient poll failure (e.g. a dropped request) — retry on the next tick.
+        }
+      })();
+    }, TRANSCRIBE_POLL_INTERVAL_MS);
   },
 
   // --- Phase 6 "Slide-text channel, smallest slice (PDF)" ---------------------------------

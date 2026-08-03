@@ -1,0 +1,69 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.attachBtn {
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+  font-size: var(--type-12);
+  cursor: pointer;
+}
+
+.attachBtn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.attachBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+  font-size: var(--type-12);
+}
+
+.errorChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-default);
+  color: var(--accent-red, var(--text-secondary));
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+  font-size: var(--type-12);
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cancelBtn {
+  background: none;
+  border: none;
+  color: var(--text-tertiary, var(--text-secondary));
+  font-size: var(--type-12);
+  cursor: pointer;
+  padding: 3px 4px;
+  text-decoration: underline;
+}
+
+.cancelBtn:hover {
+  color: var(--text-primary);
+}

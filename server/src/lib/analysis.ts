@@ -28,7 +28,7 @@ import { createStructuredCaller, type ProviderAuth, type StructuredLLMCaller } f
 import { z } from "zod";
 import { formatTimestamp } from "./time.js";
 import { DomainSchema, type Domain, type Lens } from "./models.js";
-import { listLensesOrFallback, resolveLensOrGeneric } from "./lenses.js";
+import { generateAndPersistLens, listLensesOrFallback, resolveLensOrGeneric, type LensGenerationLLMClient } from "./lenses.js";
 import type { TranscriptSegment } from "./transcripts.js";
 
 // --- Public analysis.json shape (SPEC) --------------------------------------
@@ -603,7 +603,23 @@ const MergeV3ResultSchema = z.object({
 });
 export type MergeV3Result = z.infer<typeof MergeV3ResultSchema>;
 
-const ROUTER_RESULT_SCHEMA = z.object({ domain: DomainSchema });
+/**
+ * Phase 9 "Lens autogeneration for unknown subjects": `noneFit`/`subject` are
+ * OPTIONAL on this zod schema (not `.default()`-ed, genuinely absent-able) —
+ * deliberately, so every pre-Phase-9 test/call-site object literal typed as
+ * `RouterResult` (e.g. `{ domain: "generic" }`, all over
+ * test/analysisV3.test.ts) keeps compiling and behaving unchanged. The wire
+ * JSON schema below (`buildRouterJsonSchema`) is stricter — real
+ * structured-output calls always get both fields back, per this codebase's
+ * "structured outputs want every property present" convention.
+ */
+const ROUTER_RESULT_SCHEMA = z.object({
+  domain: DomainSchema,
+  /** true when the router judged NO loaded lens plausibly fits — see `subject`. */
+  noneFit: z.boolean().optional(),
+  /** A short free-text subject label (e.g. "organic chemistry"), only meaningful when `noneFit` is true — see lib/lenses.ts's `generateAndPersistLens`. */
+  subject: z.string().optional(),
+});
 export type RouterResult = z.infer<typeof ROUTER_RESULT_SCHEMA>;
 
 /**
@@ -611,14 +627,21 @@ export type RouterResult = z.infer<typeof ROUTER_RESULT_SCHEMA>;
  * static 5-item list — it's now built from whichever lenses are actually
  * loaded (repo + user dir), so a project can route to "clinical" (or any
  * future/generated lens) the moment its lens file exists.
+ *
+ * Phase 9 "Lens autogeneration": `noneFit`/`subject` let the router say "none
+ * of these fit" instead of forcing a bad guess — `domain` stays required (a
+ * best-guess fallback in case generation itself fails, see
+ * runAnalysisJobV3), it's just no longer the ONLY signal the model can give.
  */
 function buildRouterJsonSchema(ids: readonly string[]): Record<string, unknown> {
   return {
     type: "object",
     properties: {
       domain: { type: "string", enum: [...ids] },
+      noneFit: { type: "boolean" },
+      subject: { type: "string" },
     },
-    required: ["domain"],
+    required: ["domain", "noneFit", "subject"],
     additionalProperties: false,
   };
 }
@@ -855,7 +878,7 @@ function buildMergeUserPrompt(pearls: readonly ChunkPearl[], concepts: readonly 
  */
 function buildRouterSystemPrompt(lenses: readonly Lens[]): string {
   const options = lenses.map((l) => `"${l.id}" (${l.routerDescription})`).join(", ");
-  return `Classify the dominant subject-matter domain of an instructional video from a sample of its transcript. Choose exactly one of: ${options}. This is a coarse routing signal, not a final judgment — the learner can change it later, so prefer your best single guess over hedging.`;
+  return `Classify the dominant subject-matter domain of an instructional video from a sample of its transcript. Choose exactly one of: ${options} for "domain" — prefer an existing option whenever it plausibly fits the subject matter, even loosely; these options cover a wide range of subjects and a loose fit is usually good enough, so don't reach for "noneFit" just because the fit isn't perfect. Set "noneFit" to true ONLY when the subject matter is clearly outside every option above (e.g. an entirely different field of study), and in that case also fill "subject" with a short (2-5 word) free-text label for what the video is actually about (e.g. "organic chemistry", "woodworking joinery", "personal finance") — still pick your best-guess "domain" from the list above too, as a fallback in case a new lens can't be generated for it. When "noneFit" is false, leave "subject" as an empty string. This is a coarse routing signal, not a final judgment — the learner can change it later, so prefer your best single guess over hedging.`;
 }
 
 function buildRouterUserPrompt(sampleText: string): string {
@@ -1136,8 +1159,24 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
 
   // --- V3-B B1: typed-spine methods (also deterministic, no randomness) ----
 
+  /**
+   * Phase 9 "Lens autogeneration": route-level tests need a way to exercise
+   * the "none of the loaded lenses fit" path without a real LLM — a
+   * transcript sample containing this marker (followed by a free-text
+   * subject up to the next newline) makes the fake router respond exactly
+   * as if a real model had judged no lens fits. Never matches real
+   * transcript text (it's an unmistakably synthetic string).
+   */
+  static readonly FAKE_UNKNOWN_SUBJECT_TRIGGER = "STUDYLOOP_FAKE_UNKNOWN_SUBJECT:";
+
   /** Simple keyword-count heuristic — deterministic, no network call, mirrors the real router's classification without needing a model. Phase 5 "Lens registry": `clinical` keywords added alongside the original five — any domain string not covered here (a future/generated lens with no keyword list) simply never wins the count and the default "generic" is kept. */
   async runRouter(sampleText: string, _model?: string): Promise<AnalysisOutcome<RouterResult>> {
+    const triggerIndex = sampleText.indexOf(FakeAnalysisClient.FAKE_UNKNOWN_SUBJECT_TRIGGER);
+    if (triggerIndex !== -1) {
+      const rest = sampleText.slice(triggerIndex + FakeAnalysisClient.FAKE_UNKNOWN_SUBJECT_TRIGGER.length);
+      const subject = (rest.split("\n")[0] ?? "").trim() || "unknown subject";
+      return { kind: "ok", data: { domain: "generic", noneFit: true, subject } };
+    }
     const lower = sampleText.toLowerCase();
     const keywordsByDomain: Record<string, string[]> = {
       biology: ["cell", "organism", "enzyme", "protein", "mechanism", "biology", "dna", "tissue", "membrane"],
@@ -1666,6 +1705,24 @@ export interface AnalysisJobParamsV3 {
    * transcript timing; that's future work, not this slice.
    */
   slidePages?: readonly { page: number; text: string }[];
+  /**
+   * Phase 9 "Lens autogeneration": the project's dataDir — needed so a
+   * generated lens can be persisted to `<dataDir>/lenses/<id>.json` and made
+   * visible to THIS run (see lib/lenses.ts's generateAndPersistLens).
+   * Defaults to "" (never attempts generation into a real dataDir, but also
+   * never crashes an existing caller that doesn't pass one) so every
+   * pre-Phase-9 test/call site keeps compiling and behaving unchanged.
+   */
+  dataDir?: string;
+  /**
+   * Phase 9: resolved once per analyze run by routes/analyze.ts (see
+   * lib/lenses.ts's resolveLensGenerationClient) — `null`/absent simply means
+   * "no generation available this run" (no credential, or the caller didn't
+   * wire one up), which is treated identically to "generation failed": the
+   * router's "none of the loaded lenses fit" verdict falls back to domain
+   * "generic" rather than blocking the run.
+   */
+  lensGenerationClient?: LensGenerationLLMClient | null;
 }
 
 /**
@@ -1689,10 +1746,44 @@ export async function runAnalysisJobV3(params: AnalysisJobParamsV3): Promise<Ana
     .replace(/\[[^\]]*\]/g, "")
     .slice(0, 4000);
   const routerOutcome = await params.client.runRouter(sampleText, params.model);
-  const domain: Domain = routerOutcome.kind === "ok" ? routerOutcome.data.domain : "generic";
+  let domain: Domain = routerOutcome.kind === "ok" ? routerOutcome.data.domain : "generic";
   if (routerOutcome.kind !== "ok") {
     // eslint-disable-next-line no-console
     console.warn(`[analysis] router call skipped (${routerOutcome.reason} — ${routerOutcome.detail}); defaulting domain to "generic"`);
+  } else if (routerOutcome.data.noneFit) {
+    // Phase 9 "Lens autogeneration for unknown subjects": the router judged
+    // no loaded lens fits — attempt exactly ONE lens-generation call (SPEC:
+    // "generation happens at most once per analyze run" — this `else if`
+    // branch itself is the enforcement: it can only be reached once, right
+    // here, straight off the single router call above). Any failure at all
+    // (no client available, LLM refusal/parse error, schema validation, disk
+    // IO — all handled inside generateAndPersistLens) falls back to
+    // "generic", never to the router's own best-guess `domain`, per SPEC's
+    // literal wording ("on any failure ... fall back to generic").
+    const subject = routerOutcome.data.subject?.trim();
+    if (!subject) {
+      // eslint-disable-next-line no-console
+      console.warn(`[analysis] router reported noneFit with no usable subject label — defaulting domain to "generic"`);
+      domain = "generic";
+    } else if (!params.lensGenerationClient) {
+      // eslint-disable-next-line no-console
+      console.warn(`[analysis] router reported noneFit for subject "${subject}" but no lens-generation client is available — defaulting domain to "generic"`);
+      domain = "generic";
+    } else {
+      const generated = await generateAndPersistLens({
+        dataDir: params.dataDir ?? "",
+        subject,
+        client: params.lensGenerationClient,
+        model: params.model,
+      });
+      if (generated) {
+        domain = generated.id;
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn(`[analysis] lens generation failed for subject "${subject}" — defaulting domain to "generic"`);
+        domain = "generic";
+      }
+    }
   }
 
   const collectedPearls: ChunkPearlV3[] = [];

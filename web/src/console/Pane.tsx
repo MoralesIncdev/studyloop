@@ -125,7 +125,6 @@ export function Pane({
   const sizeRef = useRef<SizeState | null>(null);
   const flightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hoverPausedRef = useRef(false);
   const posRef = useRef<PaneFraction>(defaultPos);
   const widthRef = useRef<number | undefined>(width);
   const heightRef = useRef<number | undefined>(undefined);
@@ -155,14 +154,8 @@ export function Pane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, paneId]);
 
-  // Release a hover-pause if the pane unmounts mid-hover (same contract as CCOverlay).
   useEffect(
     () => () => {
-      if (hoverPausedRef.current) {
-        hoverPausedRef.current = false;
-        useStudyLoopStore.getState().controller?.play();
-        useStudyLoopStore.getState().setAutoPaused(false);
-      }
       if (flightTimerRef.current) clearTimeout(flightTimerRef.current);
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     },
@@ -319,13 +312,6 @@ export function Pane({
   /** Mock's hidePane (index.html lines 1082-1086): fade out, then drop from
    *  the layout and persist — reopen path is edit mode's ghosted .was-hidden. */
   const handleHide = (): void => {
-    // Hiding mid-hover would strand the hover-pause (no pointerleave fires
-    // once the pane leaves the hit-test tree) — release it first.
-    if (hoverPausedRef.current) {
-      hoverPausedRef.current = false;
-      useStudyLoopStore.getState().controller?.play();
-      useStudyLoopStore.getState().setAutoPaused(false);
-    }
     setHiding(true);
     hideTimerRef.current = setTimeout(() => {
       hideTimerRef.current = null;
@@ -340,25 +326,10 @@ export function Pane({
     if (projectId) savePaneHidden(projectId, paneId, posRef.current, false);
   };
 
-  // Hover-pause with auto-resume (mock lines 1065-1074, Language Reactor) —
-  // same store contract as CCOverlay's caption hover-pause.
+  // Ryan's live-use veto (2026-08-01): panes must NOT hover-pause the video —
+  // that behavior belongs to caption hover only (CCOverlay keeps its own).
   const handlePointerEnter = (): void => {
     onEngaged?.();
-    if (editing || dragRef.current || sizeRef.current) return;
-    const store = useStudyLoopStore.getState();
-    if (store.isPlaying && store.controller) {
-      hoverPausedRef.current = true;
-      store.controller.pause();
-      store.setAutoPaused(true);
-    }
-  };
-
-  const handlePointerLeave = (): void => {
-    if (!hoverPausedRef.current) return;
-    hoverPausedRef.current = false;
-    const store = useStudyLoopStore.getState();
-    store.controller?.play();
-    store.setAutoPaused(false);
   };
 
   const className = [
@@ -400,7 +371,6 @@ export function Pane({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerEnter={handlePointerEnter}
-      onPointerLeave={handlePointerLeave}
     >
       <div className={styles.chrome}>
         <span className={styles.label}>

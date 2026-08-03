@@ -41,6 +41,16 @@ test.describe("console smoke", () => {
     const timelineRail = page.getByRole("slider", { name: "Seek" });
     await expect(timelineRail).toBeVisible();
 
+    // --- 2b. Click-to-pause on the footage (standard player behavior) -------
+    // Click off-center so no floating pane can intercept; toggle back to
+    // paused so the 14s fixture can't run out mid-test (the exhale overlay
+    // would cover later interactions).
+    await expect.poll(async () => video.evaluate((v: HTMLVideoElement) => v.paused)).toBe(true);
+    await video.click({ position: { x: 40, y: 200 } });
+    await expect.poll(async () => video.evaluate((v: HTMLVideoElement) => v.paused)).toBe(false);
+    await video.click({ position: { x: 40, y: 200 } });
+    await expect.poll(async () => video.evaluate((v: HTMLVideoElement) => v.paused)).toBe(true);
+
     const consoleRoot = page.locator('[class*="consoleRoot"]');
     await expect(consoleRoot).toBeVisible();
 
@@ -120,14 +130,13 @@ test.describe("console smoke", () => {
 
     // --- 7. Resize a pane on both axes; assert it persists after reload ----
     // Reposition first: NotePane's default spot (fy 0.6) sits low enough in
-    // the frame that its bottom-right grip falls under PlayerChrome's bottom
-    // control scrim, which is deliberately painted ABOVE the pane layer and
-    // (while paused, i.e. always in this spec) has `pointer-events: auto`
-    // (PlayerChrome.module.css's `.scrimVisible`) — a real stacking
-    // conflict, found the same way the codebase's own comments say the
-    // original chrome-tool click bug was found ("live click-tracing", not a
-    // static screenshot). Dragging the pane clear of that band first keeps
-    // this step testing the grip, not that unrelated overlap.
+    // the frame that its bottom-right grip overlaps PlayerChrome's bottom
+    // control scrim, which is deliberately painted ABOVE the pane layer.
+    // The scrim's box used to be `pointer-events: auto` wholesale while
+    // paused, which silently ate this grip's clicks — that's fixed now
+    // (PlayerChrome.module.css: only the scrim's content rows opt in), but
+    // the reposition stays so this step keeps testing the grip itself in
+    // clear space, independent of the scrim's hit-region shape.
     await dragBy(page, notePane, 0, -300);
     const grip = notePane.locator('[title="Resize"]');
     const beforeResize = await notePane.boundingBox();
@@ -163,5 +172,69 @@ test.describe("console smoke", () => {
 
     await modalityGroup.getByRole("button", { name: "Watch", exact: true }).click();
     await expect(consoleRootAfterReload, "switching back to Watch should drop the .review modality class").not.toHaveClass(/\breview\b/);
+  });
+
+  // Phase 8 (design/EXECUTION-PLAN-post-review-v1.md) "Document mode": the
+  // fixture project's domain is physical_skill (not clinical), so console
+  // stays the default surface on load — this test drives the explicit
+  // toggle. Covers: toggle to document mode -> units listed -> click an
+  // anchor -> video seeks -> toggle back to console.
+  test("document mode: toggle -> units listed -> anchor click seeks -> toggle back to console", async ({ page }) => {
+    await page.goto("/#/library");
+    await page.getByRole("button", { name: /Study Loop Smoke Fixture/ }).click();
+    await expect(page).toHaveURL(/#\/study\//);
+
+    const video = page.locator("video");
+    await expect(video).toBeVisible();
+
+    // Console is the domain default for this fixture (physical_skill) — the
+    // pane-engine-only "Edit layout" corner control is present.
+    const editLayoutBtn = page.getByRole("button", { name: "Edit layout" });
+    await expect(editLayoutBtn).toBeVisible();
+    await expect(page.getByRole("region", { name: "Document" })).toHaveCount(0);
+
+    // --- Toggle to Document via the Session cabinet's Surface group ---------
+    await page.getByRole("button", { name: "Session cabinet" }).click();
+    const surfaceGroup = page.getByRole("group", { name: "Surface" });
+    await expect(surfaceGroup).toBeVisible();
+    await surfaceGroup.getByRole("button", { name: "Document", exact: true }).click();
+    // Close via the panel's own Close button (not the edge handle — the open
+    // panel is pinned over the top of the stage and intercepts clicks on the
+    // handle underneath it) so it doesn't sit over the document list below.
+    await page.getByRole("button", { name: "Close" }).click();
+
+    // --- Document mode: pane engine gone, the document region lists every unit ---
+    await expect(editLayoutBtn, "no pane engine in document mode — the corner Edit-layout control isn't rendered").toBeHidden();
+    const documentRegion = page.getByRole("region", { name: "Document" });
+    await expect(documentRegion).toBeVisible();
+    await expect(documentRegion.getByText("Underhook controls the far hip")).toBeVisible();
+    await expect(documentRegion.getByText("Frame prevents hip escape")).toBeVisible();
+    await expect(documentRegion.getByText("Step through to mount")).toBeVisible();
+    // 3 fixture units, none attested yet.
+    await expect(documentRegion.getByText("0 / 3 attested")).toBeVisible();
+
+    // The video is still mounted and playable, just demoted to a corner PiP.
+    await expect(video).toBeVisible();
+
+    // --- Click the "Frame" unit's timestamp anchor (t=6s) — seeks to t-3 = 3s ---
+    const beforeSeek = await video.evaluate((v: HTMLVideoElement) => v.currentTime);
+    expect(beforeSeek).toBeLessThan(2);
+    await documentRegion.getByRole("button", { name: "0:06" }).click();
+    await expect
+      .poll(async () => video.evaluate((v: HTMLVideoElement) => v.currentTime), {
+        message: "clicking the unit's timestamp anchor should seek the (still-mounted, PiP'd) video",
+      })
+      .toBeGreaterThan(2.5);
+
+    // --- Toggle back to Console: document region gone, pane engine back ------
+    await page.getByRole("button", { name: "Session cabinet" }).click();
+    await surfaceGroup.getByRole("button", { name: "Console", exact: true }).click();
+    await page.getByRole("button", { name: "Close" }).click();
+
+    await expect(page.getByRole("region", { name: "Document" })).toHaveCount(0);
+    await expect(editLayoutBtn, "toggling back to console restores the pane-engine corner control").toBeVisible();
+    const conceptPane = page.locator('[data-pane="concept"]');
+    await editLayoutBtn.click();
+    await expect(conceptPane, "console mode's pane engine is fully functional again after the round trip").toBeVisible();
   });
 });

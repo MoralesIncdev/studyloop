@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { clampRate, useStudyLoopStore } from "./store";
-import type { Project } from "../lib/types";
+import type { Project, StudyLoopConfig } from "../lib/types";
 import type { PlayerHandle } from "../player/types";
 
 describe("clampRate", () => {
@@ -324,7 +324,14 @@ function makeYoutubeProject(id: string, videoId: string): Project {
   };
 }
 
-function baseConfig(overrides: Partial<{ anthropicApiKeySet: boolean; analysisModel: string | null; shareHandle: string }> = {}) {
+function baseConfig(
+  overrides: Partial<{
+    anthropicApiKeySet: boolean;
+    analysisModel: string | null;
+    shareHandle: string;
+    asr: StudyLoopConfig["asr"];
+  }> = {}
+) {
   return {
     dataDir: "~/StudyLoopData",
     libraryRoots: [],
@@ -342,6 +349,7 @@ function baseConfig(overrides: Partial<{ anthropicApiKeySet: boolean; analysisMo
     analysisModel: null,
     shareHandle: "anonymous",
     continuityWeights: { related: 0.15, conceptSearch: 0.3, teacherValidation: 0.3, gapFill: 0.25 },
+    asr: { mode: "off" as const, command: null, endpoint: null, apiKeySet: false, model: null, language: null },
     ...overrides,
   };
 }
@@ -692,6 +700,253 @@ describe("loadProjectSession — persisted rail-section restore (V3-A review fin
     await useStudyLoopStore.getState().loadProjectSession("rail-concepts");
 
     expect(useStudyLoopStore.getState().railOpenSection).toBe("concepts");
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("loadProjectSession — Phase 10 'Transcript source chain'", () => {
+  function stubFetchFor(project: Project, transcriptBody: unknown) {
+    return vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes(`/api/projects/${project.id}`)) return Promise.resolve(jsonResponse(project));
+      if (url.includes("/api/transcript")) return Promise.resolve(jsonResponse(transcriptBody));
+      if (url.endsWith("/bubbles")) return Promise.resolve(jsonResponse({ bubbles: [] }));
+      if (url.endsWith("/notes")) {
+        return Promise.resolve(new Response("", { status: 200, headers: { "content-type": "text/markdown" } }));
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+  }
+
+  beforeEach(() => {
+    useStudyLoopStore.setState({
+      currentProject: null,
+      currentProjectLoading: false,
+      sessionRequestId: 0,
+      bubbles: [],
+      bubblesLoading: false,
+      notes: "",
+      notesLoaded: false,
+      transcriptSegments: [],
+      transcriptLoading: false,
+      toasts: [],
+    });
+  });
+
+  it('still fetches a transcript when transcript.type is "none" (no declared path — chain-resolved by projectId alone), and shows no error toast when the chain finds nothing', async () => {
+    const project = makeProject("chain-none", "Chain none");
+    const fetchMock = stubFetchFor(project, { segments: [], transcribable: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().loadProjectSession("chain-none");
+
+    const transcriptCalls = fetchMock.mock.calls.filter(([input]) => String(input).includes("/api/transcript"));
+    expect(transcriptCalls).toHaveLength(1);
+    // No `path=` — the chain branch resolves purely from projectId.
+    expect(String(transcriptCalls[0][0])).not.toContain("path=");
+    expect(useStudyLoopStore.getState().transcriptSegments).toEqual([]);
+    expect(useStudyLoopStore.getState().toasts.some((t) => /transcript/i.test(t.message))).toBe(false);
+    // Phase 11: the chain's `transcribable: true` marker is captured into
+    // the store — this is TranscribeRow's entire render condition.
+    expect(useStudyLoopStore.getState().transcribable).toBe(true);
+  });
+
+  it("Phase 11: captures transcribable: false once something in the chain resolves", async () => {
+    const project = makeProject("chain-resolved", "Chain resolved");
+    const fetchMock = stubFetchFor(project, { segments: [{ start: 0, end: 1, text: "hi" }], transcribable: false });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().loadProjectSession("chain-resolved");
+    expect(useStudyLoopStore.getState().transcribable).toBe(false);
+  });
+
+  it('surfaces a sidecar/youtube-resolved transcript from the chain branch when transcript.type is "none"', async () => {
+    const project = makeProject("chain-sidecar", "Chain sidecar");
+    const segments = [{ start: 0, end: 1, text: "resolved via sidecar" }];
+    const fetchMock = stubFetchFor(project, { segments, transcriptSource: "sidecar" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().loadProjectSession("chain-sidecar");
+
+    expect(useStudyLoopStore.getState().transcriptSegments).toEqual(segments);
+  });
+
+  it('still passes an explicit path when transcript.type is "file" (pre-Phase-10 behavior unchanged)', async () => {
+    const project: Project = { ...makeProject("chain-file", "Chain file"), transcript: { type: "file", path: "lesson.srt" } };
+    const fetchMock = stubFetchFor(project, { segments: [{ start: 0, end: 1, text: "hi" }], transcriptSource: "sidecar" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().loadProjectSession("chain-file");
+
+    const transcriptCalls = fetchMock.mock.calls.filter(([input]) => String(input).includes("/api/transcript"));
+    expect(transcriptCalls).toHaveLength(1);
+    expect(String(transcriptCalls[0][0])).toContain(`path=${encodeURIComponent("lesson.srt")}`);
+  });
+});
+
+describe("startTranscribe / cancelTranscribeJob (Phase 11 'Bring-your-own local ASR adapters')", () => {
+  beforeEach(() => {
+    useStudyLoopStore.setState({
+      currentProject: makeProject("p1", "Project 1"),
+      config: null,
+      transcribeStatus: { state: "idle" },
+      transcriptSegments: [],
+      toasts: [],
+      route: { view: "library" },
+    });
+  });
+
+  it("mode 'off' → toasts an info message and navigates to Settings, without ever POSTing /transcribe", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/config")) return Promise.resolve(jsonResponse(baseConfig()));
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().startTranscribe();
+
+    expect(useStudyLoopStore.getState().route).toEqual({ view: "settings" });
+    expect(useStudyLoopStore.getState().toasts.some((t) => /ASR/.test(t.message))).toBe(true);
+    expect(fetchMock.mock.calls.every(([input]) => !String(input).includes("/transcribe"))).toBe(true);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("ASR configured → POSTs /transcribe and applies the returned running status, then polls to done and reloads the transcript", async () => {
+    vi.useFakeTimers();
+    useStudyLoopStore.setState({
+      config: baseConfig({ asr: { mode: "command", command: "cmd {input} {output}", endpoint: null, apiKeySet: false, model: null, language: null } }),
+    });
+    const segments = [{ start: 0, end: 1, text: "transcribed" }];
+    let statusCalls = 0;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/transcript")) return Promise.resolve(jsonResponse({ segments, transcribable: false }));
+      if (url.includes("/transcribe")) {
+        if (url.includes("p1") === false) throw new Error(`unexpected project in url: ${url}`);
+        statusCalls++;
+        if (statusCalls === 1) return Promise.resolve(jsonResponse({ state: "running", startedAt: new Date().toISOString() }));
+        return Promise.resolve(jsonResponse({ state: "done" }));
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().startTranscribe();
+    expect(useStudyLoopStore.getState().transcribeStatus.state).toBe("running");
+
+    // Advance past the poll interval so pollTranscribeStatus's GET fires and observes "done".
+    await vi.advanceTimersByTimeAsync(2100);
+
+    expect(useStudyLoopStore.getState().transcribeStatus.state).toBe("done");
+    expect(useStudyLoopStore.getState().transcriptSegments).toEqual(segments);
+
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("a cached (already-transcribed) response is treated as immediate 'done' — reloads the transcript without ever polling", async () => {
+    useStudyLoopStore.setState({
+      config: baseConfig({ asr: { mode: "endpoint", command: null, endpoint: "http://x", apiKeySet: false, model: null, language: null } }),
+    });
+    const segments = [{ start: 0, end: 1, text: "already cached" }];
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/transcript")) return Promise.resolve(jsonResponse({ segments, transcribable: false }));
+      if (url.includes("/transcribe")) return Promise.resolve(jsonResponse({ state: "done", cached: true }));
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().startTranscribe();
+
+    expect(useStudyLoopStore.getState().transcribeStatus).toEqual({ state: "done" });
+    expect(useStudyLoopStore.getState().transcriptSegments).toEqual(segments);
+    // Only one /transcribe call (the POST) — no follow-up GET status poll for a cached result.
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).includes("/transcribe"))).toHaveLength(1);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("a 409 (already queued/running elsewhere) is treated as in-progress, not an error toast", async () => {
+    vi.useFakeTimers();
+    useStudyLoopStore.setState({
+      config: baseConfig({ asr: { mode: "command", command: "cmd {input} {output}", endpoint: null, apiKeySet: false, model: null, language: null } }),
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/transcribe") && init?.method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: "already running", code: "already_running" }), {
+            status: 409,
+            headers: { "content-type": "application/json" },
+          })
+        );
+      }
+      return Promise.resolve(jsonResponse({ state: "running", startedAt: new Date().toISOString() }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().startTranscribe();
+    expect(useStudyLoopStore.getState().toasts.some((t) => t.kind === "error")).toBe(false);
+    // The 409 catch only kicks off polling — the "queued" set() from the
+    // start of startTranscribe is still what's showing until the first poll
+    // tick actually lands.
+    expect(useStudyLoopStore.getState().transcribeStatus.state).toBe("queued");
+
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(useStudyLoopStore.getState().transcribeStatus.state).toBe("running");
+
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("a failed run (discovered via polling) surfaces an error toast with the server's message", async () => {
+    vi.useFakeTimers();
+    useStudyLoopStore.setState({
+      config: baseConfig({ asr: { mode: "command", command: "cmd {input} {output}", endpoint: null, apiKeySet: false, model: null, language: null } }),
+    });
+    let statusCalls = 0;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/transcript")) throw new Error("must not reload transcript after a failure");
+      if (url.includes("/transcribe")) {
+        statusCalls++;
+        // POST's initial 202 body: "running" — the failure is discovered on the next poll tick.
+        if (statusCalls === 1) return Promise.resolve(jsonResponse({ state: "running", startedAt: new Date().toISOString() }));
+        return Promise.resolve(jsonResponse({ state: "failed", message: "binary not found" }));
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().startTranscribe();
+    expect(useStudyLoopStore.getState().transcribeStatus.state).toBe("running");
+
+    await vi.advanceTimersByTimeAsync(2100);
+
+    expect(useStudyLoopStore.getState().transcribeStatus).toMatchObject({ state: "failed", message: "binary not found" });
+    expect(useStudyLoopStore.getState().toasts.some((t) => t.kind === "error" && /binary not found/.test(t.message))).toBe(true);
+
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("cancelTranscribeJob DELETEs /transcribe and marks the job failed/Cancelled locally", async () => {
+    useStudyLoopStore.setState({ transcribeStatus: { state: "running", startedAt: new Date().toISOString() } });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/transcribe") && init?.method === "DELETE") return Promise.resolve(jsonResponse({ ok: true, cancelled: true }));
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useStudyLoopStore.getState().cancelTranscribeJob();
+
+    expect(useStudyLoopStore.getState().transcribeStatus).toEqual({ state: "failed", message: "Cancelled" });
+    expect(useStudyLoopStore.getState().toasts.some((t) => /[Cc]ancelled/.test(t.message))).toBe(true);
+
     vi.unstubAllGlobals();
   });
 });

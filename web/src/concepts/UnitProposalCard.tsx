@@ -17,7 +17,7 @@ import { Icon } from "../components/icons";
 import { formatTimestamp } from "../lib/time";
 import { pickPrompt, promptPoolFor } from "../lib/notationPrompts";
 import { isSafetyTierUnitType } from "../lib/safetyTier";
-import type { AnalysisUnit, UnitOverlay } from "../lib/types";
+import type { AnalysisUnit, ClusterMember, UnitOverlay } from "../lib/types";
 import styles from "./UnitProposalCard.module.css";
 
 const UNIT_TYPE_LABEL: Record<AnalysisUnit["type"], string> = {
@@ -91,6 +91,45 @@ function AdvancedFold({ overlay }: { overlay: AnalysisUnit["overlay"] }): JSX.El
             </div>
           ))}
         </dl>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Phase 8 "Document mode" item 1 ("CLUSTERs collapsed to one entry
+ * expandable to members"): the card itself is already the cluster's one
+ * entry (attest/dismiss are unit-id-level, unchanged) — this fold is what
+ * makes the member list an explicit expand/collapse instead of always-on,
+ * matching AdvancedFold's collapsed-by-default pattern just above. Distinct
+ * from console/ConceptPane.tsx's always-visible member list: that's a
+ * glanceable floating pane with no reveal gate at all, while this card is
+ * already behind the generation-slot reveal gate, so the members don't need
+ * a second gate on top — just tucked away until asked for so they don't
+ * compete with the restate prompt.
+ */
+function ClusterMemberFold({ members }: { members: ClusterMember[] }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={styles.clusterFold}>
+      <button
+        type="button"
+        className={styles.clusterToggle}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <Icon name="chevronDown" size={12} className={open ? styles.clusterChevronOpen : undefined} />
+        <span>{members.length} members</span>
+      </button>
+      {open && (
+        <ul className={styles.clusterList}>
+          {members.map((m, i) => (
+            <li key={i} className={styles.clusterItem}>
+              <span className={styles.clusterItemLabel}>{m.label}</span>
+              <span className={styles.clusterItemBody}>{m.body}</span>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
@@ -273,6 +312,9 @@ export function UnitProposalCard({ unit }: Props): JSX.Element {
         <div className={styles.body}>
           <p className={styles.summary}>{unit.summary}</p>
           <p className={styles.bodyText}>{entry?.userBody?.trim() || unit.body}</p>
+          {unit.type === "CLUSTER" && unit.members && unit.members.length > 0 && (
+            <ClusterMemberFold members={unit.members} />
+          )}
           <AdvancedFold overlay={unit.overlay} />
         </div>
       )}

@@ -16,9 +16,10 @@ import {
   readTermCorrections,
   readTerms,
   writeTerms,
+  __resetGeneratedGlossaryCacheForTests,
   __resetNursingGlossaryCacheForTests,
 } from "../src/lib/terms.js";
-import { __resetLensRegistryCacheForTests } from "../src/lib/lenses.js";
+import { lensGlossaryFilePath, __resetLensRegistryCacheForTests } from "../src/lib/lenses.js";
 import { analysisJsonPath, writeJsonAtomic } from "../src/lib/store.js";
 import type { TermsFile } from "../src/lib/models.js";
 
@@ -282,6 +283,95 @@ describe("isClinicalDomain / mergeGlossaryDefaults — Phase 5 glossaryRef gener
 
   it("dataDir defaults to \"\" (repo-only) — the shipped clinical lens's glossaryRef still activates with no dataDir argument at all", () => {
     expect(isClinicalDomain("clinical")).toBe(true);
+  });
+});
+
+// --- Phase 9 "Lens autogeneration for unknown subjects": a generated lens's
+// own starter glossary (server/src/lib/lenses.ts's generateAndPersistLens,
+// persisted at <dataDir>/lenses/glossary/<lensId>.json) loads through this
+// SAME glossaryRef mechanism — but via a ref that ISN'T "nursing", so
+// isClinicalDomain (deliberately nursing-only) stays false for it. ----------
+
+describe("mergeGlossaryDefaults — Phase 9 generated-lens glossary loading", () => {
+  let dataDir: string;
+
+  beforeEach(async () => {
+    __resetLensRegistryCacheForTests();
+    __resetGeneratedGlossaryCacheForTests();
+    dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "studyloop-generated-glossary-"));
+  });
+
+  afterEach(async () => {
+    __resetLensRegistryCacheForTests();
+    __resetGeneratedGlossaryCacheForTests();
+    await fs.rm(dataDir, { recursive: true, force: true });
+  });
+
+  async function writeGeneratedLensWithGlossary(): Promise<void> {
+    await fs.mkdir(path.join(dataDir, "lenses"), { recursive: true });
+    await fs.writeFile(
+      path.join(dataDir, "lenses", "astrology.json"),
+      JSON.stringify({
+        id: "astrology",
+        label: "Astrology",
+        routerDescription: "astrology, horoscopes, zodiac content",
+        unitTypeEmphasis: "Domain lens: astrology.",
+        overlayFields: [],
+        questionStyle: "default",
+        glossaryRef: "astrology",
+        origin: "generated",
+      })
+    );
+    await fs.mkdir(path.dirname(lensGlossaryFilePath(dataDir, "astrology")), { recursive: true });
+    await fs.writeFile(
+      lensGlossaryFilePath(dataDir, "astrology"),
+      JSON.stringify([{ correct: "ephemeris", variants: ["ephemerus", "epha merris"] }])
+    );
+  }
+
+  it("loads a generated lens's own glossary file (glossaryRef named after the lens id, not 'nursing')", async () => {
+    await writeGeneratedLensWithGlossary();
+    const merged = mergeGlossaryDefaults({}, "astrology", dataDir);
+    expect(merged["ephemerus"]).toEqual({ correct: "ephemeris", source: "glossary", createdAt: expect.any(String) });
+    expect(merged["epha merris"]).toEqual({ correct: "ephemeris", source: "glossary", createdAt: expect.any(String) });
+  });
+
+  it("isClinicalDomain stays false for a generated lens's own (non-nursing) glossaryRef — the two mechanisms are independent", async () => {
+    await writeGeneratedLensWithGlossary();
+    expect(isClinicalDomain("astrology", dataDir)).toBe(false);
+  });
+
+  it("a user correction for the same garbled key still overrides the generated glossary default", async () => {
+    await writeGeneratedLensWithGlossary();
+    const userTerms: TermsFile = {
+      ephemerus: { correct: "USER OVERRIDE", source: "user", createdAt: "2026-02-02T00:00:00Z" },
+    };
+    const merged = mergeGlossaryDefaults(userTerms, "astrology", dataDir);
+    expect(merged["ephemerus"]).toEqual(userTerms["ephemerus"]);
+  });
+
+  it("degrades to no glossary (never throws) when the lens declares a glossaryRef but the glossary file is missing", async () => {
+    await fs.mkdir(path.join(dataDir, "lenses"), { recursive: true });
+    await fs.writeFile(
+      path.join(dataDir, "lenses", "ghost.json"),
+      JSON.stringify({
+        id: "ghost",
+        label: "Ghost",
+        routerDescription: "d",
+        unitTypeEmphasis: "e",
+        overlayFields: [],
+        questionStyle: "default",
+        glossaryRef: "ghost",
+      })
+    );
+    expect(() => mergeGlossaryDefaults({}, "ghost", dataDir)).not.toThrow();
+    expect(mergeGlossaryDefaults({}, "ghost", dataDir)).toEqual({});
+  });
+
+  it("via loadEffectiveTerms end to end: a project on a generated lens gets its glossary merged in automatically", async () => {
+    await writeGeneratedLensWithGlossary();
+    const effective = await loadEffectiveTerms(dataDir, "some-project-id", "astrology");
+    expect(effective["ephemerus"].correct).toBe("ephemeris");
   });
 });
 

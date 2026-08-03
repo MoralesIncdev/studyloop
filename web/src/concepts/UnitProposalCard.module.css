@@ -421,6 +421,66 @@
   color: var(--text-secondary);
 }
 
+/* Phase 8 "Document mode": a CLUSTER's member list, collapsed by default —
+   same shape as .advancedFold just above (toggle + dimmed label), one level
+   deeper (a label + its own body per member) since each member IS a fact,
+   not a key/value pair. */
+.clusterFold {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.clusterToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: var(--type-11);
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.clusterToggle:hover {
+  color: var(--text-secondary);
+}
+
+.clusterChevronOpen {
+  transform: rotate(180deg);
+}
+
+.clusterList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 8px;
+  list-style: none;
+  background: var(--surface-overlay);
+  border-radius: var(--radius-sm);
+}
+
+.clusterItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.clusterItemLabel {
+  font-size: var(--type-11);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+}
+
+.clusterItemBody {
+  font-size: var(--type-11);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 /* V3-D D3 "also in ⟨project⟩" chip — merged/linked units from the concept registry. */
 .mergedChips {
   display: flex;

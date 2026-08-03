@@ -5,7 +5,6 @@
 // GET /api/projects/:id/analysis once done. See lib/analysis.ts for the
 // pipeline itself and lib/analysisJobs.ts for the guard/status logic tested
 // independently of this route.
-import fs from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getConfig, resolveDataDir, resolveRoots } from "../config.js";
@@ -14,12 +13,11 @@ import { AnalysisJobManager, evaluateAnalyzeGuard } from "../lib/analysisJobs.js
 import { missingCredentialMessage, resolveAnalysisModel, resolveProviderAuth } from "../lib/providers.js";
 import { updateRegistryForProject } from "../lib/conceptRegistry.js";
 import { readConceptRegistry, withConceptRegistryLock, writeConceptRegistry } from "../lib/conceptRegistryStore.js";
-import { getLens } from "../lib/lenses.js";
-import { correctTranscriptSegments } from "../lib/terms.js";
+import { getLens, resolveLensGenerationClient } from "../lib/lenses.js";
 import { readSlides } from "../lib/slides.js";
-import { resolveTranscriptPath } from "../lib/transcriptResolve.js";
-import { loadTranscriptFromText, type TranscriptSegment } from "../lib/transcripts.js";
-import { ProjectIdParamSchema } from "../lib/models.js";
+import { resolveEffectiveTranscript } from "../lib/transcriptChain.js";
+import { type TranscriptSegment } from "../lib/transcripts.js";
+import { ProjectIdParamSchema, type Project } from "../lib/models.js";
 import { analysisJsonPath, newId, pathExists, readJsonIfExists, readProject, withProjectLock, writeJsonAtomic, writeProject } from "../lib/store.js";
 
 const IdParamSchema = ProjectIdParamSchema;
@@ -28,32 +26,22 @@ const AnalyzeBodySchema = z.object({ force: z.boolean().optional() });
 /** Module-level singleton — one job map for the life of the server process, same lifetime as every other in-process cache here (health.ts, innertube.ts). */
 export const analysisJobs = new AnalysisJobManager();
 
+/**
+ * Phase 10 "Transcript source chain": analysis input now goes through the
+ * same chain resolver every other transcript read site uses (pipeline >
+ * sidecar > lazy YouTube pull), not just `project.transcript.type === "file"`
+ * — a nursing... er, BJJ video whose only transcript is a same-dir `.srt` or
+ * a lazily-pulled YouTube caption track can now be analyzed the same as a
+ * pipeline-matched one. Terms correction (Phase 2) is already applied inside
+ * resolveEffectiveTranscript, uniformly across every source.
+ */
 async function loadProjectTranscriptSegments(
   dataDir: string,
   roots: ReturnType<typeof resolveRoots>,
-  projectId: string,
-  transcript: { type: "file"; path: string } | { type: "none" },
-  domain: string | undefined
+  project: Project
 ): Promise<TranscriptSegment[]> {
-  if (transcript.type !== "file") return [];
-  const resolved = await resolveTranscriptPath(dataDir, roots, transcript.path, projectId);
-  if (!resolved.ok) return [];
-  let raw: string;
-  try {
-    raw = await fs.readFile(resolved.filePath, "utf8");
-  } catch {
-    return [];
-  }
-  try {
-    const segments = loadTranscriptFromText(resolved.filePath, raw).segments;
-    // Phase 2 "Terminology layer v1": corrections must apply before the
-    // transcript ever reaches the chunk/extract pipeline — this is the exact
-    // read site the four reviews called out ("ASR-mangled terms poison
-    // extraction"). The transcript file read above is untouched on disk.
-    return await correctTranscriptSegments(dataDir, projectId, segments, domain);
-  } catch {
-    return [];
-  }
+  const result = await resolveEffectiveTranscript(dataDir, roots, project);
+  return result.segments;
 }
 
 export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
@@ -96,7 +84,7 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const roots = resolveRoots(config);
-    const segments = await loadProjectTranscriptSegments(dataDir, roots, params.data.id, project.transcript, project.domain);
+    const segments = await loadProjectTranscriptSegments(dataDir, roots, project);
     if (segments.length === 0) {
       return reply.status(400).send({ error: "This project has no transcript to analyze", code: "no_transcript" });
     }
@@ -123,6 +111,13 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
           source: fakeMode ? "stub" : "model",
           onProgress: (pct) => analysisJobs.progress(projectId, pct),
           slidePages: slidesFile?.pages,
+          // Phase 9 "Lens autogeneration": same providerAuth already gating
+          // this whole route (evaluateAnalyzeGuard already required either
+          // fakeMode or a real credential to get this far) — resolved
+          // separately from `client` because generation is its own smaller
+          // LLM call (lib/lenses.ts), not part of AnalysisLLMClientV3.
+          dataDir,
+          lensGenerationClient: resolveLensGenerationClient(providerAuth),
         });
         await writeJsonAtomic(analysisPath, analysis);
         // V3-B B1: "domain ... stored on the project (editable chip near the

@@ -6,6 +6,7 @@ import type {
   AttestationPatchBody,
   AttestationsFile,
   Bubble,
+  CancelTranscribeResponse,
   ConceptCard,
   ConceptProfile,
   ContinuityResponse,
@@ -14,6 +15,7 @@ import type {
   GetSlidesResponse,
   HealthResponse,
   HeatmapResponse,
+  LensesResponse,
   LibraryResponse,
   MergeCandidatesResponse,
   MergedConceptsResponse,
@@ -35,6 +37,8 @@ import type {
   StudyLoopConfig,
   StudyLoopConfigPatch,
   TermsResponse,
+  TranscribePostResponse,
+  TranscribeStatus,
   TranscriptResponse,
   YoutubeResolveResponse,
 } from "./types";
@@ -86,9 +90,14 @@ export const api = {
   putConfig: (patch: StudyLoopConfigPatch) =>
     request<StudyLoopConfig>("/api/config", { method: "PUT", body: JSON.stringify(patch) }),
 
-  getTranscript: (path: string, projectId?: string) =>
+  // Phase 10 "Transcript source chain": `path` is now optional — omit it
+  // (passing `projectId` alone) to resolve via the full chain (same-dir
+  // sidecar, or a lazy YouTube caption pull) for a project whose
+  // `transcript.type` is "none". Passing `path` keeps the exact pre-Phase-10
+  // behavior (an explicit file lookup).
+  getTranscript: (path: string | undefined, projectId?: string) =>
     request<TranscriptResponse>(
-      `/api/transcript?path=${encodeURIComponent(path)}${projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""}`
+      `/api/transcript?${path ? `path=${encodeURIComponent(path)}` : ""}${projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""}`
     ),
 
   getHealth: () => request<HealthResponse>("/api/health"),
@@ -215,6 +224,9 @@ export const api = {
     }),
   getMergedConcepts: (id: string) => request<MergedConceptsResponse>(`/api/projects/${encodeURIComponent(id)}/merged-concepts`),
 
+  // --- Phase 9: lens registry summary (label + generated-lens note) ---------------
+  getLenses: () => request<LensesResponse>("/api/lenses"),
+
   // --- Phase 2: terminology corrections ---------------------------------------
   getTerms: (id: string) => request<TermsResponse>(`/api/projects/${encodeURIComponent(id)}/terms`),
   patchTerms: (id: string, body: PatchTermsBody) =>
@@ -235,6 +247,16 @@ export const api = {
   },
   deleteSlides: (id: string) =>
     request<DeleteSlidesResponse>(`/api/projects/${encodeURIComponent(id)}/slides`, { method: "DELETE" }),
+
+  // --- Phase 11: bring-your-own local ASR adapters ---------------------------------
+  startTranscribe: (id: string, force?: boolean) =>
+    request<TranscribePostResponse>(`/api/projects/${encodeURIComponent(id)}/transcribe`, {
+      method: "POST",
+      body: JSON.stringify(force ? { force: true } : {}),
+    }),
+  getTranscribeStatus: (id: string) => request<TranscribeStatus>(`/api/projects/${encodeURIComponent(id)}/transcribe`),
+  cancelTranscribe: (id: string) =>
+    request<CancelTranscribeResponse>(`/api/projects/${encodeURIComponent(id)}/transcribe`, { method: "DELETE" }),
 
   // --- V3-D D4: domain-routed card transformation — "improve this card" -----------
   improveReviewCard: (cardId: string) =>

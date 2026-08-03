@@ -7,6 +7,11 @@
 .pane {
   position: absolute;
   width: 340px;
+  /* Column flex so pane bodies (e.g. the self-test field) can track an
+     explicitly resized pane height; with auto height this lays out
+     identically to the old block flow (grip stays absolute). */
+  display: flex;
+  flex-direction: column;
   pointer-events: auto;
   cursor: default;
   touch-action: none;

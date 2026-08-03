@@ -26,6 +26,13 @@
   color: var(--text-primary);
 }
 
+.generatedNote {
+  font-size: var(--type-12);
+  color: var(--text-secondary);
+  font-style: italic;
+  cursor: help;
+}
+
 .noviceToggle {
   display: inline-flex;
   align-items: center;
