@@ -40,7 +40,7 @@ key-decisions:
   - "slidesWarningText computed once per render into a local `slidesWarning` const rather than called twice inline, avoiding duplicate work in the JSX conditional."
   - "No store change: web/src/state/store.ts already passes the whole upload-response meta object through to slidesMeta, so emptyPageCount arrives for free once the type mirror is updated — git diff on store.ts stays empty, matching the plan's acceptance criterion."
 
-requirements-completed: []
+requirements-completed: [PIPE-02]
 
 coverage:
   - id: D1
@@ -65,24 +65,27 @@ coverage:
   - id: D3
     description: "A learner attaching an image-only slide deck sees a visible amber warning naming how many pages carried no extractable text, and a normal text-layer deck's row is unchanged (ROADMAP SC3/SC4, UI half)"
     requirement: "PIPE-02"
-    verification: []
+    verification:
+      - kind: manual_procedural
+        ref: "Task 2 checkpoint:human-verify — Ryan approved 2026-08-09 against live dev servers: empty-page fixture upload returned API meta {pageCount: 2, emptyPageCount: 1} and the UI rendered the amber warning with exact text \"1 of 2 pages has no extractable text — analysis will miss those slides\" (DOM-verified visible, uncovered, color rgb(224,168,62), no emoji); text-layer fixture upload returned API meta {emptyPageCount: 0} and the filename chip rendered with NO warning present. Test project restored to original state afterward (deck deleted)."
+        status: pass
     human_judgment: true
-    rationale: "No component-test harness exists for SlidesRow (web workspace runs vitest environment: node over src/**/*.test.ts only — the pure helper is unit-tested but the actual conditional render against the real fixtures needs a human to visually confirm placement, legibility, and that the normal-deck row is untouched). This is Task 2's checkpoint:human-verify, PENDING at time of this SUMMARY — see below."
+    rationale: "Visual/functional confirmation of placement, legibility, and correct absence-on-normal-deck behavior needed a human (or DOM-level evidence gathering) rather than the node-only vitest environment SlidesRow itself isn't unit-tested in. Approved 2026-08-09."
 
 # Metrics
 duration: 12min
 completed: 2026-08-09
-status: halted
+status: complete
 ---
 
 # Phase 1 Plan 3: Slide-Warning UI Summary
 
-**`emptyPageCount` now reaches the learner as tested, glyph-free amber-pill copy in the slides row — `slidesWarningText` unit-tested for every wording case, wired into `SlidesRow` with zero store changes; Task 2's visual checkpoint is pending human confirmation.**
+**`emptyPageCount` now reaches the learner as tested, glyph-free amber-pill copy in the slides row — `slidesWarningText` unit-tested for every wording case, wired into `SlidesRow` with zero store changes, and confirmed live against both the empty-page and text-layer fixtures.**
 
 ## Performance
 
-- **Duration:** 12 min (Task 1 only; Task 2 checkpoint pending)
-- **Tasks:** 1 of 2 (Task 2 is a blocking human-verify checkpoint, not yet confirmed)
+- **Duration:** 12 min
+- **Tasks:** 2 of 2 complete
 - **Files modified:** 5 (2 created, 3 modified)
 
 ## Accomplishments
@@ -99,8 +102,7 @@ status: halted
 Each task was committed atomically:
 
 1. **Task 1: One empty-page count becomes one visible warning in the slides row** - `4f0ce27` (feat)
-
-_Task 2 (checkpoint:human-verify, gate="blocking") has not run — this plan is not autonomous and no auto-mode config is active, so the executor stopped at the checkpoint per protocol rather than self-certifying the visual/functional check. See "Next Phase Readiness" below for exact verification steps and running dev servers._
+2. **Task 2: Confirm the warning is actually visible and reads honestly** - `checkpoint:human-verify`, no code change; approved by Ryan 2026-08-09 against live dev servers (see Coverage D3)
 
 ## Files Created/Modified
 
@@ -118,9 +120,9 @@ _Task 2 (checkpoint:human-verify, gate="blocking") has not run — this plan is 
 
 ## Deviations from Plan
 
-None - plan executed exactly as written for Task 1. Task 2 is the plan's own designed checkpoint, not a deviation.
+None - plan executed exactly as written.
 
-## Verification Results (Task 1)
+## Verification Results
 
 - `npm run test -w web -- slidesWarning`: 7/7 passing (all `<behavior>` cases + zero-emoji assertion).
 - `npm run typecheck -w web`: exit 0.
@@ -128,10 +130,14 @@ None - plan executed exactly as written for Task 1. Task 2 is the plan's own des
 - `npm run build -w web`: exit 0.
 - `npm test` (full suite): server 980/980 passing (≥ 964 baseline), web 352/352 passing (≥ 345 baseline). No regressions.
 - `git diff --stat web/src/state/store.ts`: empty, as required by the plan's acceptance criteria.
+- **Task 2 checkpoint:human-verify — APPROVED by Ryan (2026-08-09)**, gathered against live dev servers:
+  - Empty-page fixture (`server/test/fixtures/slides-empty-page.pdf`) upload → API meta `{pageCount: 2, emptyPageCount: 1}`; UI rendered the amber warning with exact text "1 of 2 pages has no extractable text — analysis will miss those slides" (DOM-verified: visible, uncovered, color `rgb(224,168,62)`, no emoji glyph).
+  - Text-layer fixture (`server/test/fixtures/slides-text-layer.pdf`) upload → API meta `{emptyPageCount: 0}`; filename chip rendered, NO warning present.
+  - Test project restored to its original state afterward (deck deleted).
 
 ## Issues Encountered
 
-None for Task 1. Note for the human verifier: the plan's checkpoint text says to visit `http://127.0.0.1:4601`; in this environment Node's `fetch` (and likely the browser) only resolves the dev server at `http://localhost:4601` — `127.0.0.1:4601` did not respond in three attempts while `localhost:4601` responded 200 each time. Use `http://localhost:4601` for verification.
+Note: the plan's checkpoint text says to visit `http://127.0.0.1:4601`; in this environment Node's `fetch` only resolved the dev server at `http://localhost:4601` — `127.0.0.1:4601` did not respond in three attempts while `localhost:4601` responded 200 each time. Verification proceeded against `localhost:4601` and passed. Not a code defect — a dev-environment DNS/binding quirk worth noting for future verification runs, not a blocker.
 
 ## User Setup Required
 
@@ -139,24 +145,15 @@ None - no external service configuration required.
 
 ## Next Phase Readiness
 
-**Task 2 checkpoint is PENDING.** Dev servers are already running (started by this executor):
-- Server: `http://127.0.0.1:4600` (confirmed 200 via `/api/health`)
-- Web: `http://localhost:4601` (confirmed 200; NOT `127.0.0.1:4601` in this environment — see Issues Encountered)
-
-**How to verify (from the plan's Task 2):**
-1. Open `http://localhost:4601`, open any project, find the slides row in project settings (next to the domain/novice toggle, below the channel row).
-2. Attach `server/test/fixtures/slides-empty-page.pdf` (2 pages, second page carries no extractable text).
-   Expected: filename chip appears AND an amber warning reads "1 of 2 pages has no extractable text — analysis will miss those slides".
-3. Remove that deck, then attach `server/test/fixtures/slides-text-layer.pdf`.
-   Expected: filename chip appears, NO warning is shown.
-4. Confirm the warning has no emoji glyph and is legible against the dark surface (design/DESIGN.md: zero emoji, oklch tokens).
-5. Capture a screenshot of the warning state for the phase record.
-
-Once Task 2 is confirmed ("approved" or issue description), the plan is fully complete: this SUMMARY should be updated to `status: complete`, `requirements-completed: [PIPE-02]` (subject to the shared-ID gate — PIPE-02 is also declared by plan 01-02, which already finished, so it becomes ready once this plan's SUMMARY flips to complete), and STATE.md/ROADMAP.md advanced.
+- ROADMAP SC3 is met end to end: attaching an image-only slide PDF produces a visible, human-confirmed warning driven by `emptyPageCount`, before analysis runs.
+- ROADMAP SC4's PDF half holds at the UI: a text-layer deck's row is unchanged, human-confirmed.
+- PIPE-02 is now fully complete (both declaring plans — 01-02 server half, 01-03 web half — finished); flipped complete in `.planning/REQUIREMENTS.md`.
+- Dev servers (`server:4600`, `web:4601`) were left running per the coordinator's instruction.
+- No blockers for the rest of Phase 1 or the Phase 4 proof run.
 
 ---
 *Phase: 01-ingestion-pipeline-repair*
-*Completed: 2026-08-09 (Task 1 only — Task 2 checkpoint pending)*
+*Completed: 2026-08-09*
 
 ## Self-Check: PASSED
 
