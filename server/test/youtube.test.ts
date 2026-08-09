@@ -13,8 +13,33 @@
 import { afterEach, describe, expect, it } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import { youtubeRoutes } from "../src/routes/youtube.js";
-import { __setInnertubeClientForTests, type InnertubeClient, type RawVideoInfo } from "../src/lib/innertube.js";
+import {
+  __setInnertubeClientForTests,
+  type InnertubeClient,
+  type RawTranscriptInfo,
+  type RawVideoInfo,
+} from "../src/lib/innertube.js";
 import { __setResolveYoutubeForTests, type YoutubeMetadata } from "../src/lib/ytdlp.js";
+
+// Matches innertube.test.ts's transcriptFixture() — a real youtubei.js v17.2.0
+// TranscriptSegment tree shape, so the fast-path test below exercises the
+// real normalizeCaptions() logic rather than hand-feeding a segment array.
+function transcriptFixture(): RawTranscriptInfo {
+  return {
+    languages: ["English"],
+    selectedLanguage: "English",
+    transcript: {
+      content: {
+        body: {
+          initial_segments: [
+            { type: "TranscriptSegment", start_ms: "0", end_ms: "3000", snippet: { text: "Segment one" } },
+            { type: "TranscriptSegment", start_ms: "3000", end_ms: "6000", snippet: { text: "Segment two" } },
+          ],
+        },
+      },
+    },
+  };
+}
 
 /** Builds a fake InnertubeClient. Defaults: title set, transcript rejects (metadata-only), search unused. */
 function fakeInnertube(overrides: Partial<RawVideoInfo> = {}): InnertubeClient {
@@ -112,6 +137,121 @@ describe("POST /api/youtube/resolve", () => {
       expect(res.statusCode).toBe(400);
       expect(innertubeCalled).toBe(false);
       expect(ytdlpCalled).toBe(false);
+    });
+  });
+
+  describe("innertube fast path (captioned video — ROADMAP SC4 regression guard)", () => {
+    it("returns 200 with captions from innertube's own transcript and never spawns yt-dlp", async () => {
+      app = await buildApp();
+      __setInnertubeClientForTests(
+        fakeInnertube({
+          getTranscript: async () => transcriptFixture(),
+        })
+      );
+      let callCount = 0;
+      __setResolveYoutubeForTests(async () => {
+        callCount += 1;
+        throw new Error("fast path must never call the yt-dlp fallback");
+      });
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/youtube/resolve",
+        payload: { url: "https://www.youtube.com/watch?v=fastPathVidId" },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.title).toBe("Fake Lecture Title");
+      expect(body.captions).toEqual([
+        { start: 0, end: 3, text: "Segment one" },
+        { start: 3, end: 6, text: "Segment two" },
+      ]);
+      expect(callCount).toBe(0);
+    });
+  });
+
+  describe("innertube metadata-only, yt-dlp caption fallback throws", () => {
+    it("is non-fatal — the metadata-only response still goes out with 200", async () => {
+      app = await buildApp();
+      __setInnertubeClientForTests(fakeInnertube());
+      __setResolveYoutubeForTests(async () => {
+        throw new Error("yt-dlp exploded");
+      });
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/youtube/resolve",
+        payload: { url: "https://www.youtube.com/watch?v=throwsVidId" },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.title).toBe("Fake Lecture Title");
+      expect(body.captions).toBeUndefined();
+    });
+  });
+
+  describe("innertube total miss, yt-dlp fallback succeeds (ROADMAP SC2)", () => {
+    it("returns 200 with the yt-dlp title/captions and related: []", async () => {
+      app = await buildApp();
+      __setInnertubeClientForTests({
+        getInfo: async () => {
+          throw new Error("innertube totally unreachable");
+        },
+        search: async () => {
+          throw new Error("unused");
+        },
+      });
+      const legacyResult: YoutubeMetadata = {
+        videoId: "totalMissVidId",
+        title: "yt-dlp legacy title",
+        captions: [{ start: 0, end: 1, text: "legacy caption" }],
+      };
+      __setResolveYoutubeForTests(async () => legacyResult);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/youtube/resolve",
+        payload: { url: "https://www.youtube.com/watch?v=totalMissVidId" },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.title).toBe("yt-dlp legacy title");
+      expect(body.captions).toEqual(legacyResult.captions);
+      expect(body.related).toEqual([]);
+    });
+  });
+
+  describe("innertube total miss, yt-dlp absent (ROADMAP SC2 degradation contract)", () => {
+    it("returns 200 with ytdlpMissing: true rather than throwing", async () => {
+      app = await buildApp();
+      __setInnertubeClientForTests({
+        getInfo: async () => {
+          throw new Error("innertube totally unreachable");
+        },
+        search: async () => {
+          throw new Error("unused");
+        },
+      });
+      __setResolveYoutubeForTests(async () => ({
+        videoId: "missingYtdlpVidId",
+        title: null,
+        captions: null,
+        ytdlpMissing: true,
+      }));
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/youtube/resolve",
+        payload: { url: "https://www.youtube.com/watch?v=missingYtdlpVidId" },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.ytdlpMissing).toBe(true);
+      expect(body.related).toEqual([]);
     });
   });
 });
