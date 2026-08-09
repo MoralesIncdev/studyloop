@@ -57,6 +57,8 @@ Recent decisions affecting current work:
 - [Ingest] SPEC > PRD auto-resolution on the Analyze LLM-provider surface stands as a doc ruling, but is flagged ⚠️ stale (proof ran glm-5, multi-provider is shipped reality) — no code change planned; awaiting user call on SPEC.md
 - [Ingest] P2 depth tier (prerequisite graph, lesson composer, Threads) is its own accuracy-gated phase (Phase 5) — do not start on the proof run alone
 - [Ingest] Compile gains a distinct "Dismissed" section, separate from "Not yet reviewed" (Phase 3)
+- [2026-08-09 Phase 1] Descoped: the Innertube 15-minute cache wraps `resolveVideo` only, so the route-level yt-dlp caption merge is never cached and a repeat resolve of the same video re-spawns yt-dlp (up to its 30s timeout). Out of scope because PIPE-01's success criteria require the fallback to run, not to be cached; single-paste flows hit it once. Revisit if the Phase 4 proof run shows repeat-resolve latency.
+- [2026-08-09 Phase 1] Accepted: `text.trim().length === 0` is the emptiness threshold for PIPE-02; a page carrying only a footer or page number counts as non-empty. Revisit only if the Phase 4 proof deck exhibits that false negative.
 
 ### Pending Todos
 
@@ -69,6 +71,7 @@ None yet.
 - Attestation mutations are optimistic without rollback on the web side — Phase 3 work touching attestation flows must not deepen that pattern (codebase/CONCERNS.md)
 - 2026-08-08 slides PASS was partially circular (deck text manufactured from transcript) — Phase 4 must use a genuinely independent deck
 - Only 1 Playwright e2e spec exists; the proof re-run (Phase 4) is manual+adversarial by design, but new pipeline behavior in Phases 1-3 needs unit coverage per the SPEC quality bar
+- `pullYoutubeTranscript` in `server/src/lib/transcriptChain.ts:116-127` (chain step 3, the lazy caption pull) calls `resolveVideo` with no yt-dlp fallback, so a project that reaches that path on an Innertube-transcript-blocked network still gets nothing. Not in Phase 1 scope (PIPE-01 and ROADMAP SC1 both describe the paste-a-URL flow, which `routes/youtube.ts` owns), and wiring a 30s subprocess into a lazily-hit read path is a behavior change no success criterion asks for. Flag it as a Phase 4 proof-run watch item.
 
 ## Deferred Items
 

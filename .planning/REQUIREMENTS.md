@@ -9,7 +9,7 @@ Active scope for Milestone 1 (Student-Ready Real-Lecture Proof + accuracy-gated 
 
 ### Ingestion Pipeline (PIPE)
 
-- [ ] **PIPE-01**: YouTube resolve runs the yt-dlp caption fallback whenever Innertube returns null captions — not only when the whole resolve fails — so the normal paste-a-URL flow produces a transcript-bearing project with no manual workaround. (Proof Bug 1, MAJOR; fixes `server/src/routes/youtube.ts:45-55` short-circuit; fulfills SPEC V2 out-of-box degradation contract and REQ-source-ingestion-youtube's time-to-loop acceptance.)
+- [ ] **PIPE-01**: YouTube resolve runs the yt-dlp caption fallback whenever Innertube returns null captions — not only when the whole resolve fails — so the normal paste-a-URL flow produces a transcript-bearing project with no manual workaround. (Proof Bug 1, MAJOR; fixes `server/src/routes/youtube.ts:45-55` short-circuit; fulfills SPEC V2 out-of-box degradation contract and REQ-source-ingestion-youtube's time-to-loop acceptance.) (Provenance: the route-side code fix landed on `main` in commit `4f7ff0e` (2026-08-08, PR #10), before this requirements file was authored on 2026-08-09; Phase 1's actual delta against PIPE-01 is regression coverage — `server/test/youtube.test.ts` — not a behavior change.)
 - [ ] **PIPE-02**: Slide-PDF ingestion reports pages with no extractable text (`emptyPageCount`) and the app visibly warns on image-only decks instead of silently attaching an empty slides channel. Nothing fails silently. (Proof Bug 2; `server/src/lib/slides.ts` is pdf-parse text-layer-only; upholds REQ-slide-pdfs and REQ-graceful-binary-degradation.)
 
 ### Analysis Fidelity (ANLZ)
