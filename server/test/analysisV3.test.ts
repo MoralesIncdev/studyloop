@@ -19,7 +19,10 @@ import {
   LLMAnalysisClient,
   mapChunkToSlidePages,
   mergeEdgesByFingerprint,
+  dedupeNearDuplicateUnits,
   mergeUnitsByFingerprint,
+  remapEdgeAliases,
+  scrubOverlayToLens,
   resolveAnalysisClientV3,
   resolvePearlUnitId,
   runAnalysisJobV3,
@@ -1190,5 +1193,107 @@ describe("runAnalysisJobV3 — Phase 9 lens autogeneration wiring", () => {
     });
     expect(calls).toBe(0);
     expect(["biology", "history", "music", "physical_skill", "generic"]).toContain(analysis.domain);
+  });
+});
+
+// --- 2026-08-08 real-lecture-proof fixes: near-duplicate collapse + overlay scrub ---
+
+function finalUnit(id: string, overrides: Partial<AnalysisUnit> = {}): AnalysisUnit {
+  return {
+    id,
+    type: "DOSAGE",
+    label: id,
+    summary: "summary",
+    body: "body",
+    anchors: [{ t: 449, quote: "q" }],
+    confidence: 0.8,
+    threshold: false,
+    ...overrides,
+  };
+}
+
+describe("dedupeNearDuplicateUnits", () => {
+  it("collapses same-type units sharing an anchor when one label token set is a proper subset of the other", () => {
+    // The observed real-lecture pair: same DOSAGE fact, two label variants, same anchor t=449.
+    const { units, aliases } = dedupeNearDuplicateUnits([
+      finalUnit("tidal-volume-setting-in-ac-mode", { summary: "longer summary text", body: "the longer body wins" }),
+      finalUnit("tidal-volume-in-ac-mode", { anchors: [{ t: 449, quote: "q" }, { t: 461, quote: "q2" }], threshold: true }),
+    ]);
+    expect(units).toHaveLength(1);
+    expect(units[0].id).toBe("tidal-volume-setting-in-ac-mode");
+    expect(aliases.get("tidal-volume-in-ac-mode")).toBe("tidal-volume-setting-in-ac-mode");
+    // Absorbed unit contributes its anchors and threshold flag.
+    expect(units[0].anchors.map((a) => a.t)).toEqual([449, 461]);
+    expect(units[0].threshold).toBe(true);
+    expect(units[0].body).toBe("the longer body wins");
+  });
+
+  it("keeps units apart when neither label token set contains the other, even with a shared anchor", () => {
+    // The observed MECHANISM neighbors that must NOT merge.
+    const { units, aliases } = dedupeNearDuplicateUnits([
+      finalUnit("patient-triggering-via-negative-pressure", { type: "MECHANISM", anchors: [{ t: 432, quote: "q" }] }),
+      finalUnit("ac-mode-trigger-and-volume-delivery", { type: "MECHANISM", anchors: [{ t: 432, quote: "q" }] }),
+    ]);
+    expect(units).toHaveLength(2);
+    expect(aliases.size).toBe(0);
+  });
+
+  it("keeps units apart across different types or disjoint anchors", () => {
+    const differentType = dedupeNearDuplicateUnits([
+      finalUnit("tidal-volume-in-ac-mode", { type: "CLAIM" }),
+      finalUnit("tidal-volume-setting-in-ac-mode"),
+    ]);
+    expect(differentType.units).toHaveLength(2);
+
+    const disjointAnchors = dedupeNearDuplicateUnits([
+      finalUnit("tidal-volume-in-ac-mode", { anchors: [{ t: 100, quote: "a" }] }),
+      finalUnit("tidal-volume-setting-in-ac-mode", { anchors: [{ t: 200, quote: "b" }] }),
+    ]);
+    expect(disjointAnchors.units).toHaveLength(2);
+  });
+});
+
+describe("remapEdgeAliases", () => {
+  const edge = (source: string, target: string) => ({
+    source,
+    target,
+    type: "PART_OF" as const,
+    quote: "q",
+    confidence: 0.9,
+  });
+
+  it("rewrites endpoints through the alias map, dropping self-loops and duplicates the collapse creates", () => {
+    const aliases = new Map([["tidal-volume-in-ac-mode", "tidal-volume-setting-in-ac-mode"]]);
+    const remapped = remapEdgeAliases(
+      [
+        edge("tidal-volume-in-ac-mode", "ac-mode"),
+        edge("tidal-volume-setting-in-ac-mode", "ac-mode"), // duplicate after remap
+        edge("tidal-volume-in-ac-mode", "tidal-volume-setting-in-ac-mode"), // self-loop after remap
+      ],
+      aliases
+    );
+    expect(remapped).toEqual([edge("tidal-volume-setting-in-ac-mode", "ac-mode")]);
+  });
+
+  it("returns edges unchanged when there are no aliases", () => {
+    const edges = [edge("a", "b")];
+    expect(remapEdgeAliases(edges, new Map())).toEqual(edges);
+  });
+});
+
+describe("scrubOverlayToLens", () => {
+  it("keeps only the lens's declared overlay keys and collapses an emptied overlay to undefined", () => {
+    const clinicalKeys = new Set(["drugClass", "genericName", "brandName", "route", "normalRange", "nclexCategory"]);
+    const scrubbed = scrubOverlayToLens(
+      [
+        finalUnit("with-stray-fields", { overlay: { drugClass: "beta blocker", triggers: ["stray"], keyContext: "stray" } }),
+        finalUnit("only-stray-fields", { overlay: { entities: ["stray"] } }),
+        finalUnit("no-overlay"),
+      ],
+      clinicalKeys
+    );
+    expect(scrubbed[0].overlay).toEqual({ drugClass: "beta blocker" });
+    expect(scrubbed[1].overlay).toBeUndefined();
+    expect(scrubbed[2].overlay).toBeUndefined();
   });
 });

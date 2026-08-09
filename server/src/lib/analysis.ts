@@ -902,6 +902,7 @@ Extract:
 
 ${lens.unitTypeEmphasis}
 ${slideContext ? `\nThe learner also attached a slide deck (PDF) alongside this video. ${slideContext}\n` : ""}
+Every summary, body, and CLUSTER member body must be grounded in what THIS segment's transcript (or the supplied slide text) actually says — never import definitions, expansions, or facts from your own outside knowledge, even when you are confident they are correct. If the speaker only name-drops a term without explaining it, record that it was mentioned rather than supplying the missing explanation yourself.
 Every timestamp you output MUST fall within this segment's own time range — never extrapolate a timestamp from outside what you were given. If the segment has little of substance, return short (or empty) arrays rather than inventing content.`;
 }
 
@@ -1507,10 +1508,32 @@ function mergeOverlayFields(group: readonly ChunkUnitRaw[]): UnitOverlay {
     if (value) result[key] = value;
   }
   for (const key of OVERLAY_ARRAY_KEYS) {
-    const union = [...new Set(overlays.flatMap((o) => o[key] ?? []))];
+    // Empty-string entries INSIDE an array survived the old union — models
+    // emit `["", "bradycardia"]`-style fillers (2026-08-08 real-lecture
+    // proof) — so filter them the same way scalar "" is already dropped.
+    const union = [...new Set(overlays.flatMap((o) => o[key] ?? []).filter((v) => v.trim() !== ""))];
     if (union.length > 0) result[key] = union;
   }
   return result;
+}
+
+/**
+ * Real-lecture proof finding (2026-08-08): models fill overlay fields the
+ * resolved lens never declared (the prompt says "which ones to fill in is
+ * named by the lens below — leave the rest as '' or []", but instruction
+ * alone doesn't hold). Enforce it server-side: keep only the lens's own
+ * `overlayFields` keys; an overlay emptied by the scrub collapses back to
+ * `undefined`, same as mergeUnitsByFingerprint's `{}` rule.
+ */
+export function scrubOverlayToLens(units: readonly AnalysisUnit[], declaredKeys: ReadonlySet<string>): AnalysisUnit[] {
+  return units.map((u) => {
+    if (!u.overlay) return u;
+    const scrubbed: UnitOverlay = {};
+    for (const [key, value] of Object.entries(u.overlay)) {
+      if (declaredKeys.has(key)) (scrubbed as Record<string, unknown>)[key] = value;
+    }
+    return { ...u, overlay: Object.keys(scrubbed).length > 0 ? scrubbed : undefined };
+  });
 }
 
 /**
@@ -1573,7 +1596,7 @@ function resolveClusterType(group: readonly ChunkUnitRaw[]): { type: UnitType; m
  * mirrors mergeOverlayFields' "don't persist a value nobody actually emitted"
  * rule above.
  */
-function mergeEvidence(group: readonly ChunkUnitRaw[]): UnitEvidence | undefined {
+function mergeEvidence(group: readonly { evidence?: UnitEvidence }[]): UnitEvidence | undefined {
   const values = group.map((g) => g.evidence).filter((v): v is UnitEvidence => v !== undefined);
   if (values.length === 0) return undefined;
   const hasSlides = values.some((v) => v === "slides" || v === "both");
@@ -1649,6 +1672,79 @@ export function mergeUnitsByFingerprint(units: readonly ChunkUnitRaw[]): Analysi
  * between two units both present in this same segment") or that would
  * self-loop are dropped rather than surfaced as broken data.
  */
+/**
+ * Real-lecture proof finding (2026-08-08): the model can emit the same fact
+ * under two label VARIANTS — "tidal-volume-in-ac-mode" vs
+ * "tidal-volume-setting-in-ac-mode" — which fingerprint differently, so
+ * mergeUnitsByFingerprint keeps both and the doubled unit flows into
+ * concepts and pearls. This second, deliberately conservative pass collapses
+ * a pair only when ALL THREE hold: same final type, at least one shared
+ * anchor timestamp (same `t`), and one label's fingerprint token set is a
+ * proper subset of the other's. Genuinely distinct neighbors fail the
+ * subset test (e.g. "patient-triggering-via-negative-pressure" vs
+ * "ac-mode-trigger-and-volume-delivery" share an anchor but neither token
+ * set contains the other) and are kept apart.
+ *
+ * The first-seen unit of a collapsed pair survives (stable ids — everything
+ * downstream references unit ids); the absorbed unit contributes its
+ * anchors, the longer summary/body, its threshold flag, and its evidence.
+ * `aliases` maps each absorbed id to its surviving id so edges and pearl
+ * unitIds can be remapped instead of dangling.
+ */
+export function dedupeNearDuplicateUnits(units: readonly AnalysisUnit[]): { units: AnalysisUnit[]; aliases: Map<string, string> } {
+  const tokensOf = (id: string) => new Set(id.split("-").filter(Boolean));
+  const isProperSubset = (a: ReadonlySet<string>, b: ReadonlySet<string>) =>
+    a.size < b.size && [...a].every((t) => b.has(t));
+
+  const kept: AnalysisUnit[] = [];
+  const aliases = new Map<string, string>();
+  for (const unit of units) {
+    const unitTokens = tokensOf(unit.id);
+    const unitTs = new Set(unit.anchors.map((a) => a.t));
+    const matchIdx = kept.findIndex((k) => {
+      if (k.type !== unit.type) return false;
+      if (!k.anchors.some((a) => unitTs.has(a.t))) return false;
+      const keptTokens = tokensOf(k.id);
+      return isProperSubset(unitTokens, keptTokens) || isProperSubset(keptTokens, unitTokens);
+    });
+    if (matchIdx === -1) {
+      kept.push(unit);
+      continue;
+    }
+    const survivor = kept[matchIdx];
+    aliases.set(unit.id, survivor.id);
+    const anchorByT = new Map<number, string>(survivor.anchors.map((a) => [a.t, a.quote]));
+    for (const a of unit.anchors) if (!anchorByT.has(a.t)) anchorByT.set(a.t, a.quote);
+    kept[matchIdx] = {
+      ...survivor,
+      summary: unit.summary.length > survivor.summary.length ? unit.summary : survivor.summary,
+      body: unit.body.length > survivor.body.length ? unit.body : survivor.body,
+      anchors: [...anchorByT.entries()].sort((a, b) => a[0] - b[0]).map(([t, quote]) => ({ t, quote })),
+      confidence: Math.max(survivor.confidence, unit.confidence),
+      threshold: survivor.threshold || unit.threshold,
+      evidence: survivor.evidence === unit.evidence ? survivor.evidence : mergeEvidence([survivor, unit]),
+    };
+  }
+  return { units: kept, aliases };
+}
+
+/** Rewrites edge endpoints through dedupeNearDuplicateUnits' alias map, dropping self-loops and duplicate (source, target, type) rows the collapse creates. */
+export function remapEdgeAliases(edges: readonly AnalysisEdge[], aliases: ReadonlyMap<string, string>): AnalysisEdge[] {
+  if (aliases.size === 0) return [...edges];
+  const seen = new Set<string>();
+  const out: AnalysisEdge[] = [];
+  for (const e of edges) {
+    const source = aliases.get(e.source) ?? e.source;
+    const target = aliases.get(e.target) ?? e.target;
+    if (source === target) continue;
+    const key = `${source}::${target}::${e.type}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ...e, source, target });
+  }
+  return out;
+}
+
 export function mergeEdgesByFingerprint(edges: readonly ChunkEdgeRaw[], units: readonly AnalysisUnit[]): AnalysisEdge[] {
   const knownIds = new Set(units.map((u) => u.id));
   const order: string[] = [];
@@ -1824,9 +1920,16 @@ export async function runAnalysisJobV3(params: AnalysisJobParamsV3): Promise<Ana
     );
   }
 
-  const mergedUnits = mergeUnitsByFingerprint(collectedUnits);
-  const knownUnitIds = new Set(mergedUnits.map((u) => u.id));
-  const mergedEdges = mergeEdgesByFingerprint(collectedEdges, mergedUnits);
+  const fingerprintUnits = mergeUnitsByFingerprint(collectedUnits);
+  const { units: dedupedUnits, aliases } = dedupeNearDuplicateUnits(fingerprintUnits);
+  // Overlay scrub uses the SAME lens resolution the chunk prompts used, so
+  // the fields kept are exactly the fields the lens told the model to fill.
+  const analysisLens = resolveLensOrGeneric(params.dataDir ?? "", domain);
+  const mergedUnits = scrubOverlayToLens(dedupedUnits, new Set(analysisLens.overlayFields.map((f) => f.key)));
+  // Edges/pearls were collected against raw labels: resolve them in the
+  // PRE-dedupe id space, then remap absorbed ids to their survivors.
+  const knownUnitIds = new Set(fingerprintUnits.map((u) => u.id));
+  const mergedEdges = remapEdgeAliases(mergeEdgesByFingerprint(collectedEdges, fingerprintUnits), aliases);
 
   const merge = await params.client.runMergeV3(collectedPearls, params.model);
   if (merge.kind !== "ok") {
@@ -1834,13 +1937,16 @@ export async function runAnalysisJobV3(params: AnalysisJobParamsV3): Promise<Ana
   }
   params.onProgress?.(100);
 
-  const finalPearls: Pearl[] = merge.data.pearls.map((p) => ({
-    t: p.t,
-    label: p.label,
-    insight: p.insight,
-    importance: p.importance,
-    unitId: resolvePearlUnitId(p.unitLabel, knownUnitIds),
-  }));
+  const finalPearls: Pearl[] = merge.data.pearls.map((p) => {
+    const resolved = resolvePearlUnitId(p.unitLabel, knownUnitIds);
+    return {
+      t: p.t,
+      label: p.label,
+      insight: p.insight,
+      importance: p.importance,
+      unitId: resolved ? (aliases.get(resolved) ?? resolved) : undefined,
+    };
+  });
 
   return {
     generatedAt: new Date().toISOString(),

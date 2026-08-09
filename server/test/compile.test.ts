@@ -180,9 +180,11 @@ describe("renderCompiledDocument — V2-C analysis sections", () => {
       analysisPearls: pearls,
     });
     expect(markdown).toContain("## Pearls");
-    expect(markdown).toContain("★★★ **[1:05] Critical insight** — The single most important thing said.");
-    expect(markdown).toContain("★★ **[5:00] Supporting point**");
-    expect(markdown).toContain("★ **[15:00] Minor detail**");
+    // Timestamps are seek LINKS (#t=N), same convention as note tokens —
+    // plain-text brackets were the 2026-08-08 real-lecture-proof finding.
+    expect(markdown).toContain("★★★ **[1:05](#t=65) Critical insight** — The single most important thing said.");
+    expect(markdown).toContain("★★ **[5:00](#t=300) Supporting point**");
+    expect(markdown).toContain("★ **[15:00](#t=900) Minor detail**");
     // Importance-sorted (3 before 2 before 1), not chronological.
     const critIdx = markdown.indexOf("Critical insight");
     const supportIdx = markdown.indexOf("Supporting point");
@@ -208,7 +210,7 @@ describe("renderCompiledDocument — V2-C analysis sections", () => {
       analysisConcepts: concepts,
     });
     expect(markdown).toContain("## Concept breakdown");
-    expect(markdown).toContain("### Grip Fighting ([1:05], [8:20])");
+    expect(markdown).toContain("### Grip Fighting ([1:05](#t=65), [8:20](#t=500))");
     expect(markdown).toContain("How to control grips.");
     expect(markdown).toContain("Detailed body text.");
   });
@@ -267,7 +269,7 @@ describe("renderCompiledDocument — V3-B B2 attested vs 'Not yet reviewed' unit
       analysisUnits: units,
       unitAttestations: { "u-attested": { status: "attested", userTake: "My own explanation.", at: "t" } },
     });
-    expect(markdown).toContain("### Attested Unit ([1:05])");
+    expect(markdown).toContain("### Attested Unit ([1:05](#t=65))");
     expect(markdown).toContain("Summary of the attested unit.");
     expect(markdown).toContain("Full AI body of the attested unit.");
     expect(markdown).toContain("**Your take:** My own explanation.");
@@ -289,6 +291,28 @@ describe("renderCompiledDocument — V3-B B2 attested vs 'Not yet reviewed' unit
     expect(markdown).toContain("- Untouched Unit");
     expect(markdown).not.toContain("Body the reader should never see.");
     expect(markdown).not.toContain("Summary the reader should never see.");
+  });
+
+  it("a dismissed unit renders under its own 'Dismissed' list, never under 'Not yet reviewed'", () => {
+    const markdown = renderCompiledDocument({
+      title: "V3 compile",
+      source,
+      notes: "",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+      analysisUnits: units,
+      unitAttestations: { "u-attested": { status: "dismissed", at: "t" } },
+    });
+    // Dismissed = the learner reviewed it and judged it not worth keeping —
+    // titles-only like unreviewed units, but labeled truthfully.
+    expect(markdown).toContain("### Dismissed");
+    expect(markdown).toContain("- Attested Unit");
+    expect(markdown).not.toContain("Full AI body of the attested unit.");
+    const notYetSection = markdown.slice(markdown.indexOf("### Not yet reviewed"), markdown.indexOf("### Dismissed"));
+    expect(notYetSection).toContain("- Untouched Unit");
+    expect(notYetSection).not.toContain("- Attested Unit");
   });
 
   it("a bare userTake (no explicit attest) is still enough to render a unit in full", () => {

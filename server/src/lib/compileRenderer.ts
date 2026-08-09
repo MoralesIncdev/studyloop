@@ -49,12 +49,14 @@ function describeSource(source: Source): string {
   return source.url;
 }
 
+/** `[mm:ss](#t=N)` link for a timestamp — the one seek-link convention every compiled section shares (same anchor shape renderNotesTokens has always emitted). */
+function timestampLink(seconds: number): string {
+  return `[${formatTimestamp(seconds)}](#t=${Math.round(seconds)})`;
+}
+
 /** Replaces `^t:123.4` timestamp tokens in notes markdown with `[mm:ss]` links. */
 export function renderNotesTokens(notes: string): string {
-  return notes.replace(/\^t:(\d+(?:\.\d+)?)/g, (_match, secondsStr: string) => {
-    const seconds = Number(secondsStr);
-    return `[${formatTimestamp(seconds)}](#t=${Math.round(seconds)})`;
-  });
+  return notes.replace(/\^t:(\d+(?:\.\d+)?)/g, (_match, secondsStr: string) => timestampLink(Number(secondsStr)));
 }
 
 function renderBubbles(bubbles: readonly Bubble[]): string {
@@ -77,7 +79,7 @@ function isCovered(card: ConceptCard, watchedUpTo: number): boolean {
 function renderAnalysisPearls(pearls: readonly Pearl[]): string {
   const sorted = [...pearls].sort((a, b) => b.importance - a.importance || a.t - b.t);
   return sorted
-    .map((p) => `- ${"★".repeat(p.importance)} **[${formatTimestamp(p.t)}] ${p.label}** — ${p.insight}`)
+    .map((p) => `- ${"★".repeat(p.importance)} **${timestampLink(p.t)} ${p.label}** — ${p.insight}`)
     .join("\n");
 }
 
@@ -89,7 +91,12 @@ function renderAnalysisPearls(pearls: readonly Pearl[]): string {
  */
 function renderAnalysisUnitsV3(units: readonly AnalysisUnit[], attestations: AttestationsFile): string {
   const attested = units.filter((u) => isUnitFeedable(attestations[u.id]));
-  const notYet = units.filter((u) => !isUnitFeedable(attestations[u.id]));
+  // "Not yet reviewed" must mean exactly that: a unit the learner DISMISSED
+  // was reviewed — they judged it not worth keeping. Lumping the two together
+  // (the pre-2026-08-08 behavior) misreported the learner's own progress in
+  // their study document, so dismissed units get their own titles-only list.
+  const dismissed = units.filter((u) => !isUnitFeedable(attestations[u.id]) && attestations[u.id]?.status === "dismissed");
+  const notYet = units.filter((u) => !isUnitFeedable(attestations[u.id]) && attestations[u.id]?.status !== "dismissed");
   const parts: string[] = [];
 
   if (attested.length > 0) {
@@ -97,7 +104,7 @@ function renderAnalysisUnitsV3(units: readonly AnalysisUnit[], attestations: Att
       attested
         .map((u) => {
           const entry = attestations[u.id];
-          const anchorList = u.anchors.map((a) => `[${formatTimestamp(a.t)}]`).join(", ");
+          const anchorList = u.anchors.map((a) => timestampLink(a.t)).join(", ");
           const body = entry?.userBody?.trim() || u.body;
           const lines = [`### ${u.label}${anchorList ? ` (${anchorList})` : ""}`, "", u.summary, "", body];
           if (entry?.userTake?.trim()) lines.push("", `**Your take:** ${entry.userTake.trim()}`);
@@ -109,13 +116,16 @@ function renderAnalysisUnitsV3(units: readonly AnalysisUnit[], attestations: Att
   if (notYet.length > 0) {
     parts.push(["### Not yet reviewed", "", notYet.map((u) => `- ${u.label}`).join("\n")].join("\n"));
   }
+  if (dismissed.length > 0) {
+    parts.push(["### Dismissed", "", dismissed.map((u) => `- ${u.label}`).join("\n")].join("\n"));
+  }
   return parts.join("\n\n");
 }
 
 function renderAnalysisConcepts(concepts: readonly AnalysisConcept[]): string {
   return concepts
     .map((c) => {
-      const anchorList = c.anchors.map((a) => `[${formatTimestamp(a.t)}]`).join(", ");
+      const anchorList = c.anchors.map((a) => timestampLink(a.t)).join(", ");
       const lines = [`### ${c.title}${anchorList ? ` (${anchorList})` : ""}`, "", c.summary, "", c.body];
       return lines.join("\n");
     })
