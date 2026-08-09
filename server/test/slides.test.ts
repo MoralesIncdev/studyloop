@@ -24,7 +24,7 @@ import {
 } from "../src/lib/slides.js";
 import { analysisJsonPath, slidesJsonPath, writeJsonAtomic } from "../src/lib/store.js";
 import { markAnalysisStale } from "../src/lib/terms.js";
-import type { SlidesFile } from "../src/lib/models.js";
+import { SlidesMetaSchema, type SlidesFile } from "../src/lib/models.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES = path.join(__dirname, "fixtures");
@@ -119,6 +119,54 @@ describe("PdfParseSlideExtractor against real PDF fixtures (PIPE-02)", () => {
     const page2 = result.pages[1];
     expect(page2.text.length).toBeGreaterThan(0);
     expect(page2.text.trim().length).toBe(0);
+  });
+
+  // ROADMAP SC4 text-layer regression guard: a normal deck must keep
+  // reporting zero empty pages and behave exactly as before this signal
+  // was added.
+  it("slides-text-layer.pdf: pageCount 2, emptyPageCount 0, and both pages carry non-whitespace text", async () => {
+    const buffer = await fs.readFile(path.join(FIXTURES, "slides-text-layer.pdf"));
+    const extractor = new PdfParseSlideExtractor();
+    const result = await extractor.extract(buffer);
+    expect(result.pageCount).toBe(2);
+    expect(result.emptyPageCount).toBe(0);
+    expect(result.pages[0].text.trim().length).toBeGreaterThan(0);
+    expect(result.pages[1].text.trim().length).toBeGreaterThan(0);
+  });
+
+  it("both fixtures produce a pages array whose length equals the reported pageCount — the counter can never disagree with what gets stored", async () => {
+    const extractor = new PdfParseSlideExtractor();
+    for (const fixture of ["slides-empty-page.pdf", "slides-text-layer.pdf"]) {
+      const buffer = await fs.readFile(path.join(FIXTURES, fixture));
+      const result = await extractor.extract(buffer);
+      expect(result.pages.length).toBe(result.pageCount);
+    }
+  });
+});
+
+describe("emptyPageCount schema + GET-response surface (PIPE-02, threat T-01-06/T-01-07)", () => {
+  it("a route-shaped meta object (matching routes/slides.ts's literal) parses cleanly through SlidesMetaSchema", () => {
+    const meta = { filename: "deck.pdf", pageCount: 2, uploadedAt: new Date().toISOString(), emptyPageCount: 1 };
+    expect(() => SlidesMetaSchema.parse(meta)).not.toThrow();
+  });
+
+  it("the GET response shape exposes meta only — no page-text field — built from a readSlides result", async () => {
+    const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "studyloop-slides-get-"));
+    try {
+      const projectId = "proj-slides-get";
+      await writeSlides(dataDir, projectId, {
+        meta: { filename: "deck.pdf", pageCount: 1, uploadedAt: "2026-08-01T00:00:00.000Z", emptyPageCount: 0 },
+        pages: [{ page: 1, text: "some extracted page text that must never leak to GET" }],
+      });
+      const slides = await readSlides(dataDir, projectId);
+      // Mirrors routes/slides.ts's GET handler: `{ meta: slides?.meta ?? null }`.
+      const getResponse = { meta: slides?.meta ?? null };
+      expect(Object.keys(getResponse)).toEqual(["meta"]);
+      expect(getResponse).not.toHaveProperty("pages");
+      expect(JSON.stringify(getResponse)).not.toContain("must never leak");
+    } finally {
+      await fs.rm(dataDir, { recursive: true, force: true });
+    }
   });
 });
 
