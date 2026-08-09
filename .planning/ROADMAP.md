@@ -11,7 +11,7 @@ StudyLoop's engine is built (all 11 prior build phases merged) but the 2026-08-0
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: Ingestion Pipeline Repair** - Caption fallback runs in the normal flow; image-only slide PDFs warn instead of failing silently
+- [x] **Phase 1: Ingestion Pipeline Repair** - Caption fallback runs in the normal flow; image-only slide PDFs warn instead of failing silently (completed 2026-08-09)
 - [ ] **Phase 2: Analysis Fidelity Hardening** - Chunk-overlap dedup, enrichment marked or suppressed, overlay-field discipline
 - [ ] **Phase 3: Attestation Gate & Compile Honesty** - Un-attested pearl review channel closed per LOCKED ADR; compile distinguishes Dismissed; anchors clickable
 - [ ] **Phase 4: Real-Lecture Proof Re-Run** - Full end-to-end PASS on a real nursing lecture with zero manual workarounds
@@ -31,13 +31,13 @@ StudyLoop's engine is built (all 11 prior build phases merged) but the 2026-08-0
   3. Attaching an image-only (no text layer) slide PDF produces a visible warning driven by `emptyPageCount` — the learner knows the slides channel is empty before analysis runs
   4. Existing text-layer PDF and captioned-YouTube flows are unchanged (regression tests cover both branches of the fallback)
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 
 - [x] 01-01-PLAN.md — PIPE-01: route-level regression coverage for the yt-dlp caption fallback (wave 1)
 - [x] 01-02-PLAN.md — PIPE-02: emptyPageCount from the PDF extractor through the upload response (wave 1)
-- [ ] 01-03-PLAN.md — PIPE-02: mirrored web type and the learner-visible empty-deck warning (wave 2)
+- [x] 01-03-PLAN.md — PIPE-02: mirrored web type and the learner-visible empty-deck warning (wave 2)
 
 ### Phase 2: Analysis Fidelity Hardening
 
@@ -106,7 +106,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Ingestion Pipeline Repair | 2/3 | In Progress|  |
+| 1. Ingestion Pipeline Repair | 3/3 | Complete    | 2026-08-09 |
 | 2. Analysis Fidelity Hardening | 0/TBD | Not started | - |
 | 3. Attestation Gate & Compile Honesty | 0/TBD | Not started | - |
 | 4. Real-Lecture Proof Re-Run | 0/TBD | Not started | - |
