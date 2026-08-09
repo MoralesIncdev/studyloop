@@ -27,7 +27,12 @@ StudyLoop's engine is built (all 11 prior build phases merged) but the 2026-08-0
   2. Total youtubei.js failure still degrades per the out-of-box contract: resolve falls back to the yt-dlp path, and yt-dlp being absent does not block project creation (`ytdlpMissing: true`)
   3. Attaching an image-only (no text layer) slide PDF produces a visible warning driven by `emptyPageCount` — the learner knows the slides channel is empty before analysis runs
   4. Existing text-layer PDF and captioned-YouTube flows are unchanged (regression tests cover both branches of the fallback)
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — PIPE-01: route-level regression coverage for the yt-dlp caption fallback (wave 1)
+- [ ] 01-02-PLAN.md — PIPE-02: emptyPageCount from the PDF extractor through the upload response (wave 1)
+- [ ] 01-03-PLAN.md — PIPE-02: mirrored web type and the learner-visible empty-deck warning (wave 2)
 
 ### Phase 2: Analysis Fidelity Hardening
 **Goal**: Analysis output on a real lecture contains no duplicate units, no unmarked ungrounded claims, and no junk overlay fields
@@ -84,7 +89,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Ingestion Pipeline Repair | 0/TBD | Not started | - |
+| 1. Ingestion Pipeline Repair | 0/3 | Not started | - |
 | 2. Analysis Fidelity Hardening | 0/TBD | Not started | - |
 | 3. Attestation Gate & Compile Honesty | 0/TBD | Not started | - |
 | 4. Real-Lecture Proof Re-Run | 0/TBD | Not started | - |
