@@ -1,0 +1,34 @@
+{
+  "source_path": "/Users/antemo/studyloop/docs/PRD.md",
+  "type": "PRD",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "StudyLoop — Product Requirements Document",
+  "summary": "Local-first study engine implementing evidence-based learning loops (generate → reveal → test → review) with user attestation for long-form video and documents.",
+  "scope": [
+    "StudyLoop",
+    "video study",
+    "learning loops",
+    "retention",
+    "concept extraction",
+    "clinical",
+    "nursing",
+    "spaced repetition",
+    "YouTube",
+    "transcripts",
+    "analysis engine",
+    "domain lenses",
+    "review system",
+    "local-first"
+  ],
+  "cross_refs": [
+    "docs/PEDAGOGY.md",
+    "docs/FEATURE-REVIEW.md",
+    "design/DESIGN.md",
+    "design/EXECUTION-PLAN-post-review-v1.md",
+    "github.com/MoralesIncdev/studyloop"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

@@ -1,0 +1,30 @@
+{
+  "source_path": "/Users/antemo/studyloop/docs/REAL-LECTURE-PROOF-2026-08-08.md",
+  "type": "DOC",
+  "confidence": "medium",
+  "manifest_override": false,
+  "title": "Real-Lecture Proof — 2026-08-08",
+  "summary": "Proof-of-concept validation report demonstrating clinical analysis, slides, and document modes work end-to-end on a real nursing lecture; identifies 7 bugs blocking student-facing release.",
+  "scope": [
+    "clinical analysis",
+    "slides extraction",
+    "document compilation",
+    "YouTube video ingestion",
+    "transcript resolution",
+    "bug validation",
+    "StudyLoop milestone verification"
+  ],
+  "cross_refs": [
+    "/Users/antemo/StudyLoop/projects/2852bce9-cb76-4849-ad44-82ce98db8ed1/",
+    "server/src/routes/youtube.ts",
+    "server/src/lib/slides.ts",
+    "server/src/routes/slides.ts",
+    "server/src/lib/analysis.ts",
+    "server/src/lib/terms.ts",
+    "server/src/lib/compileRenderer.ts",
+    "server/lenses/clinical.json"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": "Test/validation report: end-to-end proof-of-concept testing on real clinical lecture with bug findings. Blends QA evidence with post-hoc issue tracking. Not a requirements document (PRD), architecture decision (ADR), or technical specification (SPEC), but supporting evidence documentation. Medium confidence because content is technical and issue-driven (partial spec-like signals) but primary purpose is proof/validation rather than contracts or requirements."
+}

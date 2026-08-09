@@ -1,0 +1,29 @@
+{
+  "source_path": "/Users/antemo/studyloop/SPEC.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "StudyLoop — Technical Spec (v1)",
+  "summary": "Technical specification for StudyLoop, a local-first web app for deep study of long-form video content, defining API contracts, data models, frontend behavior patterns, and phased feature releases (V2 through V3-D).",
+  "scope": [
+    "StudyLoop",
+    "API endpoints",
+    "Fastify server",
+    "React web client",
+    "YouTube integration",
+    "Analysis engine",
+    "Review system",
+    "Concept extraction",
+    "Project persistence",
+    "Domain-aware features"
+  ],
+  "cross_refs": [
+    "design/reference-youtube.png",
+    "design/DESIGN.md",
+    "FEATURE-REVIEW.md",
+    "PEDAGOGY.md"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

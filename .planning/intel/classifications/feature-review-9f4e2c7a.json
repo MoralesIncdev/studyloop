@@ -1,0 +1,30 @@
+{
+  "source_path": "/Users/antemo/studyloop/docs/FEATURE-REVIEW.md",
+  "type": "SPEC",
+  "confidence": "medium",
+  "manifest_override": false,
+  "title": "StudyLoop Per-Feature Review & v3 Roadmap (adjudicated 2026-07-28)",
+  "summary": "Council-adjudicated review of StudyLoop features with verdicts on v3 changes; specifies four build phases prioritized by learning leverage per implementation effort.",
+  "scope": [
+    "Discover & Navigate",
+    "Study Loop",
+    "Analysis Engine",
+    "Retention",
+    "Synthesis & Contribution",
+    "Concept Continuity",
+    "Intent toggles",
+    "State-aware surface",
+    "Attestation loop",
+    "Study Path rail",
+    "Card transformation",
+    "Lapse-to-context pipeline",
+    "Overlay diff-on-import",
+    "Heatmap layers",
+    "v3-A through v3-D phases"
+  ],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": null,
+  "notes": "Medium confidence: prescribes technical implementation constraints and formal build roadmap (SPEC signal), but lacks formal API/schema tables and reads with design rationale narrative (DOC-adjacent). The v3 Roadmap table with phase contents and 'why first' reasoning is the formal spec element. Council verdicts provide context but implementation prescriptions dominate.",
+  "cycle_resolution": "2026-08-09: pruned back-ref to docs/PEDAGOGY.md per INGEST-CONFLICTS blocker remedy (mutual reference acknowledged; ADR is upstream of review doc)"
+}

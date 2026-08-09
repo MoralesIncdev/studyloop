@@ -1,0 +1,33 @@
+{
+  "source_path": "/Users/antemo/studyloop/docs/PEDAGOGY.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "StudyLoop Pedagogy Framework",
+  "summary": "Binding pedagogical architecture governing active recall, generation effect, spaced review, and learner attestation across all StudyLoop features.",
+  "scope": [
+    "pedagogy",
+    "learning science",
+    "active recall",
+    "generation effect",
+    "retrieval practice",
+    "spaced review",
+    "concept extraction",
+    "learner attestation",
+    "knowledge decomposition",
+    "study paths",
+    "cognitive load",
+    "retention mechanics",
+    "content discovery",
+    "anti-features"
+  ],
+  "cross_refs": [
+    "FEATURE-REVIEW.md",
+    "~/.openclaw/council/sessions/",
+    "design/ (repo history)",
+    "analysis v3 schema"
+  ],
+  "locked": true,
+  "precedence": null,
+  "notes": ""
+}
