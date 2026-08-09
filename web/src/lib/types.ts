@@ -529,6 +529,8 @@ export interface SlidesMeta {
   filename: string;
   pageCount: number;
   uploadedAt: string;
+  /** Count of pages with no extractable text (trimmed-length emptiness), per server SlidesMetaSchema (PIPE-02). */
+  emptyPageCount: number;
 }
 
 /** GET /api/projects/:id/slides — `meta` is `null` when no deck is attached. */

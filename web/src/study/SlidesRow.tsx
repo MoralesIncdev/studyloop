@@ -10,6 +10,7 @@
 // honest slice" the phase spec calls out instead: a quiet inline note.
 import { useRef } from "react";
 import { useStudyLoopStore } from "../state/store";
+import { slidesWarningText } from "../lib/slidesWarning";
 import styles from "./SlidesRow.module.css";
 
 export function SlidesRow(): JSX.Element | null {
@@ -22,6 +23,8 @@ export function SlidesRow(): JSX.Element | null {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   if (!currentProject) return null;
+
+  const slidesWarning = slidesMeta ? slidesWarningText(slidesMeta) : null;
 
   return (
     <div className={styles.row}>
@@ -54,6 +57,7 @@ export function SlidesRow(): JSX.Element | null {
           >
             Remove
           </button>
+          {slidesWarning && <span className={styles.warnNote}>{slidesWarning}</span>}
         </>
       ) : (
         <button

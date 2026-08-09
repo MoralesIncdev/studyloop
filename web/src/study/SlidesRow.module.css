@@ -70,3 +70,15 @@
   color: var(--accent-amber, var(--text-secondary));
   font-style: italic;
 }
+
+/* PIPE-02: warns the learner that some (or all) pages of the attached deck
+   carried no extractable text, before analysis runs. */
+.warnNote {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+  font-size: var(--type-12);
+  color: var(--accent-amber);
+  border: 1px solid color-mix(in srgb, var(--accent-amber) 55%, transparent);
+}
