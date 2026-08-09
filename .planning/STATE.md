@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 1
 current_phase_name: Ingestion Pipeline Repair
-status: planning
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-08-09T23:15:23.991Z"
+status: executing
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-08-09T23:21:21.812Z"
 last_activity: 2026-08-09
 last_activity_desc: Project initialized from doc ingest (PROJECT.md, REQUIREMENTS.md, ROADMAP.md created)
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-09)
 ## Current Position
 
 Phase: 1 of 5 (Ingestion Pipeline Repair)
-Plan: 1 of 3 in current phase
-Status: In Progress
+Plan: 2 of 3 in current phase
+Status: Ready to execute
 Last activity: 2026-08-09 — Completed 01-01-PLAN.md (PIPE-01 regression coverage: youtube.test.ts + __setResolveYoutubeForTests DI seam)
 
-Progress: [███░░░░░░░] 33%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [███░░░░░░░] 33%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 01-ingestion-pipeline-repair P01 | 20 min | 3 tasks | 4 files |
+| Phase 01 P02 | 20min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,7 @@ Recent decisions affecting current work:
 - [Ingest] Compile gains a distinct "Dismissed" section, separate from "Not yet reviewed" (Phase 3)
 - [2026-08-09 Phase 1] Descoped: the Innertube 15-minute cache wraps `resolveVideo` only, so the route-level yt-dlp caption merge is never cached and a repeat resolve of the same video re-spawns yt-dlp (up to its 30s timeout). Out of scope because PIPE-01's success criteria require the fallback to run, not to be cached; single-paste flows hit it once. Revisit if the Phase 4 proof run shows repeat-resolve latency.
 - [2026-08-09 Phase 1] Accepted: `text.trim().length === 0` is the emptiness threshold for PIPE-02; a page carrying only a footer or page number counts as non-empty. Revisit only if the Phase 4 proof deck exhibits that false negative.
+- [2026-08-09 Phase 1] emptyPageCount is computed inside PdfParseSlideExtractor's existing pagerender callback (not a second pass over pages) and defaults to 0 on SlidesMetaSchema so pre-existing slides.json files stay readable.
 
 ### Pending Todos
 
@@ -99,6 +101,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-09T23:15:23.984Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-08-09T23:21:18.437Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
