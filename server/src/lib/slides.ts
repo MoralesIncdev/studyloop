@@ -30,6 +30,18 @@ import { isNotFound, readJsonIfExists, slidesJsonPath, writeJsonAtomic } from ".
 export interface ExtractedSlides {
   pageCount: number;
   pages: SlidePage[];
+  emptyPageCount: number;
+}
+
+/**
+ * PIPE-02: whether a page's extracted text carries no real content. Trimming
+ * is required (not a bare `=== ""` check) because PDF text layers routinely
+ * yield whitespace-only pages — `test/fixtures/slides-empty-page.pdf`'s
+ * second page has a raw text length > 0 (spaces/newlines from the renderer)
+ * but a trimmed length of 0, and that's the case this predicate must catch.
+ */
+export function isEmptyPageText(text: string): boolean {
+  return text.trim().length === 0;
 }
 
 /**
@@ -69,6 +81,7 @@ interface PdfPageData {
 export class PdfParseSlideExtractor implements SlideExtractor {
   async extract(buffer: Buffer): Promise<ExtractedSlides> {
     const pages: SlidePage[] = [];
+    let emptyPageCount = 0;
     await pdfParse(buffer, {
       // Captures one page's text as its own array entry (pdf-parse's default
       // behavior only ever accumulates everything into one whole-document
@@ -84,11 +97,15 @@ export class PdfParseSlideExtractor implements SlideExtractor {
           else text += "\n" + item.str;
           lastY = item.transform[5];
         }
+        // PIPE-02: increment inside this callback (the only place per-page
+        // text is materialized), not in a second pass over `pages` after
+        // pdfParse resolves — a second pass could drift from what's stored.
+        if (isEmptyPageText(text)) emptyPageCount++;
         pages.push({ page: pages.length + 1, text });
         return text;
       },
     });
-    return { pageCount: pages.length, pages };
+    return { pageCount: pages.length, pages, emptyPageCount };
   }
 }
 

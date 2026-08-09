@@ -267,11 +267,19 @@ export const SlidePageSchema = z.object({
 });
 export type SlidePage = z.infer<typeof SlidePageSchema>;
 
-/** Upload metadata for a project's attached slide deck — everything the web app needs to render "deck.pdf · 24 pages" without shipping the (potentially large) extracted text. */
+/**
+ * Upload metadata for a project's attached slide deck — everything the web
+ * app needs to render "deck.pdf · 24 pages" without shipping the
+ * (potentially large) extracted text. `emptyPageCount` (PIPE-02) is how many
+ * of those pages had no extractable text (trimmed length 0) — the signal an
+ * image-only or scanned deck's silently-empty text channel needs. Defaults
+ * to 0 so a `slides.json` written before this field existed still parses.
+ */
 export const SlidesMetaSchema = z.object({
   filename: z.string(),
   pageCount: z.number().int().nonnegative(),
   uploadedAt: z.string(),
+  emptyPageCount: z.number().int().nonnegative().default(0),
 });
 export type SlidesMeta = z.infer<typeof SlidesMetaSchema>;
 

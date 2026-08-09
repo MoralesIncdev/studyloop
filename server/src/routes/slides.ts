@@ -66,7 +66,7 @@ export async function slidesRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const result = await withProjectLock(params.data.id, async () => {
-      const meta = { filename, pageCount: extracted.pageCount, uploadedAt: new Date().toISOString() };
+      const meta = { filename, pageCount: extracted.pageCount, uploadedAt: new Date().toISOString(), emptyPageCount: extracted.emptyPageCount };
       await writeSlides(dataDir, params.data.id, { meta, pages: extracted.pages });
       const analysisMarkedStale = await markAnalysisStale(dataDir, params.data.id, "slides-changed");
       return { meta, analysisMarkedStale };
