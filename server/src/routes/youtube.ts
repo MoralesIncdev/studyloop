@@ -43,13 +43,30 @@ export async function youtubeRoutes(app: FastifyInstance): Promise<void> {
       const resolved = await resolveVideo(videoId);
       const elapsedMs = Date.now() - started;
       if (resolved.title || resolved.captions) {
-        app.log.info({ videoId, elapsedMs }, "youtube resolve: innertube hit");
+        let captions = resolved.captions && resolved.captions.length > 0 ? resolved.captions : undefined;
+        if (captions) {
+          app.log.info({ videoId, elapsedMs }, "youtube resolve: innertube hit");
+        } else {
+          // Innertube resolved metadata but not captions — on some networks
+          // its transcript endpoint reliably fails while yt-dlp's caption
+          // path works. Returning metadata-only here would make the normal
+          // resolve-then-create flow build a transcript-less project, so try
+          // the yt-dlp caption fallback before answering (non-fatal: on any
+          // failure the metadata-only response below still goes out).
+          app.log.info({ videoId, elapsedMs }, "youtube resolve: innertube metadata-only, trying yt-dlp for captions");
+          try {
+            const legacy = await resolveYoutube(url);
+            if (legacy.captions && legacy.captions.length > 0) captions = legacy.captions;
+          } catch (err) {
+            app.log.warn({ videoId, err }, "youtube resolve: yt-dlp caption fallback failed, returning metadata-only");
+          }
+        }
         return {
           videoId,
           title: resolved.title,
           author: resolved.author ?? undefined,
           durationSeconds: resolved.durationSeconds ?? undefined,
-          captions: resolved.captions ?? undefined,
+          captions,
           related: resolved.related,
         };
       }
