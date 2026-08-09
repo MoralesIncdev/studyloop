@@ -134,6 +134,13 @@ export interface YoutubeMetadata {
   ytdlpMissing?: boolean;
 }
 
+let resolveYoutubeOverride: ((url: string) => Promise<YoutubeMetadata>) | null = null;
+
+/** Test-only: force `resolveYoutube` to return a fake/spy implementation — mirrors lib/slides.ts's `__setSlideExtractorForTests`. Pass `null` to restore the real implementation. */
+export function __setResolveYoutubeForTests(fn: ((url: string) => Promise<YoutubeMetadata>) | null): void {
+  resolveYoutubeOverride = fn;
+}
+
 /**
  * Resolves title + auto-captions for a YouTube URL via yt-dlp, without
  * downloading video. If yt-dlp isn't installed, this does NOT throw/block —
@@ -142,6 +149,7 @@ export interface YoutubeMetadata {
  */
 export async function resolveYoutube(url: string): Promise<YoutubeMetadata> {
   assertValidYoutubeUrl(url);
+  if (resolveYoutubeOverride) return resolveYoutubeOverride(url);
   // Local extraction covers every URL shape we know about (watch?v=, youtu.be,
   // /shorts/, /live/, /embed/) — but a URL with none of those (e.g. a
   // playlist or channel link that still passes the host/scheme allowlist)
