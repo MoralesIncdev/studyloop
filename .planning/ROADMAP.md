@@ -109,12 +109,12 @@ Plans:
 **Goal:** Anchor timestamps point where the content is actually spoken — F-10 drift (10/18 units up to ~4m42s off, incl. both DOSAGE cards) and F-09 rolling-caption duplication root-caused and fixed; anchor verifier re-run on the 2026-08-10 proof project yields a clean report; PROOF-01 closes
 **Requirements**: PROOF-01 (carried open from Phase 4; see docs/proof-evidence-2026-08-10/ FINDINGS F-09/F-10/F-11)
 **Depends on:** Phase 4
-**Plans:** 1/7 plans executed
+**Plans:** 2/7 plans executed
 
 Plans:
 
 - [x] 04.1-01-PLAN.md — tracer: rolling dedup + anchor correction + verifier agree end-to-end offline (wave 1)
-- [ ] 04.1-02-PLAN.md — F-09: full rolling-caption dedup, real-data fixtures, uniform chain-step application (wave 2)
+- [x] 04.1-02-PLAN.md — F-09: full rolling-caption dedup, real-data fixtures, uniform chain-step application (wave 2)
 - [ ] 04.1-03-PLAN.md — F-10: full anchor-correction pass, safety-tier accounting, pearls, telemetry, prompt tightening (wave 2)
 - [ ] 04.1-04-PLAN.md — F-11: predicate-condition evidence, narrowest safe fix or documented limitation (wave 3)
 - [ ] 04.1-05-PLAN.md — D-02 live re-run: re-ingest and re-analyze on the isolated proof harness (wave 4)
