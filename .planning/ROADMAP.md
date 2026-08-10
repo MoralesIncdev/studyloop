@@ -73,11 +73,11 @@ Plans:
   4. The compiled document lists dismissed units under a distinct "Dismissed" section, separate from "Not yet reviewed"
   5. Pearl/concept anchor timestamps in the compiled document are clickable links, matching user-note `^t:` token behavior
 
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 
-- [ ] 03-01-PLAN.md — GATE-01: route-level `app.inject` regression proving the attestation gate and the review.json migration hold end-to-end (wave 1)
+- [x] 03-01-PLAN.md — GATE-01: route-level `app.inject` regression proving the attestation gate and the review.json migration hold end-to-end (wave 1)
 - [ ] 03-02-PLAN.md — COMP-01/COMP-02: dismissed-partition edge cases and anchor-link convention parity (wave 1)
 - [ ] 03-03-PLAN.md — GATE-02: SPEC.md F11 + V3-B deviation notes and REQUIREMENTS.md provenance (wave 2)
 
@@ -121,6 +121,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Ingestion Pipeline Repair | 3/3 | Complete    | 2026-08-09 |
 | 2. Analysis Fidelity Hardening | 4/4 | Complete    | 2026-08-10 |
-| 3. Attestation Gate & Compile Honesty | 0/3 | Not started | - |
+| 3. Attestation Gate & Compile Honesty | 1/3 | In Progress|  |
 | 4. Real-Lecture Proof Re-Run | 0/TBD | Not started | - |
 | 5. Depth Tier (Accuracy-Gated) | 0/TBD | Not started | - |

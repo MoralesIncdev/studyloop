@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 3
 current_phase_name: Attestation Gate & Compile Honesty
-status: planning
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-08-10T15:58:50.917Z"
+status: in-progress
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-08-10T17:00:55.000Z"
 last_activity: 2026-08-10
-last_activity_desc: Phase 2 Plan 3 — ANLZ-02 enrichment extended across the pearl channel and the compiled document; requirement now Complete
+last_activity_desc: Phase 3 Plan 1 — route-level app.inject regressions prove GATE-01 holds end-to-end through the real GET /api/review/queue handler; GATE-01 checkbox stays Pending until 03-03 (shared declarer) also completes
 progress:
   total_phases: 2
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 8
+  completed_plans: 8
 ---
 
 # Project State
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-09)
 
 **Core value:** A real lecture goes end-to-end with zero hallucinated claims and zero un-attested AI content in the review queue.
-**Current focus:** Phase 2 — Analysis Fidelity Hardening
+**Current focus:** Phase 3 — Attestation Gate & Compile Honesty
 
 ## Current Position
 
 Phase: 3 of 5 (Attestation Gate & Compile Honesty)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-08-10 — Phase 2 complete, transitioned to Phase 3
+Plan: 1/3 executed (03-01 complete; 03-02, 03-03 pending)
+Status: In progress
+Last activity: 2026-08-10 — 03-01-PLAN.md complete: route-level attestation-gate proof
 
 Progress: [█████████░] 86%
 
@@ -64,6 +64,7 @@ Progress: [█████████░] 86%
 | Phase 02-analysis-fidelity-hardening P01 | 35 min | 2 tasks | 7 files |
 | Phase 02 P02 | 20 min | 2 tasks | 5 files |
 | Phase 02 P03 | 30 min | 3 tasks | 7 files |
+| Phase 03-attestation-gate-compile-honesty P01 | 20 min | 2 tasks | 1 file |
 
 ## Accumulated Context
 
@@ -83,6 +84,7 @@ Recent decisions affecting current work:
 - [2026-08-10 Phase 2 P01] REQUIREMENTS.md's ANLZ-02 checkbox stays Pending: 02-03-PLAN.md also declares ANLZ-02 (pearl/compiled-export surfaces) and hasn't run yet — shared-ID gate (#2388) flips it only once both declaring plans have a SUMMARY.
 - [2026-08-10 Phase 2 P02] PRIORITIZATION added to `clinical.json`'s `safetyTier` array and mirrored into `safetyTier.ts`'s `SAFETY_TIER_UNIT_TYPES` (D-02, LOCKED). D-01's distinct-facts-never-merge guarantee and the verbatim-quote predicate are now regression-tested for all four safety-tier types (DOSAGE/CONTRAINDICATION/LAB_VALUE/PRIORITIZATION); `UnitProposalCard.tsx` was not touched. REQUIREMENTS.md's ANLZ-01 checkbox stays Pending: 02-04-PLAN.md also declares ANLZ-01 and hasn't run yet — shared-ID gate (#2388).
 - [2026-08-10 Phase 2 P03] ANLZ-02 repeated on the pearl channel (PearlSchema.enrichment, both LLM prompts, merge-dedupe OR in both the real prompt and FakeAnalysisClient) and extended into the compiled document (renderAnalysisPearls + renderAnalysisUnitsV3's attested branch), via a re-declared server-side ENRICHMENT_NOTE verified character-identical to the web copy. This was the second and final declaring plan for ANLZ-02 (02-01 was first) — REQUIREMENTS.md's ANLZ-02 checkbox is now Complete (shared-ID gate #2388 resolved).
+- [2026-08-10 Phase 3 P01] GATE-01 proven end-to-end at the route layer via server/test/reviewRoutes.test.ts (5 app.inject regressions against the real GET /api/review/queue handler), isolated via STUDYLOOP_CONFIG_DIR + two fs.mkdtemp roots + dynamic `await import()` of every StudyLoop module in beforeAll — no static `import ... from "../src/..."` line anywhere in the file, verified by grep. No server/src changes (test-only plan, hard constraint honored). REQUIREMENTS.md's GATE-01 checkbox stays Pending: 03-03-PLAN.md also declares GATE-01 and hasn't run yet — same shared-ID gate (#2388) precedent as ANLZ-01/ANLZ-02.
 
 ### Pending Todos
 
@@ -109,6 +111,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-10T02:11:47.703Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-08-10T17:00:55.000Z
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None
