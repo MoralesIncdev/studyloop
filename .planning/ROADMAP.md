@@ -51,7 +51,14 @@ Plans:
   3. Stored analysis.json contains no overlay values in fields the active lens instructs to leave empty — no lone `[""]` entries survive
   4. The clinical safety tier still holds under the new merge logic: DOSAGE/CONTRAINDICATION/LAB_VALUE/PRIORITIZATION items never auto-merge and render verbatim quotes with exact values
 
-**Plans**: TBD
+**Plans:** 4 plans
+
+Plans:
+
+- [ ] 02-01-PLAN.md — ANLZ-02 tracer: enrichment flag end-to-end, chunk wire schema to unit-card badge (wave 1)
+- [ ] 02-02-PLAN.md — D-02: PRIORITIZATION joins the clinical safety tier, four-type never-auto-merge regression (wave 1)
+- [ ] 02-03-PLAN.md — ANLZ-02 expansion: pearl channel through both LLM calls + compiled-document marking (wave 2)
+- [ ] 02-04-PLAN.md — ANLZ-01/ANLZ-03 audit coverage under D-01 + phase-gate human verification (wave 3)
 
 ### Phase 3: Attestation Gate & Compile Honesty
 
@@ -107,7 +114,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Ingestion Pipeline Repair | 3/3 | Complete    | 2026-08-09 |
-| 2. Analysis Fidelity Hardening | 0/TBD | Not started | - |
+| 2. Analysis Fidelity Hardening | 0/4 | Planned | - |
 | 3. Attestation Gate & Compile Honesty | 0/TBD | Not started | - |
 | 4. Real-Lecture Proof Re-Run | 0/TBD | Not started | - |
 | 5. Depth Tier (Accuracy-Gated) | 0/TBD | Not started | - |
