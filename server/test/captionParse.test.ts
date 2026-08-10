@@ -87,7 +87,7 @@ describe("parseSrtCaptions", () => {
     expect(parseSrtCaptions(raw).segments.map((s) => s.text)).toEqual(["first", "second"]);
   });
 
-  it("parses the real .en.srt fixture (first 20 cues of a genuine yt-dlp auto-caption rip)", async () => {
+  it("parses the real .en.srt fixture (first 20 cues of a genuine yt-dlp auto-caption rip), collapsing its genuine rolling-caption duplication", async () => {
     const raw = await fs.readFile(path.join(FIXTURES, "real-bjj-captions.en.srt"), "utf8");
     const result = parseSrtCaptions(raw);
     // Real auto-generated YouTube captions "roll up" — each cue repeats the
@@ -98,14 +98,31 @@ describe("parseSrtCaptions", () => {
     // like the SRT spec) treats as ending a cue splits that text off into its
     // own headerless, arrow-less fragment, which is silently dropped as "not
     // a cue" rather than counted malformed; cue #1 itself is left with no
-    // text and *is* counted malformed. The remaining 19 (of 20) cues have no
-    // such internal blank line and parse cleanly — this is exactly the
-    // "malformed cues get skipped with a count, not silently dropped or
-    // thrown on" behavior this module exists to guarantee on messy real data.
-    expect(result.segments).toHaveLength(19);
+    // text and *is* counted malformed. malformedCount is unaffected by the
+    // Phase 04.1 rolling-caption dedup (F-09) below — a dropped rolling
+    // duplicate is not a malformed cue.
     expect(result.malformedCount).toBe(1);
+
+    // Phase 04.1 (D-01 item 1, F-09): this fixture's remaining 19 cues are
+    // THE genuine reset/grow rolling pattern the dedup exists to collapse —
+    // not an accidental collision. Proof, read directly from the fixture:
+    // cue 4 ("hey guys um I want to work passing the", 21.150-21.160s) is a
+    // pure "reset" repeat of cue 3's own tail and is now dropped entirely;
+    // cue 6 ("half guard um which", 24.269-24.279s) repeats cue 5's tail the
+    // same way; the pattern continues identically through the rest of the
+    // fixture. Collapsing it changes this test's own segment count (19 -> 10
+    // parsed cues, one deduped segment per genuinely NEW phrase) — recorded
+    // here as the plan's documented single exception (04.1-01-SUMMARY.md),
+    // not a silently-edited fixture or a relaxed assertion.
+    expect(result.segments).toHaveLength(10);
     expect(result.segments[0]).toEqual({ start: 18.99, end: 19, text: "[Music]" });
     expect(result.segments.some((s) => s.text.includes("hey guys um I want to work passing the"))).toBe(true);
+    expect(result.segments.some((s) => s.text.includes("half guard um which"))).toBe(true);
+    // No phrase appears twice in the joined stream — the whole point of the
+    // dedup: the growing cue's repeated tail is stripped, not just re-timed.
+    const joined = result.segments.map((s) => s.text).join(" ");
+    expect(joined.match(/hey guys um I want to work passing the/g)).toHaveLength(1);
+    expect(joined.match(/half guard um which/g)).toHaveLength(1);
     // Ascending by start.
     for (let i = 1; i < result.segments.length; i++) {
       expect(result.segments[i].start).toBeGreaterThanOrEqual(result.segments[i - 1].start);

@@ -203,6 +203,74 @@ describe("correctAnalysisAnchors", () => {
   });
 });
 
+// --- Task 2: blast-radius guard — corrector safety invariants -----------------
+
+describe("correctAnalysisAnchors — Task 2 safety invariants", () => {
+  const segments = cleanTranscriptSegments();
+
+  it("quote-immutability: a fixture exercising all three correction outcomes at once keeps every quote identical", () => {
+    const corrected1: UnitAnchor = { t: 45, quote: "Neurons transmit signals across synapses." };
+    const untouched1: UnitAnchor = { t: 5, quote: "Synapses release neurotransmitters into the gap." };
+    const unresolved1: UnitAnchor = { t: 7, quote: "This sentence was never spoken in the transcript." };
+    const analysis = {
+      units: [unit({ id: "u-all-three", anchors: [corrected1, untouched1, unresolved1] })],
+    };
+
+    const { analysis: result, corrections, unresolved } = correctAnalysisAnchors(analysis, segments);
+
+    // Exactly one of each outcome fired, as intended by this fixture.
+    expect(corrections).toHaveLength(1);
+    expect(unresolved).toHaveLength(1);
+    // Quote strings match their originals exactly, regardless of outcome.
+    const resultQuotes = result.units![0].anchors.map((a) => a.quote);
+    expect(resultQuotes).toEqual([corrected1.quote, untouched1.quote, unresolved1.quote]);
+  });
+
+  it("is idempotent — correcting an already-corrected analysis produces identical t values and an empty corrections list", () => {
+    const analysis = {
+      units: [
+        unit({
+          id: "u-idempotent",
+          anchors: [
+            { t: 45, quote: "Neurons transmit signals across synapses." },
+            { t: 7, quote: "This sentence was never spoken in the transcript." },
+          ],
+        }),
+      ],
+    };
+
+    const first = correctAnalysisAnchors(analysis, segments);
+    const second = correctAnalysisAnchors(first.analysis, segments);
+
+    expect(second.analysis.units![0].anchors.map((a) => a.t)).toEqual(first.analysis.units![0].anchors.map((a) => a.t));
+    expect(second.corrections).toEqual([]);
+    // The still-unresolved anchor is reported unresolved again on every pass — idempotent, not "resolved by re-running".
+    expect(second.unresolved).toHaveLength(1);
+  });
+
+  it("an analysis with no units returns without throwing and corrects nothing", () => {
+    const noUnitsField = correctAnalysisAnchors({}, segments);
+    expect(noUnitsField.analysis).toEqual({});
+    expect(noUnitsField.corrections).toEqual([]);
+    expect(noUnitsField.unresolved).toEqual([]);
+
+    const emptyUnitsArray = correctAnalysisAnchors({ units: [] }, segments);
+    expect(emptyUnitsArray.analysis.units).toEqual([]);
+    expect(emptyUnitsArray.corrections).toEqual([]);
+    expect(emptyUnitsArray.unresolved).toEqual([]);
+  });
+
+  it("a caption stream with no segments returns without throwing — every anchor becomes unresolved, never a false pass", () => {
+    const analysis = { units: [unit({ id: "u-no-captions", anchors: [{ t: 5, quote: "Synapses release neurotransmitters into the gap." }] })] };
+
+    const { analysis: result, corrections, unresolved } = correctAnalysisAnchors(analysis, []);
+
+    expect(result.units![0].anchors[0].t).toBe(5); // untouched — never invents a position
+    expect(corrections).toEqual([]);
+    expect(unresolved).toHaveLength(1);
+  });
+});
+
 // --- Behaviors 7-8: full end-to-end chain -------------------------------------
 
 /** Deterministic no-network test double: two units per the tracer's fixture — one correctly anchored, one whose quote is early in the transcript while its claimed t points at a later, in-bounds (single-chunk) position — mirroring RESEARCH's majority "in-bounds-but-wrong" drift shape, not just an out-of-window case. */
