@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 4
 current_phase_name: Real-Lecture Proof Re-Run
 status: awaiting-checkpoint
-stopped_at: Completed 04.1-02-PLAN.md
-last_updated: "2026-08-10T21:22:13.811Z"
+stopped_at: Completed 04.1-03-PLAN.md
+last_updated: "2026-08-10T21:48:11.434Z"
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 22
-  completed_plans: 17
+  completed_plans: 18
 last_activity: 2026-08-10
-last_activity_desc: "Phase 04.1 Plan 2 (of 7) — widened F-09's rolling-caption dedup to the real 2026-08-10 proof data and applied it uniformly across every transcript-chain step. MIN_OVERLAP_WORDS=3 (with a complete-match escape hatch) and TIME_TOUCH_TOLERANCE_SEC=50ms are now named, justified module constants pinned against RESEARCH's ten-cue excerpt (10->6 segments) and FINDINGS' CPAP passage (4->3 segments), both committed as real fixtures asserted literally. resolveEffectiveTranscript's four chain branches all call dedupeRollingCaptions before correctTranscriptSegments, closing Open Question 3 (Innertube path, checked-but-unresolved) and — critically — reaching the proof project's already-written captions.json, which parse-time-only dedup could never touch. Full suite 1080 server (1059 baseline + 21 new) + 357 web, both at/above baseline; PROOF-01 stays Pending (shared-ID gate — 04.1-03 through 04.1-07 still to run, plus D-02's live-lecture re-proof still required to close it)"
+last_activity_desc: "Phase 04.1 Plan 3 (of 7) — widened correctAnalysisAnchors to the full F-10 fix: every real drift shape (in-window-but-wrong and out-of-window, uniform code path), ellipsis-joined quotes (first-span location), clinical safety-tier accounting (SAFETY_TIER_UNIT_TYPES), pearl timestamp correction (narrow rule, never invented), per-run [analysis] anchor-correction telemetry (no schema change), and a tightened chunk prompt (timestamp provenance, same-occurrence binding, quote contiguity). 66-anchor/18-unit regression built from the real 2026-08-10 proof project's own data replayed through the shipped matching primitives. Full suite 1125 server (1080 baseline + 45 new) + 357 web, both at/above baseline; PROOF-01 stays Pending (shared-ID gate — 04.1-04 through 04.1-07 still to run, plus D-02's live-lecture re-proof still required to close it)"
 ---
 
 # Project State
@@ -32,8 +32,8 @@ Status: CONDITIONAL PASS accepted by Ryan 2026-08-10 (report: docs/REAL-LECTURE-
 PROOF-02 complete; PROOF-01 open — carried to inserted Phase 04.1 (Anchor Fidelity Repair: F-09 rolling captions, F-10 anchor drift, F-11 dedup escape).
 Formal `phase complete 4` is gated on gap closure by design — it lands when Phase 04.1 closes PROOF-01.
 
-Phase 04.1 (Anchor Fidelity Repair, 7 plans, wave 2 of N): Plan 01 (tracer) and Plan 02 (wider F-09 dedup ruleset + uniform chain-step application) complete. dedupeRollingCaptions now carries two real-data-justified thresholds and reaches all four resolveEffectiveTranscript branches; correctAnalysisAnchors still wired end-to-end through runAnalysisJobV3 from Plan 01. PROOF-01 checkbox stays Pending: shared-ID gate across all 7 declared plans, plus D-02's live-lecture re-proof (04.1-04+) still required for verdict discipline (D-03).
-Next action: continue Phase 04.1 wave execution (04.1-03 onward, per depends_on in each PLAN.md)
+Phase 04.1 (Anchor Fidelity Repair, 7 plans, wave 2 of N): Plan 01 (tracer), Plan 02 (wider F-09 dedup ruleset + uniform chain-step application), and Plan 03 (full F-10 correction pass — every drift shape, safety-tier accounting, pearls, telemetry, prompt tightening) complete. dedupeRollingCaptions carries two real-data-justified thresholds and reaches all four resolveEffectiveTranscript branches; correctAnalysisAnchors now corrects every drift shape the real proof run exhibited (not just out-of-window), pearl timestamps under a narrow non-inventive rule, and every run reports what it moved via console.warn telemetry (no schema change). PROOF-01 checkbox stays Pending: shared-ID gate across all 7 declared plans, plus D-02's live-lecture re-proof (04.1-04+) still required for verdict discipline (D-03).
+Next action: continue Phase 04.1 wave execution (04.1-04 onward, per depends_on in each PLAN.md)
 
 ## Performance Metrics
 
@@ -76,6 +76,7 @@ Next action: continue Phase 04.1 wave execution (04.1-03 onward, per depends_on 
 | Phase 04 P05 (Tasks 1-3; Task 4 checkpoint pending) | ~45 min | 3 tasks | 13 files |
 | Phase 04.1 P01 | 13min | 2 tasks | 7 files |
 | Phase 04.1 P02 | 24min | 2 tasks | 7 files |
+| Phase 04.1 P03 | 45min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,7 @@ Recent decisions affecting current work:
 
 - [2026-08-10 Phase 04.1 P01] Tracer proven end-to-end: dedupeRollingCaptions (F-09) + correctAnalysisAnchors (F-10, D-01 item 2) wired into runAnalysisJobV3's post-merge tail, sharing anchorVerify.ts's extracted findQuoteOccurrences with the committed verifier so a corrected anchor can never disagree with the oracle judging it (D-03 preserved byte-for-byte: anchorVerify.test.ts diff is empty). One existing test's assertions legitimately changed (captionParse.test.ts's real-bjj-captions.en.srt fixture, 19->10 segments) per the plan's own documented single exception, proven inline with the specific overlapping words, not silently edited. Full suite 1059 server (1047 baseline + 12 new) + 357 web, both at/above baseline. REQUIREMENTS.md's PROOF-01 checkbox stays Pending: all 7 phase plans (04.1-01 through 04.1-07) declare PROOF-01 and haven't all run yet — same shared-ID gate (#2388) precedent as prior phases; D-03's verdict discipline also requires the actual live-lecture re-proof (04.1-04+), not this offline tracer alone, to close it.
 - [2026-08-10 Phase 04.1 P02] The tracer's two deliberately-open thresholds are now named module constants in rollingCaptions.ts, both real-data-justified rather than guessed: MIN_OVERLAP_WORDS=3 accepts a PARTIAL overlap match only at/above 3 words, but a COMPLETE match (the whole trailing window or whole cue consumed) is always accepted regardless of word count via an escape hatch — resolving the tension that the real proof data's own shortest genuine reset cue ("Med.") is only 1 word, while an accidental 1-2 word boundary coincidence must still be rejected. TIME_TOUCH_TOLERANCE_SEC=50ms absorbs float-rounding only (every genuine rolling pair in the real data touches exactly, to the millisecond). Two real fixtures committed under server/test/fixtures/ (RESEARCH's ten-cue excerpt, 10->6 segments; FINDINGS' CPAP passage, 4->3 segments), both asserted literally. resolveEffectiveTranscript's four chain branches (pipeline/declared file, sidecar, lazy Innertube pull, ASR cache) all now call dedupeRollingCaptions immediately before correctTranscriptSegments — Open Question 3 (Innertube susceptibility) resolved as checked-but-unresolved in a code comment at the application site (normalizeCaptions builds from Innertube's own segment tree, never VTT cue text; no live rolling Innertube sample was ever observed to test against), with uniform application justified independently since it's a no-op on clean input and is the only way to reach the proof project's already-written, pre-fix captions.json (chain step 1's JSON path never passes through the cue-block parser Task 1's dedup lives in). GitNexus detect-changes flagged the transcriptChain.ts diff HIGH risk (9 affected execution-flow steps, since resolveEffectiveTranscript is a hub function) — this matches the plan's own pre-accepted threat T-04.1-06 (medium severity, disposition accept, reversible by removing one call), not an unexpected blast-radius finding (upstream impact analysis for resolveEffectiveTranscript itself stayed LOW, 2 direct callers). Full suite 1080 server (1059 baseline + 21 new) + 357 web, both at/above baseline. REQUIREMENTS.md's PROOF-01 checkbox stays Pending: 04.1-03 through 04.1-07 haven't run yet — same shared-ID gate (#2388) precedent; D-03's verdict discipline also requires the live-lecture re-proof (04.1-04+).
+- [2026-08-10 Phase 04.1 P03] Widened correctAnalysisAnchors to cover every real drift shape (in-window-but-wrong and out-of-window, uniformly), ellipsis-joined quotes (first-span location), clinical safety-tier accounting (SAFETY_TIER_UNIT_TYPES), pearl timestamp correction (narrow rule: in-range untouched, out-of-range moved only to a linked unit's own corrected anchor, never invented), and per-run [analysis] anchor-correction telemetry (no schema change). buildChunkV3SystemPrompt tightened on timestamp provenance/same-occurrence binding/quote contiguity, layered under the correction pass. 66-anchor/18-unit regression built from the real 2026-08-10 proof project's own analysis.json replayed against its real captions.json via the shipped matching primitives; found cpap-vs-peep-terminology's claimed anchors are already within tolerance (contradicts RESEARCH's own row label, confirmed by hallucination-audit.md). Full suite 1125 server (1080 baseline + 45 new) + 357 web, both at/above baseline. REQUIREMENTS.md's PROOF-01 checkbox stays Pending: 04.1-04 through 04.1-07 haven't run yet — shared-ID gate (#2388); D-03's verdict discipline also requires the live-lecture re-proof (04.1-04+).
 
 ### Pending Todos
 
@@ -138,6 +140,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-10T21:22:13.811Z
-Stopped at: Completed 04.1-02-PLAN.md
+Last session: 2026-08-10T21:48:11.425Z
+Stopped at: Completed 04.1-03-PLAN.md
 Resume file: None
