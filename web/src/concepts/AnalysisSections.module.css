@@ -141,6 +141,15 @@
   font-size: var(--type-11);
 }
 
+/* ANLZ-02 "Ungrounded enrichment marking": quiet qualifier tag, colored with
+   --accent-blue to match the unit card's enrichment mark (UnitProposalCard's
+   .enrichmentBadge/.enrichmentNotice from plan 02-01). */
+.pearlEnrichmentTag {
+  flex-shrink: 0;
+  color: var(--accent-blue);
+  font-size: var(--type-11);
+}
+
 .conceptRow {
   padding: 8px;
   border-radius: var(--radius-sm);

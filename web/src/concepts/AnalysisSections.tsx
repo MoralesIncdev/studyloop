@@ -10,6 +10,7 @@ import { sortPearls, starStates, hashHueForHandle, AI_CONCEPT_ID_PREFIX } from "
 import { formatTimestamp } from "../lib/time";
 import { Icon } from "../components/icons";
 import { UnitProposalCard } from "./UnitProposalCard";
+import { enrichmentNoticeText } from "../lib/enrichment";
 import type { AttestationEntry, Pearl } from "../lib/types";
 import styles from "./AnalysisSections.module.css";
 
@@ -96,6 +97,8 @@ export function PearlsSection(): JSX.Element | null {
           const linkedFeedable = pearl.unitId !== undefined && isAttestedOrTaken(attestations[pearl.unitId]);
           const explicitlyAdded = pearlReviewAdds.has(String(pearl.t));
           const inReview = linkedFeedable || explicitlyAdded;
+          // ANLZ-02: computed once here — never call enrichmentNoticeText twice inline in JSX (02-01 precedent).
+          const enrichmentNotice = enrichmentNoticeText(pearl);
           return (
             <li key={`${pearl.t}-${pearl.label}`} className={styles.pearlRow} onClick={() => toggle(i)}>
               <div className={styles.pearlHead}>
@@ -111,6 +114,11 @@ export function PearlsSection(): JSX.Element | null {
                   {formatTimestamp(pearl.t)}
                 </button>
                 <span className={styles.pearlLabel}>{pearl.label}</span>
+                {enrichmentNotice && (
+                  <span className={styles.pearlEnrichmentTag} title={enrichmentNotice} aria-label={enrichmentNotice}>
+                    context
+                  </span>
+                )}
                 {inReview ? (
                   <span className={styles.pearlInReviewTag} title="This pearl is in your review queue">
                     <Icon name="check" size={11} />

@@ -344,6 +344,8 @@ export interface Pearl {
   importance: 1 | 2 | 3;
   /** V3-B B1: links this pearl to a typed unit (analysis.units), when the merge pass could resolve one. */
   unitId?: string;
+  /** ANLZ-02 — this pearl's insight states more than this segment's transcript/slide text actually says (self-reported groundedness). Absent means not flagged. */
+  enrichment?: boolean;
 }
 
 export interface AnalysisConceptAnchor {
