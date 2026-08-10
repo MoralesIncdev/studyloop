@@ -470,9 +470,30 @@ A review card is derived (never duplicated) from study artifacts across ALL proj
   title when no shot) + prompt "What was your note here?"; back = the note text +
   transcript quote if the note carries one.
 - **Pearl card** (analysis pearls): front = pearl label + project title; back = the
-  insight. Only from `source: "model"` analyses (stubs excluded outside dev).
+  insight. A `source: "model"` analysis is necessary but not sufficient (stubs
+  excluded outside dev) — the attestation gate documented below also applies; a
+  model pearl is never a card on its own.
 Cards are identified by stable ids: `bubble:<projectId>:<bubbleId>`,
 `pearl:<projectId>:<t>`. Deleted artifacts drop their cards silently.
+
+**Implementation notes (deviations from the literal wording above):**
+- Attestation gate (LOCKED ADR-PED-02/07): a pearl becomes a card only when one
+  of two learner signals exists, checked in `deriveLiveCards`
+  (`server/src/lib/review.ts`): path (a), the pearl's `unitId` resolves to a
+  unit for which `isUnitFeedable()` (`server/src/lib/attestation.ts`) is
+  true — attested, or carrying a non-empty `userTake`; or path (b), the
+  learner explicitly added the pearl through the rail's "Add to review"
+  action (`POST /api/projects/:id/pearls/:t/review-add`, persisted per
+  project in `pearlReviewAdds.json`). Path (b) is an explicit opt-in add, NOT
+  an attestation — the two are distinct learner actions, and either one alone
+  is sufficient. Landed in commit `813dc21` (2026-07-29).
+- Legacy card migration: `review.json` entries written before the gate are
+  reconciled continuously on every queue read, not by a batch script. A
+  no-longer-live `pearl:` card with `reps > 0` is kept in `cards` (learner
+  progress is never deleted, and it still counts toward `masteryCount`) but
+  can never re-enter `dueCards`; one with `reps === 0` is dropped like any
+  other orphan. Legitimately gated cards' scheduling state is untouched by
+  either path.
 
 ## Scheduling (hidden SM-2-lite)
 `<dataDir>/review.json` — `{version:1, cards:{[cardId]:{due, interval, lapses,
@@ -670,6 +691,24 @@ review-loop; do NOT touch search/share/heatmap/up-next (V3-C owns those).*
   (cards with interval ≥30d); streak becomes small footnote text.
 - Attested units become reviewable as generation cards: front = "your take"
   prompt for the unit, back = unit summary + user's own take.
+
+**Implementation notes (deviations from the literal wording above):**
+- B2's compile partition is three-way, not two-way (COMP-01): unattested
+  units split into a not-yet-reviewed list (never touched) and a
+  `### Dismissed` list (the learner reviewed it and judged it not worth
+  keeping); both are titles-only, and each heading is omitted when its list
+  is empty. Lumping the two together misreported the learner's own progress
+  back to them. Landed in commit `468e0b8` (2026-08-08).
+- Anchor timestamps are seek links (COMP-02): every pearl, concept, and
+  attested-unit anchor in the compiled document renders in the
+  `[mm:ss](#t=N)` form, the same convention a note's `^t:` token has always
+  produced. Landed in commit `468e0b8`.
+- B4's pearl cards are attestation-gated (GATE-01, LOCKED ADR-PED-02/07): the
+  question-form pearl front described above only ever applies to a pearl
+  that already passed the F11 "Cards" gate — `isUnitFeedable()` on its linked
+  unit, or an explicit "Add to review" — so an un-attested, never-added
+  pearl produces no card at all and never reaches transformation. Landed in
+  commit `813dc21`.
 
 # V3-C — Discovery & Apprenticeship (2026-07-28)
 *Implements FEATURE-REVIEW V3-C under PEDAGOGY.md §6-7. Do NOT touch analysis
