@@ -28,12 +28,52 @@
 //      unrelated content spoken minutes earlier (also caps the cost of the
 //      search).
 //
+// Phase 04.1 Plan 2 (D-01 item 1's wider ruleset, F-09): the tracer (Plan 1)
+// deliberately left two thresholds unset — accepting ANY nonzero overlap and
+// requiring exact time equality. Both are now named module constants (see
+// MIN_OVERLAP_WORDS and TIME_TOUCH_TOLERANCE_SEC below), pinned against the
+// real 2026-08-10 proof data (server/test/fixtures/rolling-research-*.vtt,
+// rolling-cpap-*.vtt) so the values are justified against genuine rolling
+// pairs, not guessed.
+//
 // Comparison is normalized (case-folded, whitespace-collapsed); output text
 // preserves each emitted word's original casing and punctuation exactly.
 import type { CaptionSegment } from "./captionParse.js";
 
-/** Word-count window at the tail of the accumulated stream the overlap search considers — generous for YouTube's rolling pattern (a few words per growing cue) without risking a match against unrelated earlier content. */
+/** Word-count window at the tail of the accumulated stream the overlap search considers — generous for YouTube's rolling pattern (a few words per growing cue) without risking a match against unrelated earlier content. Also bounds the search cost on a long transcript (T-04.1-07). */
 const OVERLAP_WINDOW_WORDS = 40;
+
+/**
+ * Minimum overlap length (in words) required to strip a PARTIAL match — one
+ * that doesn't consume the entire available comparison window (see
+ * `longestSuffixPrefixOverlap`'s "complete match" escape hatch below).
+ * Chosen at 3: the real 2026-08-10 proof data's rolling pairs share overlaps
+ * from 1 word (the transcript's very first cue, "Med.", RESEARCH's ten-cue
+ * excerpt) up to 12+ words — but every one of those is a COMPLETE match
+ * (the whole trailing tail-window or the whole incoming cue's own text is
+ * consumed), never a partial one; complete matches are accepted regardless
+ * of word count via the escape hatch, so this constant never has to be
+ * lowered to accommodate them. A PARTIAL match below 3 words — where more
+ * tail/cue content was available for comparison and simply didn't match —
+ * is far more likely to be an accidental word-boundary coincidence (two
+ * unrelated sentences sharing "the"/"a"/"is" at the seam) than genuine
+ * YouTube rolling duplication (T-04.1-05).
+ */
+const MIN_OVERLAP_WORDS = 3;
+
+/**
+ * Seconds of slack allowed when deciding whether two cues' time ranges
+ * "touch or overlap". Every genuine rolling pair in the real 2026-08-10 data
+ * has an EXACT touch (one cue's end equals the next cue's start, to the
+ * millisecond) — this tolerance exists only to absorb floating-point noise
+ * from the ms-to-seconds conversion (`ms / 1000`) used when parsing VTT/SRT
+ * timestamps and Innertube's `start_ms`/`end_ms` fields, not to bridge a
+ * genuine pause between unrelated cues. 50ms is far smaller than the
+ * shortest real gap between disjoint sentences (hundreds of ms to seconds)
+ * and comfortably larger than any float-rounding error this codebase's
+ * second-granularity timestamps could produce.
+ */
+const TIME_TOUCH_TOLERANCE_SEC = 0.05;
 
 interface Token {
   /** Case-folded form used for comparison only. */
@@ -49,15 +89,32 @@ function tokenize(text: string): Token[] {
     .map((original) => ({ original, normalized: original.toLowerCase() }));
 }
 
-/** True when two cues' time ranges touch or overlap (a genuine rolling pair always does; disjoint cues in a clean transcript never do). */
+/**
+ * True when two cues' time ranges touch or overlap, within
+ * TIME_TOUCH_TOLERANCE_SEC. A genuine rolling pair always satisfies this
+ * (near-identical/overlapping start times, exact touch in the real data);
+ * disjoint cues in a clean transcript rarely do, and even when they touch at
+ * a single boundary point, `longestSuffixPrefixOverlap`'s content check
+ * (guard 2) finds nothing worth stripping.
+ */
 function timeRangesTouch(a: CaptionSegment, b: CaptionSegment): boolean {
-  return a.start <= b.end && b.start <= a.end;
+  return a.start - TIME_TOUCH_TOLERANCE_SEC <= b.end && b.start - TIME_TOUCH_TOLERANCE_SEC <= a.end;
 }
 
 /**
  * Length of the longest suffix of `tailTokens` that is also a prefix of
- * `cueTokens`, comparing on `.normalized`. Returns 0 when no such overlap
- * exists (including when either side is empty).
+ * `cueTokens`, comparing on `.normalized`. A match that consumes the ENTIRE
+ * available comparison window — either the whole trailing tail-window or
+ * the whole incoming cue, whichever is shorter — is always accepted, however
+ * short: this is what every genuine reset/grow pair in the real proof data
+ * looks like, including the transcript's very first, single-word reset cue
+ * ("Med.", 04.1-RESEARCH.md's excerpt), where there simply isn't more
+ * context available to require a longer match. A match SHORTER than the
+ * full available window is accepted only when it reaches MIN_OVERLAP_WORDS
+ * — there was room for a longer match and none was found, which is much
+ * more likely to be an accidental word-boundary coincidence than a rolling
+ * continuation. Returns 0 when no match exists at all (including when
+ * either side is empty).
  */
 function longestSuffixPrefixOverlap(tailTokens: readonly Token[], cueTokens: readonly Token[]): number {
   const maxLen = Math.min(tailTokens.length, cueTokens.length);
@@ -70,7 +127,9 @@ function longestSuffixPrefixOverlap(tailTokens: readonly Token[], cueTokens: rea
         break;
       }
     }
-    if (matches) return len;
+    if (matches) {
+      return len === maxLen || len >= MIN_OVERLAP_WORDS ? len : 0;
+    }
   }
   return 0;
 }
@@ -85,7 +144,9 @@ function longestSuffixPrefixOverlap(tailTokens: readonly Token[], cueTokens: rea
  * normal, non-rolling case) passes through with its original text
  * unchanged, and resets the accumulated tail to its own words — so a real
  * transcript with no rolling structure comes out the same count, same
- * starts, same ends, same text.
+ * starts, same ends, same text. Running this function on its own output
+ * changes nothing (idempotent): a deduped stream has no remaining overlaps
+ * left to strip.
  */
 export function dedupeRollingCaptions(segments: readonly CaptionSegment[]): CaptionSegment[] {
   const result: CaptionSegment[] = [];

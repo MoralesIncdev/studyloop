@@ -1,0 +1,25 @@
+WEBVTT
+
+NOTE
+The CPAP passage from docs/proof-evidence-2026-08-10/FINDINGS.md's F-09
+entry (the `[21.99] "Okay, CPAP is typically the term that is"` chain),
+reconstructed as VTT cues. FINDINGS.md's chain notation gives each cue's
+start second only; each cue's end is reconstructed as the following cue's
+start second, matching the exact pattern the RESEARCH excerpt's raw
+captions.json data shows (every rolling cue's end equals the next cue's
+start). The final cue has no following cue in FINDINGS.md's chain, so its
+end is reconstructed as start + 4.00s — the typical growing-cue duration
+observed elsewhere in this same real data (04.1-RESEARCH.md's ten-cue
+excerpt has growing-cue durations of 1.51s-4.47s).
+
+00:00:21.990 --> 00:00:22.000
+Okay, CPAP is typically the term that is
+
+00:00:22.000 --> 00:00:25.190
+Okay, CPAP is typically the term that is used if this is non-invasive
+
+00:00:25.190 --> 00:00:25.200
+used if this is non-invasive
+
+00:00:25.200 --> 00:00:29.200
+used if this is non-invasive ventilation. In other words, if instead

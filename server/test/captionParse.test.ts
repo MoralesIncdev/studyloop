@@ -178,4 +178,29 @@ describe("parseVttCaptions", () => {
     const raw = ["WEBVTT", "", "00:00:01.000 --> 00:00:02.000 align:start line:0%", "hello"].join("\n");
     expect(parseVttCaptions(raw).segments).toEqual([{ start: 1, end: 2, text: "hello" }]);
   });
+
+  // Phase 04.1 Plan 2 (D-01 item 1, F-09 wider ruleset): a rolling VTT cue
+  // chain (reset/grow alternation) parsed through this function comes out
+  // deduped — dedupeRollingCaptions's own full behavior suite lives in
+  // rollingCaptions.test.ts; this is only the integration point.
+  it("dedupes a rolling-caption cue chain (F-09) when parsing VTT text", () => {
+    const raw = [
+      "WEBVTT",
+      "",
+      "00:00:01.000 --> 00:00:02.000",
+      "hello",
+      "",
+      "00:00:02.000 --> 00:00:04.000",
+      "hello there friend",
+      "",
+      "00:00:04.000 --> 00:00:04.010",
+      "there friend",
+    ].join("\n");
+    const result = parseVttCaptions(raw);
+    expect(result.malformedCount).toBe(0);
+    expect(result.segments).toEqual([
+      { start: 1, end: 2, text: "hello" },
+      { start: 2, end: 4, text: "there friend" },
+    ]);
+  });
 });
