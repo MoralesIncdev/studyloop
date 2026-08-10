@@ -94,11 +94,11 @@ Plans:
   4. The previously-unproven session-content rendering paths (notes, captures, watchedUpTo, lessonSummary) are exercised during the run and verified in the compiled export
   5. The proof is written up as a dated report (like REAL-LECTURE-PROOF-2026-08-08.md) with adversarial verification, and CI is green
 
-**Plans:** 5 plans
+**Plans:** 1/5 plans executed
 
 Plans:
 
-- [ ] 04-01-PLAN.md — preflight: isolated proof harness (tracer), lecture content gate, independent deck + concept doc (wave 1)
+- [x] 04-01-PLAN.md — preflight: isolated proof harness (tracer), lecture content gate, independent deck + concept doc (wave 1)
 - [ ] 04-02-PLAN.md — committed verbatim-anchor verifier, cross-validated against the 2026-08-08 project (wave 1)
 - [ ] 04-03-PLAN.md — proof run part 1: UI paste, independent deck attach, real clinical analysis (wave 2)
 - [ ] 04-04-PLAN.md — proof run part 2: attestation lifecycle, session content, compile + export (wave 3)
@@ -130,5 +130,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Ingestion Pipeline Repair | 3/3 | Complete    | 2026-08-09 |
 | 2. Analysis Fidelity Hardening | 4/4 | Complete    | 2026-08-10 |
 | 3. Attestation Gate & Compile Honesty | 3/3 | Complete    | 2026-08-10 |
-| 4. Real-Lecture Proof Re-Run | 0/5 | Not started | - |
+| 4. Real-Lecture Proof Re-Run | 1/5 | In Progress|  |
 | 5. Depth Tier (Accuracy-Gated) | 0/TBD | Not started | - |
