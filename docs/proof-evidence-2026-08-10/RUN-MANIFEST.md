@@ -116,3 +116,15 @@ Stable key/value block appended to by every Phase 4 plan. Do not remove or reord
 | Optimistic-mutation-without-rollback check | No divergence found — every UI action that appeared to succeed was confirmed present in the persisted attestations.json once async completion was allowed for (see F-06/F-08) |
 | Automated verify script | PASS — `attested=8 withTake=7 dismissed=1 untouched=9` |
 | FINDINGS.md status after Task 1 | 1 new finding (F-06, OBSERVATION — browse-tooling ref ambiguity against this app's intentionally-duplicated DOM, not an app bug) |
+
+## Session-content paths — notes, captures, concept doc, watchedUpTo (Task 2 — 04-04)
+
+| Key | Value |
+|---|---|
+| Notes | 3 substantive notes, 861 chars total, each ending in a real `^t:` seek token inserted via the pane's own "@ timestamp" control at 3 real (pointer-driven) player-seek positions: 24.6s, 183.3s, 298.2s |
+| Captures | 3 captures via the "M" mine-this-moment hotkey at 38.3s, 128.6s, 339.2s (spread 300.9s, exceeds the 60s minimum) — each with a real frame shot + auto-mined transcript excerpt; 2 recaptioned with genuine learner commentary through BubbleRail's inline edit, 1 deliberately cleared to empty text (`shot` present, `text` empty) so the compile caption step had something to prompt for |
+| Concept doc attach | `/Users/antemo/studyloop/docs/proof-evidence-2026-08-10/inputs/concept-doc.md`, 4 parsed cards (anchors 22s/184s/385s/502s) — attach initially 403'd (see F-07), recovered via Settings → "Concept documents" → one-click attach button in the dock |
+| watchedUpTo | Persisted at 339.25s (the furthest of the note/capture seeks), monotonic high-water mark confirmed via `GET /api/projects/:id` → `run/project-before-compile.json` |
+| Concepts Covered (dock counter) | "Covered 2 / 4" — `CPAP – what it actually is` (0:22) and `Pressure support – patient does the work, machine just helps` (3:04) covered; `PEEP – the pressure that's always left over` (6:25) and `FiO2 – how much oxygen you're actually giving` (8:22) not covered — genuine partial split, screenshotted (run-11) |
+| Automated verify script | PASS — `notes=861ch tokens=3 captures=3 captioned=2 watchedUpTo=339.245...` |
+| FINDINGS.md status after Task 2 | 2 new findings (F-07 MINOR — concept-doc attach requires an undocumented prior Settings step; F-08 OBSERVATION — mine-this-moment's async chain lands after a delay, and a stray re-dispatch produced one duplicate bubble cleaned up via the UI's own Delete-capture action) |

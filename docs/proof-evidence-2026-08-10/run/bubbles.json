@@ -1,0 +1,23 @@
+[
+  {
+    "id": "850b5848-958b-4750-a495-28febaef0984",
+    "t": 38.30188679245283,
+    "text": "This is the exact line where he draws the CPAP-vs-invasive-mask distinction — the moment my unit1 take was based on.",
+    "shot": "shots/shot-38302.jpg",
+    "createdAt": "2026-08-10T19:04:39.730Z"
+  },
+  {
+    "id": "a7dfb943-7765-46df-8262-52dbd80d2fd9",
+    "t": 128.58490566037736,
+    "text": "This is the exact PEEP-stays-at-end-of-exhale line — matches what I wrote in my unit2 take almost word for word.",
+    "shot": "shots/shot-128585.jpg",
+    "createdAt": "2026-08-10T19:05:45.423Z"
+  },
+  {
+    "id": "04ebdaac-ef08-4a68-9b01-64bf338da84f",
+    "t": 339.24528301886795,
+    "text": "",
+    "shot": "shots/shot-339245.jpg",
+    "createdAt": "2026-08-10T19:05:51.919Z"
+  }
+]
