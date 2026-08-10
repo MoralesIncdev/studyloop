@@ -1,15 +1,16 @@
-// Phase 04.1-03 Task 1 — widens 04.1-01's tracer correction pass
+// Phase 04.1-03 — widens 04.1-01's tracer correction pass
 // (correctAnalysisAnchors) into the full F-10 fix: every drift shape the
 // real 2026-08-10 proof run exhibited (RESEARCH's empirical drift table),
-// clinical safety-tier moves separately identifiable, and ellipsis-joined
-// quotes located by their first span. See also anchorFidelity.test.ts
-// (04.1-01's original 4-outcome tracer coverage, still passing) and
-// analysisV3.test.ts (Task 2's pearl/telemetry coverage, Task 3's prompt
-// contract).
+// clinical safety-tier moves separately identifiable, ellipsis-joined
+// quotes located by their first span (Task 1), and pearl timestamp
+// correction (Task 2, narrow rule — see below). See also
+// anchorFidelity.test.ts (04.1-01's original 4-outcome tracer coverage,
+// still passing) and analysisV3.test.ts (Task 2's per-run correction
+// telemetry, Task 3's prompt contract).
 import { describe, expect, it } from "vitest";
 import { correctAnalysisAnchors, isSafetyTierUnitType, SAFETY_TIER_UNIT_TYPES } from "../src/lib/anchorCorrect.js";
 import { DEFAULT_TOLERANCE_SEC } from "../src/lib/anchorVerify.js";
-import type { AnalysisUnit, UnitAnchor, UnitType } from "../src/lib/analysis.js";
+import type { AnalysisUnit, Pearl, UnitAnchor, UnitType } from "../src/lib/analysis.js";
 import type { TranscriptSegmentInput } from "../src/lib/models.js";
 
 function segment(start: number, text: string): TranscriptSegmentInput {
@@ -26,6 +27,16 @@ function unit(overrides: Partial<AnalysisUnit> = {}): AnalysisUnit {
     anchors: [],
     confidence: 0.8,
     threshold: false,
+    ...overrides,
+  };
+}
+
+function pearl(overrides: Partial<Pearl> = {}): Pearl {
+  return {
+    t: 0,
+    label: "Test pearl",
+    insight: "insight",
+    importance: 2,
     ...overrides,
   };
 }
@@ -605,5 +616,101 @@ describe("correctAnalysisAnchors — real 2026-08-10 proof-run drift-table regre
     const dosageCorrections = corrections.filter((c) => c.unitType === "DOSAGE");
     expect(dosageCorrections.map((c) => c.unitId).sort()).toEqual(["cpap-and-peep-setting-range", "pressure-support-range"]);
     for (const c of dosageCorrections) expect(isSafetyTierUnitType(c.unitType)).toBe(true);
+  });
+});
+
+// --- Task 2: pearl timestamp correction — the narrow rule ---------------------
+// anchorVerify.ts's own pearl check (:273-284) is a range check against the
+// last caption segment's end, with no quote to match — that is exactly what
+// bounds what correction is even possible here: a pearl is never located by
+// content, only ever brought back inside a range it already has independent
+// evidence for (its own linked unit's corrected anchor).
+
+describe("correctAnalysisAnchors — pearl timestamp correction", () => {
+  const segments = [segment(0, "Opening statement of the lecture."), segment(20, "Closing statement of the lecture.")];
+  // lastSegmentEnd = 20.5 (segments run 0-0.5 and 20-20.5).
+
+  it("leaves an in-range pearl timestamp byte-identical, whether or not it links to a unit", () => {
+    const linked = pearl({ label: "in-range-linked", t: 10, unitId: "u-anchored" });
+    const unlinked = pearl({ label: "in-range-unlinked", t: 15 });
+    const analysis = {
+      units: [unit({ id: "u-anchored", anchors: [{ t: 5, quote: "Opening statement of the lecture." }] })],
+      pearls: [linked, unlinked],
+    };
+
+    const { analysis: corrected, pearlCorrections, unresolvedPearls } = correctAnalysisAnchors(analysis, segments);
+
+    expect(corrected.pearls![0]).toBe(linked); // same reference — untouched
+    expect(corrected.pearls![1]).toBe(unlinked);
+    expect(pearlCorrections).toEqual([]);
+    expect(unresolvedPearls).toEqual([]);
+  });
+
+  it("moves an out-of-range pearl to its linked unit's earliest CORRECTED anchor time", () => {
+    // The unit's own anchor is itself drifted (claimed t=999, far outside
+    // the caption stream) and gets corrected to 0 first — the pearl must
+    // land on the CORRECTED position (0), not the unit's stale claimed one.
+    const analysis = {
+      units: [unit({ id: "u-anchored", anchors: [{ t: 999, quote: "Opening statement of the lecture." }] })],
+      pearls: [pearl({ label: "out-of-range-linked", t: 500, unitId: "u-anchored" })],
+    };
+
+    const { analysis: corrected, pearlCorrections, unresolvedPearls } = correctAnalysisAnchors(analysis, segments);
+
+    expect(corrected.pearls![0].t).toBe(0);
+    expect(pearlCorrections).toEqual([{ pearlLabel: "out-of-range-linked", unitId: "u-anchored", before: 500, after: 0 }]);
+    expect(unresolvedPearls).toEqual([]);
+  });
+
+  it("leaves an out-of-range pearl untouched and unresolved when it links to no unit — never clamps it to the transcript end", () => {
+    const orphan = pearl({ label: "out-of-range-orphan", t: 500 });
+    const analysis = { units: [unit({ id: "u-anchored", anchors: [{ t: 5, quote: "Opening statement of the lecture." }] })], pearls: [orphan] };
+
+    const { analysis: corrected, pearlCorrections, unresolvedPearls } = correctAnalysisAnchors(analysis, segments);
+
+    expect(corrected.pearls![0]).toBe(orphan); // untouched, not clamped to 20.5
+    expect(pearlCorrections).toEqual([]);
+    expect(unresolvedPearls).toEqual([{ pearlLabel: "out-of-range-orphan", t: 500, unitId: undefined }]);
+  });
+
+  it("leaves an out-of-range pearl untouched and unresolved when its linked unit has zero anchors", () => {
+    const orphanLink = pearl({ label: "out-of-range-empty-unit", t: 500, unitId: "u-no-anchors" });
+    const analysis = { units: [unit({ id: "u-no-anchors", anchors: [] })], pearls: [orphanLink] };
+
+    const { analysis: corrected, pearlCorrections, unresolvedPearls } = correctAnalysisAnchors(analysis, segments);
+
+    expect(corrected.pearls![0]).toBe(orphanLink);
+    expect(pearlCorrections).toEqual([]);
+    expect(unresolvedPearls).toEqual([{ pearlLabel: "out-of-range-empty-unit", t: 500, unitId: "u-no-anchors" }]);
+  });
+
+  it("leaves an out-of-range pearl untouched and unresolved when its unitId names a unit that does not exist", () => {
+    const staleLink = pearl({ label: "out-of-range-stale-link", t: 500, unitId: "u-does-not-exist" });
+    const analysis = { units: [unit({ id: "u-anchored", anchors: [{ t: 5, quote: "Opening statement of the lecture." }] })], pearls: [staleLink] };
+
+    const { pearlCorrections, unresolvedPearls } = correctAnalysisAnchors(analysis, segments);
+
+    expect(pearlCorrections).toEqual([]);
+    expect(unresolvedPearls).toEqual([{ pearlLabel: "out-of-range-stale-link", t: 500, unitId: "u-does-not-exist" }]);
+  });
+
+  it("a `pearls` key that is absent entirely leaves the returned analysis with no `pearls` key at all — 04.1-01's units-only tracer scope is unaffected", () => {
+    const analysis = { units: [unit({ id: "u-only", anchors: [{ t: 5, quote: "Opening statement of the lecture." }] })] };
+
+    const { analysis: corrected, pearlCorrections, unresolvedPearls } = correctAnalysisAnchors(analysis, segments);
+
+    expect("pearls" in corrected).toBe(false);
+    expect(pearlCorrections).toEqual([]);
+    expect(unresolvedPearls).toEqual([]);
+  });
+
+  it("an empty caption stream (no valid range at all) leaves every pearl untouched and unresolved, never a false pass", () => {
+    const analysis = { units: [], pearls: [pearl({ label: "no-captions", t: 5 })] };
+
+    const { analysis: corrected, pearlCorrections, unresolvedPearls } = correctAnalysisAnchors(analysis, []);
+
+    expect(corrected.pearls![0].t).toBe(5);
+    expect(pearlCorrections).toEqual([]);
+    expect(unresolvedPearls).toHaveLength(1);
   });
 });

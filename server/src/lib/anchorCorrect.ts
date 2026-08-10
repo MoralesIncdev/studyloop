@@ -18,11 +18,15 @@
 // verifier that judges a corrected anchor must be the same machinery that
 // located it, or the oracle and the corrector could disagree).
 //
-// Pure module: no filesystem, network, or console I/O. Unit anchors are the
-// whole scope of this module through 04.1-01/04.1-03's Task 1 — pearls and
-// per-run correction telemetry belong to 04.1-03's Task 2.
+// Pure module: no filesystem, network, or console I/O. 04.1-03's Task 2
+// widens this module to also correct pearl timestamps (narrowly — a pearl
+// carries no quote, so the only defensible move is bringing an out-of-range
+// timestamp back inside the transcript, and only when the pearl's own
+// linked unit supplies a corrected position); per-run correction telemetry
+// (the console.warn summary) is wired at the runAnalysisJobV3 call site in
+// analysis.ts, not here — this module stays pure.
 import { DEFAULT_TOLERANCE_SEC, buildCaptionIndex, findQuoteOccurrences, type CaptionIndex } from "./anchorVerify.js";
-import type { AnalysisUnit, UnitAnchor, UnitType } from "./analysis.js";
+import type { AnalysisUnit, Pearl, UnitAnchor, UnitType } from "./analysis.js";
 import type { TranscriptSegmentInput } from "./models.js";
 
 // --- Clinical safety-tier accounting -----------------------------------------
@@ -68,10 +72,25 @@ export interface UnresolvedAnchor {
   quote: string;
 }
 
+export interface PearlCorrection {
+  pearlLabel: string;
+  unitId: string;
+  before: number;
+  after: number;
+}
+
+export interface UnresolvedPearl {
+  pearlLabel: string;
+  t: number;
+  unitId?: string;
+}
+
 export interface AnchorCorrectResult<T> {
   analysis: T;
   corrections: AnchorCorrection[];
   unresolved: UnresolvedAnchor[];
+  pearlCorrections: PearlCorrection[];
+  unresolvedPearls: UnresolvedPearl[];
 }
 
 export interface AnchorCorrectOptions {
@@ -85,9 +104,17 @@ export interface AnchorCorrectOptions {
   toleranceSec?: number;
 }
 
-/** The minimal shape this module needs — accepts either a full `Analysis` or the intermediate `{ units }` snapshot `runAnalysisJobV3` has in hand post-merge, pre-return. */
+/**
+ * The minimal shape this module needs — accepts either a full `Analysis` or
+ * the intermediate `{ units, pearls }` snapshot `runAnalysisJobV3` has in
+ * hand post-merge. `pearls` is corrected only when the key is present at
+ * all (04.1-01's original tracer scope — units only, no `pearls` key —
+ * still works exactly as before: a `pearls` key that is `undefined` is
+ * never added to the output).
+ */
 export interface AnchorCorrectInput {
   units?: readonly AnalysisUnit[];
+  pearls?: readonly Pearl[];
 }
 
 // --- Ellipsis-joined quote handling -------------------------------------------
@@ -132,8 +159,21 @@ function firstEllipsisSpan(quote: string): string | null {
  *   left untouched, recorded as unresolved (a timestamp is never invented
  *   for a quote that cannot be located).
  *
- * Never throws: an analysis with no units, or a caption stream with no
- * segments, both return with nothing corrected (every anchor becomes
+ * When `analysis.pearls` is present, every pearl timestamp is also
+ * corrected (narrowly — see `correctOnePearl`):
+ * - a timestamp within the caption stream's range is left untouched,
+ *   whether or not it links to a unit — a pearl carries no quote, so an
+ *   in-range timestamp is never second-guessed.
+ * - an out-of-range timestamp whose `unitId` names a unit with at least one
+ *   (corrected) anchor is moved to that unit's own earliest anchor time —
+ *   the only position this pass can defend, since a pearl has nothing of
+ *   its own to locate by.
+ * - an out-of-range timestamp with no usable unit link (no `unitId`, or a
+ *   `unitId` naming a unit with zero anchors) is left untouched and
+ *   recorded as unresolved — a timestamp is never invented.
+ *
+ * Never throws: an analysis with no units/pearls, or a caption stream with
+ * no segments, both return with nothing corrected (every anchor becomes
  * unresolved rather than a false pass).
  */
 export function correctAnalysisAnchors<T extends AnchorCorrectInput>(
@@ -141,25 +181,33 @@ export function correctAnalysisAnchors<T extends AnchorCorrectInput>(
   segments: readonly TranscriptSegmentInput[],
   options: AnchorCorrectOptions = {}
 ): AnchorCorrectResult<T> {
-  if (!analysis.units || analysis.units.length === 0) {
-    return { analysis, corrections: [], unresolved: [] };
-  }
-
   const toleranceSec = options.toleranceSec ?? DEFAULT_TOLERANCE_SEC;
   const index = buildCaptionIndex(segments);
   const corrections: AnchorCorrection[] = [];
   const unresolved: UnresolvedAnchor[] = [];
+  const pearlCorrections: PearlCorrection[] = [];
+  const unresolvedPearls: UnresolvedPearl[] = [];
 
-  const correctedUnits = analysis.units.map((unit) => ({
-    ...unit,
-    anchors: unit.anchors.map((anchor) => correctOneAnchor(unit, anchor, index, toleranceSec, corrections, unresolved)),
-  }));
+  let correctedUnits: readonly AnalysisUnit[] | undefined = analysis.units;
+  if (analysis.units && analysis.units.length > 0) {
+    correctedUnits = analysis.units.map((unit) => ({
+      ...unit,
+      anchors: unit.anchors.map((anchor) => correctOneAnchor(unit, anchor, index, toleranceSec, corrections, unresolved)),
+    }));
+  }
 
-  return {
-    analysis: { ...analysis, units: correctedUnits },
-    corrections,
-    unresolved,
-  };
+  let correctedPearls: readonly Pearl[] | undefined = analysis.pearls;
+  if (analysis.pearls && analysis.pearls.length > 0) {
+    const lastEnd = lastSegmentEnd(segments);
+    const earliestAnchorByUnitId = buildEarliestAnchorMap(correctedUnits ?? []);
+    correctedPearls = analysis.pearls.map((pearl) => correctOnePearl(pearl, lastEnd, earliestAnchorByUnitId, pearlCorrections, unresolvedPearls));
+  }
+
+  const result: AnchorCorrectInput = { ...analysis };
+  if (analysis.units !== undefined) result.units = correctedUnits;
+  if (analysis.pearls !== undefined) result.pearls = correctedPearls;
+
+  return { analysis: result as T, corrections, unresolved, pearlCorrections, unresolvedPearls };
 }
 
 function correctOneAnchor(
@@ -206,4 +254,46 @@ function applyOccurrences(
   // ellipsis-first-span path corrects only the position, never rewrites the
   // quote to the span it matched against.
   return { t: earliest, quote: anchor.quote };
+}
+
+// --- Pearl timestamp correction (04.1-03 Task 2) -----------------------------
+
+/** The last caption segment's own `end` — the same range boundary `verifyAnchors`'s pearl range check judges against (anchorVerify.ts:243-246's private `lastSegmentEnd`, duplicated here as a trivial one-liner rather than exported/imported, since it isn't the quote-search primitive D-03 requires this module to share). `undefined` for an empty caption stream, meaning no valid range exists at all. */
+function lastSegmentEnd(segments: readonly TranscriptSegmentInput[]): number | undefined {
+  if (segments.length === 0) return undefined;
+  return Math.max(...segments.map((s) => s.end));
+}
+
+/** Earliest anchor `t` per unit id, computed over the (already-corrected) units — a pearl is only ever moved to a position one of these units can actually defend. Units with zero anchors are omitted (nothing to move a pearl to). */
+function buildEarliestAnchorMap(units: readonly AnalysisUnit[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const unit of units) {
+    if (unit.anchors.length === 0) continue;
+    map.set(unit.id, Math.min(...unit.anchors.map((a) => a.t)));
+  }
+  return map;
+}
+
+function correctOnePearl(
+  pearl: Pearl,
+  lastEnd: number | undefined,
+  earliestAnchorByUnitId: Map<string, number>,
+  pearlCorrections: PearlCorrection[],
+  unresolvedPearls: UnresolvedPearl[]
+): Pearl {
+  const inRange = lastEnd !== undefined && pearl.t <= lastEnd;
+  if (inRange) {
+    return pearl;
+  }
+
+  if (pearl.unitId) {
+    const earliest = earliestAnchorByUnitId.get(pearl.unitId);
+    if (earliest !== undefined) {
+      pearlCorrections.push({ pearlLabel: pearl.label, unitId: pearl.unitId, before: pearl.t, after: earliest });
+      return { ...pearl, t: earliest };
+    }
+  }
+
+  unresolvedPearls.push({ pearlLabel: pearl.label, t: pearl.t, unitId: pearl.unitId });
+  return pearl;
 }

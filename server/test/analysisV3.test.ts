@@ -3,7 +3,7 @@
 // test/analysis.test.ts's structure (fake-client end-to-end, no live API
 // calls) but exercises the new router gate, deterministic unit/edge merge,
 // and the resulting version:3 analysis shape.
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -525,6 +525,166 @@ describe("runAnalysisJobV3 — Phase 6 slide context threading", () => {
 
     // Fake client sets evidence deterministically whenever it saw slide context.
     expect(analysis.units!.some((u) => u.evidence === "slides" || u.evidence === "both")).toBe(true);
+  });
+});
+
+// --- Phase 04.1-03 Task 2: pearl timestamp correction + per-run telemetry ----
+// GitNexus impact (upstream, run before this call-site edit — repo CLAUDE.md
+// MUST rule): runAnalysisJobV3 has 2 direct callers (routes/analyze.ts's
+// analyzeRoutes; analysisV3.test.ts itself) plus 04.1-01's own
+// anchorFidelity.test.ts (added this same phase) — LOW risk, unchanged from
+// 04.1-01-SUMMARY.md's original reading except for that one new test-file
+// caller 04.1-01 itself introduced (expected, not a surprise). resolvePearlUnitId
+// is consumed as-is (not modified) by this task, so no separate impact check
+// applied to it.
+
+describe("runAnalysisJobV3 — Phase 04.1-03 Task 2: pearl correction + anchor-correction telemetry", () => {
+  function driftedClient(pearlT: number, unitLabel = "Neuron signal transmission"): AnalysisLLMClientV3 {
+    return {
+      runRouter: async () => ({ kind: "ok", data: { domain: "generic" } }),
+      runChunkV3: async () => ({
+        kind: "ok",
+        data: {
+          pearls: [],
+          units: [
+            {
+              type: "CLAIM",
+              label: unitLabel,
+              summary: "Neurons transmit signals across synapses.",
+              body: "Neurons transmit electrical signals across synapses.",
+              // Deliberately drifted (far outside the 5s-long single segment
+              // below) — the corrector should snap this to 0.
+              anchors: [{ t: 999, quote: "Neurons transmit signals." }],
+              confidence: 0.9,
+            },
+          ],
+          edges: [],
+        },
+      }),
+      runMergeV3: async () => ({
+        kind: "ok",
+        data: {
+          pearls: [{ t: pearlT, label: "Key pearl", insight: "A pearl insight.", importance: 2, unitLabel }],
+          themes: [],
+        },
+      }),
+    };
+  }
+
+  function singleSegment(): TranscriptSegment[] {
+    return [segment(0, 5, "Neurons transmit signals.")];
+  }
+
+  function warnMessages(spy: { mock: { calls: unknown[][] } }): string[] {
+    return spy.mock.calls.map((args) => String(args[0])).filter((msg) => msg.startsWith("[analysis] anchor-correction"));
+  }
+
+  it("moves an out-of-range pearl to its linked unit's earliest CORRECTED anchor time", async () => {
+    const analysis = await runAnalysisJobV3({ segments: singleSegment(), model: "claude-opus-5", client: driftedClient(5000) });
+
+    const unit = analysis.units!.find((u) => u.label === "Neuron signal transmission")!;
+    expect(unit.anchors[0].t).toBe(0); // corrected first
+
+    const pearl = analysis.pearls.find((p) => p.label === "Key pearl")!;
+    expect(pearl.t).toBe(0); // moved to the unit's CORRECTED anchor, not its stale claimed one
+    expect(pearl.unitId).toBe(unit.id);
+  });
+
+  it("leaves an out-of-range pearl with no usable unit link untouched — never invents or clamps a position", async () => {
+    // unitLabel "" resolves to no unit at all (resolvePearlUnitId's own
+    // empty-string sentinel).
+    const analysis = await runAnalysisJobV3({ segments: singleSegment(), model: "claude-opus-5", client: driftedClient(5000, "") });
+
+    const pearl = analysis.pearls.find((p) => p.label === "Key pearl")!;
+    expect(pearl.t).toBe(5000); // untouched, not clamped to the transcript end
+    expect(pearl.unitId).toBeUndefined();
+  });
+
+  it("emits a single greppable summary line plus one detail line per unit correction, with all four counts", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await runAnalysisJobV3({ segments: singleSegment(), model: "claude-opus-5", client: driftedClient(5000) });
+
+      const messages = warnMessages(warnSpy);
+      expect(messages).toHaveLength(2);
+      expect(messages[0]).toBe("[analysis] anchor-correction: units=1 safetyTier=0 pearls=1 unresolved=0");
+      expect(messages[1]).toContain("unit=neuron-signal-transmission");
+      expect(messages[1]).toContain("type=CLAIM");
+      expect(messages[1]).toContain("before=999");
+      expect(messages[1]).toContain("after=0");
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("emits no correction log output when a run corrects nothing", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const cleanClient: AnalysisLLMClientV3 = {
+        runRouter: async () => ({ kind: "ok", data: { domain: "generic" } }),
+        runChunkV3: async () => ({
+          kind: "ok",
+          data: {
+            pearls: [],
+            units: [
+              {
+                type: "CLAIM",
+                label: "Already correct unit",
+                summary: "s",
+                body: "b",
+                anchors: [{ t: 0, quote: "Neurons transmit signals." }],
+                confidence: 0.9,
+              },
+            ],
+            edges: [],
+          },
+        }),
+        runMergeV3: async () => ({ kind: "ok", data: { pearls: [{ t: 2, label: "In-range pearl", insight: "i", importance: 1, unitLabel: "" }], themes: [] } }),
+      };
+      await runAnalysisJobV3({ segments: singleSegment(), model: "claude-opus-5", client: cleanClient });
+
+      expect(warnMessages(warnSpy)).toEqual([]);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("counts a safety-tier (DOSAGE) unit correction separately from an ordinary one in the summary line", async () => {
+    const dosageClient: AnalysisLLMClientV3 = {
+      runRouter: async () => ({ kind: "ok", data: { domain: "generic" } }),
+      runChunkV3: async () => ({
+        kind: "ok",
+        data: {
+          pearls: [],
+          units: [
+            {
+              type: "DOSAGE",
+              label: "Dosage unit",
+              summary: "s",
+              body: "b",
+              anchors: [{ t: 999, quote: "Neurons transmit signals." }],
+              confidence: 0.9,
+            },
+          ],
+          edges: [],
+        },
+      }),
+      runMergeV3: async () => ({ kind: "ok", data: { pearls: [], themes: [] } }),
+    };
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await runAnalysisJobV3({ segments: singleSegment(), model: "claude-opus-5", client: dosageClient });
+      const messages = warnMessages(warnSpy);
+      expect(messages[0]).toBe("[analysis] anchor-correction: units=1 safetyTier=1 pearls=0 unresolved=0");
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("AnalysisSchema is unchanged by pearl correction — no new field, existing round-trip tests untouched", async () => {
+    const analysis = await runAnalysisJobV3({ segments: singleSegment(), model: "claude-opus-5", client: driftedClient(5000) });
+    const parsed = AnalysisSchema.parse(analysis);
+    expect(parsed.pearls.find((p) => p.label === "Key pearl")!.t).toBe(0);
   });
 });
 

@@ -30,7 +30,14 @@ import { formatTimestamp } from "./time.js";
 import { DomainSchema, type Domain, type Lens } from "./models.js";
 import { generateAndPersistLens, listLensesOrFallback, resolveLensOrGeneric, type LensGenerationLLMClient } from "./lenses.js";
 import type { TranscriptSegment } from "./transcripts.js";
-import { correctAnalysisAnchors } from "./anchorCorrect.js";
+import {
+  correctAnalysisAnchors,
+  isSafetyTierUnitType,
+  type AnchorCorrection,
+  type PearlCorrection,
+  type UnresolvedAnchor,
+  type UnresolvedPearl,
+} from "./anchorCorrect.js";
 
 // --- Public analysis.json shape (SPEC) --------------------------------------
 
@@ -1983,13 +1990,6 @@ export async function runAnalysisJobV3(params: AnalysisJobParamsV3): Promise<Ana
   // the fields kept are exactly the fields the lens told the model to fill.
   const analysisLens = resolveLensOrGeneric(params.dataDir ?? "", domain);
   const mergedUnits = scrubOverlayToLens(dedupedUnits, new Set(analysisLens.overlayFields.map((f) => f.key)));
-  // Phase 04.1 D-01 item 2 (F-10): post-merge anchor correction — cross-
-  // checks every unit anchor's claimed `t` against where its own quote
-  // really occurs in the (F-09-deduped) caption stream `params.segments`
-  // already holds, using the same matching machinery `verifyAnchors` will
-  // later judge it against (D-03's oracle is not tuned, it is satisfied).
-  const { analysis: unitsWithCorrectedAnchors } = correctAnalysisAnchors({ units: mergedUnits }, params.segments);
-  const correctedUnits = unitsWithCorrectedAnchors.units ?? mergedUnits;
   // Edges/pearls were collected against raw labels: resolve them in the
   // PRE-dedupe id space, then remap absorbed ids to their survivors.
   const knownUnitIds = new Set(fingerprintUnits.map((u) => u.id));
@@ -2001,7 +2001,7 @@ export async function runAnalysisJobV3(params: AnalysisJobParamsV3): Promise<Ana
   }
   params.onProgress?.(100);
 
-  const finalPearls: Pearl[] = merge.data.pearls.map((p) => {
+  const finalPearlsPreCorrection: Pearl[] = merge.data.pearls.map((p) => {
     const resolved = resolvePearlUnitId(p.unitLabel, knownUnitIds);
     return {
       t: p.t,
@@ -2016,6 +2016,32 @@ export async function runAnalysisJobV3(params: AnalysisJobParamsV3): Promise<Ana
     };
   });
 
+  // Phase 04.1 D-01 item 2 (F-10, widened by 04.1-03): post-merge anchor
+  // correction — cross-checks every unit anchor's claimed `t` against where
+  // its own quote really occurs in the (F-09-deduped) caption stream
+  // `params.segments` already holds, using the same matching machinery
+  // `verifyAnchors` will later judge it against (D-03's oracle is not
+  // tuned, it is satisfied). Runs ONCE, here, after both units (post-
+  // dedupe/scrub) and pearls (post-alias resolution) have their final ids —
+  // pearl correction needs each pearl's OWN linked unit's corrected anchor
+  // position, and `finalPearlsPreCorrection` is the first point a pearl's
+  // `unitId` exists in the post-alias id space. Deliberately takes only
+  // `mergedUnits`/`finalPearlsPreCorrection` and `params.segments` — no
+  // chunk index, no chunk count, no window bounds — so it cannot special-
+  // case a chunk even by accident (RESEARCH's Open Question 1 was never
+  // resolved either way; the design doesn't depend on the answer).
+  const {
+    analysis: corrected,
+    corrections,
+    unresolved,
+    pearlCorrections,
+    unresolvedPearls,
+  } = correctAnalysisAnchors({ units: mergedUnits, pearls: finalPearlsPreCorrection }, params.segments);
+  const correctedUnits = corrected.units ?? mergedUnits;
+  const finalPearls = corrected.pearls ?? finalPearlsPreCorrection;
+
+  logAnchorCorrectionSummary(corrections, unresolved, pearlCorrections, unresolvedPearls);
+
   return {
     generatedAt: new Date().toISOString(),
     model: params.model,
@@ -2028,6 +2054,37 @@ export async function runAnalysisJobV3(params: AnalysisJobParamsV3): Promise<Ana
     units: correctedUnits,
     edges: mergedEdges,
   };
+}
+
+/**
+ * Phase 04.1-03 Task 2: per-run correction telemetry. Deliberately kept out
+ * of the persisted schema (`AnalysisSchema` gains no field — no existing
+ * analysis.json, downstream consumer, or existing test changes shape) and
+ * emitted through the same `[analysis]` console.warn channel the pipeline
+ * already uses for skipped chunks and router fallbacks. Silent when nothing
+ * was corrected — a clean run produces zero correction log output. The
+ * summary line's `anchor-correction:` prefix is stable and greppable (the
+ * D-02 live re-run will want to capture it from the harness's server log).
+ */
+function logAnchorCorrectionSummary(
+  corrections: readonly AnchorCorrection[],
+  unresolved: readonly UnresolvedAnchor[],
+  pearlCorrections: readonly PearlCorrection[],
+  _unresolvedPearls: readonly UnresolvedPearl[]
+): void {
+  if (corrections.length === 0 && pearlCorrections.length === 0) return;
+
+  const safetyTierCount = corrections.filter((c) => isSafetyTierUnitType(c.unitType)).length;
+  // "unresolved" here counts unresolved QUOTES (unit anchors) specifically —
+  // pearls carry no quote, so unresolvedPearls isn't folded into this count.
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[analysis] anchor-correction: units=${corrections.length} safetyTier=${safetyTierCount} pearls=${pearlCorrections.length} unresolved=${unresolved.length}`
+  );
+  for (const c of corrections) {
+    // eslint-disable-next-line no-console
+    console.warn(`[analysis] anchor-correction detail: unit=${c.unitId} type=${c.unitType} before=${c.before} after=${c.after}`);
+  }
 }
 
 /** Stable content hash (first 8 hex chars of sha256) — used for overlay filenames (see lib/shareBundle.ts). */
