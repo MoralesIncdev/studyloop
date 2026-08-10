@@ -375,6 +375,25 @@ describe("mergeUnitsByFingerprint — Phase 6 evidence merging", () => {
   });
 });
 
+describe("mergeUnitsByFingerprint — ANLZ-02 enrichment merging", () => {
+  const base = { type: "CLAIM" as const, label: "Same Concept", summary: "s", body: "b", anchors: [], confidence: 0.5 };
+
+  it("leaves enrichment undefined (not false) when no unit in the group set it", () => {
+    const merged = mergeUnitsByFingerprint([{ ...base }]);
+    expect(merged[0].enrichment).toBeUndefined();
+  });
+
+  it("is true if ANY unit in the fingerprint group was flagged enrichment — never averaged away", () => {
+    const merged = mergeUnitsByFingerprint([{ ...base, enrichment: false }, { ...base, enrichment: true }]);
+    expect(merged[0].enrichment).toBe(true);
+  });
+
+  it("stays undefined when every raw unit explicitly says false", () => {
+    const merged = mergeUnitsByFingerprint([{ ...base, enrichment: false }, { ...base, enrichment: false }]);
+    expect(merged[0].enrichment).toBeUndefined();
+  });
+});
+
 describe("AnalysisSchema — Phase 6 staleReason 'slides-changed'", () => {
   it("accepts 'slides-changed' alongside the existing 'terms-changed'", () => {
     const base = {
@@ -805,6 +824,20 @@ describe("runAnalysisJobV3 (fake client end-to-end — no live API calls)", () =
     // V3-D D2: fake mode deterministically flags every 3rd chunk's primary unit threshold.
     expect(analysis.units!.some((u) => u.threshold)).toBe(true);
     expect(analysis.units!.some((u) => u.threshold === false)).toBe(true);
+  });
+
+  it("ANLZ-02: a fake-mode-flagged unit's enrichment flag reaches the returned analysis and round-trips through AnalysisSchema", async () => {
+    const segments: TranscriptSegment[] = [];
+    for (let t = 0; t < 1000; t += 5) segments.push(segment(t, t + 5, `text at ${t}`));
+
+    const analysis = await runAnalysisJobV3({ segments, model: "claude-opus-5", client: new FakeAnalysisClient() });
+
+    // Fake mode deterministically flags every 4th chunk's primary unit (see runChunkV3).
+    expect(analysis.units!.some((u) => u.enrichment === true)).toBe(true);
+    expect(analysis.units!.some((u) => u.enrichment === undefined)).toBe(true);
+
+    const parsed = AnalysisSchema.parse(analysis);
+    expect(parsed.units!.some((u) => u.enrichment === true)).toBe(true);
   });
 
   it("V3-D D1: emits a domain-shaped overlay on the primary unit, deterministically, for every non-generic domain", async () => {
@@ -1250,6 +1283,48 @@ describe("dedupeNearDuplicateUnits", () => {
       finalUnit("tidal-volume-setting-in-ac-mode", { anchors: [{ t: 200, quote: "b" }] }),
     ]);
     expect(disjointAnchors.units).toHaveLength(2);
+  });
+
+  // ANLZ-02: enrichment propagates through the collapse the same way threshold does (D-01 — the match predicate itself never changes).
+  it("carries enrichment true onto the survivor when only the ABSORBED unit was flagged", () => {
+    const { units } = dedupeNearDuplicateUnits([
+      finalUnit("tidal-volume-setting-in-ac-mode"),
+      finalUnit("tidal-volume-in-ac-mode", { enrichment: true }),
+    ]);
+    expect(units).toHaveLength(1);
+    expect(units[0].enrichment).toBe(true);
+  });
+
+  it("carries enrichment true onto the survivor when only the SURVIVOR unit was flagged", () => {
+    const { units } = dedupeNearDuplicateUnits([
+      finalUnit("tidal-volume-setting-in-ac-mode", { enrichment: true }),
+      finalUnit("tidal-volume-in-ac-mode"),
+    ]);
+    expect(units).toHaveLength(1);
+    expect(units[0].enrichment).toBe(true);
+  });
+
+  it("leaves enrichment undefined when neither unit in the collapsed pair was flagged", () => {
+    const { units } = dedupeNearDuplicateUnits([
+      finalUnit("tidal-volume-setting-in-ac-mode"),
+      finalUnit("tidal-volume-in-ac-mode"),
+    ]);
+    expect(units).toHaveLength(1);
+    expect(units[0].enrichment).toBeUndefined();
+  });
+
+  it("the collapse decision itself is unaffected by enrichment — two units differing ONLY in enrichment still collapse (D-01: enrichment is passenger data)", () => {
+    const flagged = dedupeNearDuplicateUnits([
+      finalUnit("tidal-volume-setting-in-ac-mode", { enrichment: true }),
+      finalUnit("tidal-volume-in-ac-mode", { enrichment: false }),
+    ]);
+    expect(flagged.units).toHaveLength(1);
+
+    const distinctNeighbors = dedupeNearDuplicateUnits([
+      finalUnit("patient-triggering-via-negative-pressure", { type: "MECHANISM", anchors: [{ t: 432, quote: "q" }], enrichment: true }),
+      finalUnit("ac-mode-trigger-and-volume-delivery", { type: "MECHANISM", anchors: [{ t: 432, quote: "q" }], enrichment: true }),
+    ]);
+    expect(distinctNeighbors.units).toHaveLength(2);
   });
 });
 

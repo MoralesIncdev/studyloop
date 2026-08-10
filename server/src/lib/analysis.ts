@@ -245,6 +245,16 @@ export const AnalysisUnitSchema = z.object({
    * "absent means transcript" default matters.
    */
   evidence: UnitEvidenceSchema.optional(),
+  /**
+   * ANLZ-02 "Ungrounded enrichment marking": true when the chunk model
+   * self-reports that this unit's summary/body/CLUSTER member bodies say
+   * more than THIS segment's anchored transcript (or supplied slide text)
+   * actually states. `.optional()` (not `.default(false)`) — absent means
+   * not flagged, i.e. the unit's content is taken as supported by its
+   * anchored quotes, mirroring how `evidence`/`overlay`/`members` already
+   * model absence on this same schema.
+   */
+  enrichment: z.boolean().optional(),
 }).superRefine((unit, ctx) => {
   if (unit.type === "CLUSTER") {
     if (!unit.members || unit.members.length < CLUSTER_MIN_MEMBERS || unit.members.length > CLUSTER_MAX_MEMBERS) {
@@ -578,6 +588,8 @@ const ChunkUnitRawSchema = z.object({
   members: z.array(ClusterMemberSchema).optional(),
   /** Phase 6 "Slide-text channel" — optional at the wire level too (not just the final AnalysisUnit), same "pre-Phase-6 fixtures/callers keep compiling" reasoning as overlay/threshold above. */
   evidence: UnitEvidenceSchema.optional(),
+  /** ANLZ-02 — optional at the wire level too (not just the final AnalysisUnit), same "pre-ANLZ-02 fixtures/callers keep compiling" reasoning as overlay/threshold/evidence above. */
+  enrichment: z.boolean().optional(),
 });
 type ChunkUnitRaw = z.infer<typeof ChunkUnitRawSchema>;
 
@@ -780,6 +792,11 @@ const CHUNK_V3_JSON_SCHEMA = {
           // so there's no need for an empty-string sentinel the way
           // unitLabel/overlay need one.
           evidence: { type: "string", enum: ["transcript", "slides", "both"] },
+          // ANLZ-02 "Ungrounded enrichment marking": required at the wire
+          // level because structured-output json_schema mode wants every
+          // property present (same convention threshold/evidence/members
+          // already follow above); false is the not-flagged value.
+          enrichment: { type: "boolean" },
         },
         required: [
           "type",
@@ -792,6 +809,7 @@ const CHUNK_V3_JSON_SCHEMA = {
           "threshold",
           "members",
           "evidence",
+          "enrichment",
         ],
         additionalProperties: false,
       },
@@ -897,12 +915,12 @@ function buildChunkV3SystemPrompt(lens: Lens, slideContext?: string): string {
 
 Extract:
 - "pearls": specific, memorable insights worth remembering, each anchored to the timestamp (in seconds) where it's said. A label under 60 characters, a 1-3 sentence insight, an importance rating (3 = critical/central point, 2 = useful supporting point, 1 = minor/incidental detail), and "unitLabel": the exact label of the unit below this pearl illustrates, or "" if none fits.
-- "units": typed knowledge units on a universal spine — each is exactly one of CLAIM (an assertion), MECHANISM (how/why something works), PROCEDURE (an ordered how-to), EXAMPLE (a concrete instance), BOUNDARY (a limit, exception, or "this doesn't apply when…"), CLUSTER (a parent concept covering 3 or more closely-related atomic facts — e.g. "side effects of metoprolol" listing bradycardia, hypotension, fatigue, etc. as separate facts), DOSAGE (a medication amount/frequency), CONTRAINDICATION (when NOT to do/give something), LAB_VALUE (a normal/abnormal test range or result), or PRIORITIZATION ("what do you do first" judgment material). Each unit has a short "label" (used to link edges/pearls to it — keep it stable and specific, not a generic phrase), a 1-2 sentence "summary", a longer markdown "body", one or more "anchors" (each an exact "quote" from the transcript plus its timestamp "t" in seconds), a "confidence" 0-1 for how clearly the transcript supports this unit as extracted, an "overlay" object of domain-specific structured fields (which ones to fill in is named by the lens below — leave the rest as "" or []), "threshold": true only when this unit is a transformative/integrative/troublesome idea — one that later material genuinely depends on understanding, a concept that "unlocks" the rest of the video once grasped (most units are NOT threshold — false otherwise), "evidence": one of "transcript" (default — this unit's content came from what was actually said/shown in the video), "slides" (this unit's content came primarily from the supplementary slide-deck text below, not something actually said), or "both" — use "transcript" unless slide deck text was supplied below AND plausibly contributed to this specific unit, and "members": for a CLUSTER unit ONLY, 2 to 12 objects each with its own short "label" (the specific fact, e.g. "Bradycardia"), a 1-2 sentence "body" (that fact alone, phrased so it stands on its own as a flashcard answer), and "anchorSec" (seconds — reuse this unit's own anchor time if you have nothing more precise); for every non-CLUSTER unit, "members" MUST be an empty array. IMPORTANT: whenever the transcript states 3 or more closely-related atomic facts under one shared parent concept, emit ONE CLUSTER unit with those facts as members rather than 3+ separate CLAIM units for the same facts — this is what lets a learner attest the parent concept once instead of restating every fact individually. Use individual CLAIM (or other) units as usual for anything that isn't part of such a group.
+- "units": typed knowledge units on a universal spine — each is exactly one of CLAIM (an assertion), MECHANISM (how/why something works), PROCEDURE (an ordered how-to), EXAMPLE (a concrete instance), BOUNDARY (a limit, exception, or "this doesn't apply when…"), CLUSTER (a parent concept covering 3 or more closely-related atomic facts — e.g. "side effects of metoprolol" listing bradycardia, hypotension, fatigue, etc. as separate facts), DOSAGE (a medication amount/frequency), CONTRAINDICATION (when NOT to do/give something), LAB_VALUE (a normal/abnormal test range or result), or PRIORITIZATION ("what do you do first" judgment material). Each unit has a short "label" (used to link edges/pearls to it — keep it stable and specific, not a generic phrase), a 1-2 sentence "summary", a longer markdown "body", one or more "anchors" (each an exact "quote" from the transcript plus its timestamp "t" in seconds), a "confidence" 0-1 for how clearly the transcript supports this unit as extracted, an "overlay" object of domain-specific structured fields (which ones to fill in is named by the lens below — leave the rest as "" or []), "threshold": true only when this unit is a transformative/integrative/troublesome idea — one that later material genuinely depends on understanding, a concept that "unlocks" the rest of the video once grasped (most units are NOT threshold — false otherwise), "evidence": one of "transcript" (default — this unit's content came from what was actually said/shown in the video), "slides" (this unit's content came primarily from the supplementary slide-deck text below, not something actually said), or "both" — use "transcript" unless slide deck text was supplied below AND plausibly contributed to this specific unit, "enrichment": true when this unit's summary, body, or CLUSTER member bodies state more than THIS segment's transcript or supplied slide text actually says (canonical case: the speaker name-drops a term and you supply the definition), false when every claim is backed by the anchored quotes, and "members": for a CLUSTER unit ONLY, 2 to 12 objects each with its own short "label" (the specific fact, e.g. "Bradycardia"), a 1-2 sentence "body" (that fact alone, phrased so it stands on its own as a flashcard answer), and "anchorSec" (seconds — reuse this unit's own anchor time if you have nothing more precise); for every non-CLUSTER unit, "members" MUST be an empty array. IMPORTANT: whenever the transcript states 3 or more closely-related atomic facts under one shared parent concept, emit ONE CLUSTER unit with those facts as members rather than 3+ separate CLAIM units for the same facts — this is what lets a learner attest the parent concept once instead of restating every fact individually. Use individual CLAIM (or other) units as usual for anything that isn't part of such a group.
 - "edges": relationships between two units you extracted THIS segment — "sourceLabel"/"targetLabel" must exactly match "label" fields above, "type" is one of REQUIRES (source requires target as a prerequisite), PART_OF (source is part of target), EXAMPLE_OF (source is an example of target), or PROCEDURE_STEP (source is the step before target in the same procedure), plus the supporting "quote" and a "confidence" 0-1. Only emit edges between two units both present in this same segment's "units" list.
 
 ${lens.unitTypeEmphasis}
 ${slideContext ? `\nThe learner also attached a slide deck (PDF) alongside this video. ${slideContext}\n` : ""}
-Every summary, body, and CLUSTER member body must be grounded in what THIS segment's transcript (or the supplied slide text) actually says — never import definitions, expansions, or facts from your own outside knowledge, even when you are confident they are correct. If the speaker only name-drops a term without explaining it, record that it was mentioned rather than supplying the missing explanation yourself.
+Every summary, body, and CLUSTER member body must be grounded in what THIS segment's transcript (or the supplied slide text) actually says — never import definitions, expansions, or facts from your own outside knowledge, even when you are confident they are correct. If the speaker only name-drops a term without explaining it, record that it was mentioned rather than supplying the missing explanation yourself. If you genuinely cannot describe the unit without going past what this segment states, set "enrichment" to true on that unit instead of letting the addition read as lecture-derived — this is the fallback for when grounding truly runs out, not a licence to enrich freely.
 Every timestamp you output MUST fall within this segment's own time range — never extrapolate a timestamp from outside what you were given. If the segment has little of substance, return short (or empty) arrays rather than inventing content.`;
 }
 
@@ -1220,6 +1238,8 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
     // context block, cycling through "slides"/"both" so fake mode exercises
     // both non-default branches without ever claiming "transcript" is wrong.
     const primaryEvidence: UnitEvidence | undefined = slideContext ? (chunk.index % 2 === 0 ? "both" : "slides") : undefined;
+    // ANLZ-02: every fourth chunk's primary unit is flagged enrichment — deterministic (no randomness), index 0 always flagged so a short fake transcript always exercises the true branch.
+    const enrichment: true | undefined = chunk.index % 4 === 0 ? true : undefined;
     return {
       kind: "ok",
       data: {
@@ -1243,6 +1263,7 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
             overlay: fakeOverlayFor(domain, primaryLabel, chunk),
             threshold,
             evidence: primaryEvidence,
+            enrichment,
           },
           {
             type: "EXAMPLE",
@@ -1651,13 +1672,20 @@ export function mergeUnitsByFingerprint(units: readonly ChunkUnitRaw[]): Analysi
       confidence: average(group.map((g) => g.confidence)),
       // V3-D D1/D2: overlay collapses to undefined rather than `{}` (nothing
       // for the Advanced fold to show); threshold is true if ANY unit in the
-      // group was flagged (never "average away" a threshold signal).
+      // group was flagged (never "average away" a threshold signal). ANLZ-02
+      // enrichment follows the same never-average-away rule as threshold,
+      // but collapses to undefined (not false) when nothing in the group
+      // ever set it — same "don't persist a value nobody actually emitted"
+      // rule mergeEvidence/mergeOverlayFields already follow.
       overlay: Object.keys(mergedOverlay).length > 0 ? mergedOverlay : undefined,
       threshold: group.some((g) => g.threshold === true),
       // Phase 4: present only when finalType === "CLUSTER" (see resolveClusterType).
       members,
       // Phase 6: undefined (not "transcript") when nothing in the group ever set it — see mergeEvidence.
       evidence: mergeEvidence(group),
+      // ANLZ-02: true | undefined, never false — a single flagged chunk emission
+      // cannot be silently outvoted into looking lecture-derived.
+      enrichment: group.some((g) => g.enrichment === true) ? true : undefined,
     };
   });
 }
@@ -1687,9 +1715,10 @@ export function mergeUnitsByFingerprint(units: readonly ChunkUnitRaw[]): Analysi
  *
  * The first-seen unit of a collapsed pair survives (stable ids — everything
  * downstream references unit ids); the absorbed unit contributes its
- * anchors, the longer summary/body, its threshold flag, and its evidence.
- * `aliases` maps each absorbed id to its surviving id so edges and pearl
- * unitIds can be remapped instead of dangling.
+ * anchors, the longer summary/body, its threshold flag, its evidence, and
+ * its ANLZ-02 enrichment flag. `aliases` maps each absorbed id to its
+ * surviving id so edges and pearl unitIds can be remapped instead of
+ * dangling.
  */
 export function dedupeNearDuplicateUnits(units: readonly AnalysisUnit[]): { units: AnalysisUnit[]; aliases: Map<string, string> } {
   const tokensOf = (id: string) => new Set(id.split("-").filter(Boolean));
@@ -1723,6 +1752,8 @@ export function dedupeNearDuplicateUnits(units: readonly AnalysisUnit[]): { unit
       confidence: Math.max(survivor.confidence, unit.confidence),
       threshold: survivor.threshold || unit.threshold,
       evidence: survivor.evidence === unit.evidence ? survivor.evidence : mergeEvidence([survivor, unit]),
+      // ANLZ-02: OR survivor and absorbed, collapsing to undefined when neither was flagged — D-01 leaves the match predicate above untouched, this field is passenger data on the collapse.
+      enrichment: survivor.enrichment === true || unit.enrichment === true ? true : undefined,
     };
   }
   return { units: kept, aliases };
