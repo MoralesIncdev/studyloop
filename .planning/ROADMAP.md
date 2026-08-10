@@ -104,6 +104,17 @@ Plans:
 - [x] 04-04-PLAN.md — proof run part 2: attestation lifecycle, session content, compile + export (wave 3)
 - [ ] 04-05-PLAN.md — adversarial verification, dated report, CI + provenance, Ryan sign-off (wave 4)
 
+### Phase 04.1: Anchor Fidelity Repair (INSERTED)
+
+**Goal:** Anchor timestamps point where the content is actually spoken — F-10 drift (10/18 units up to ~4m42s off, incl. both DOSAGE cards) and F-09 rolling-caption duplication root-caused and fixed; anchor verifier re-run on the 2026-08-10 proof project yields a clean report; PROOF-01 closes
+**Requirements**: PROOF-01 (carried open from Phase 4; see docs/proof-evidence-2026-08-10/ FINDINGS F-09/F-10/F-11)
+**Depends on:** Phase 4
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 04.1 to break down)
+
 ### Phase 5: Depth Tier (Accuracy-Gated)
 
 **Goal**: Compounding cross-library features unlock — learners can see prerequisite paths across videos, compose multi-video lessons, and browse concept-grouped Threads

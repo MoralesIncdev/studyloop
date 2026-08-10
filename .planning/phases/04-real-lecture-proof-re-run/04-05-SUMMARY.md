@@ -91,26 +91,29 @@ coverage:
     human_judgment: false
   - id: D5
     description: "Ryan's sign-off at the blocking checkpoint — read the report and confirm the CONDITIONAL verdicts and the open PROOF-01 checkbox are not overstated or understated"
-    verification: []
+    verification:
+      - kind: manual_procedural
+        ref: "Ryan approved the checkpoint 2026-08-10: 'Phase 4 closes as-is — overall CONDITIONAL PASS, PROOF-01 stays open (unchecked, with provenance note), PROOF-02 complete. The proof project remains in place ... as evidence.'"
+        status: pass
     human_judgment: true
-    rationale: "T-04-14's mitigation requires an explicit human confirmation that the requirement checkboxes match the evidence — this is the entire point of the blocking checkpoint and cannot be self-certified by the executor."
+    rationale: "T-04-14's mitigation requires an explicit human confirmation that the requirement checkboxes match the evidence — this is the entire point of the blocking checkpoint and cannot be self-certified by the executor. Ryan's explicit approval is recorded verbatim above, satisfying that requirement."
 
-duration: 55min
+duration: 58min
 completed: 2026-08-10
-status: halted
+status: complete
 ---
 
 # Phase 4 Plan 5: Adversarial Verification, Dated Report, CI + Provenance Summary
 
-**Ran the committed verbatim-anchor verifier against the real proof analysis, found a 39% mechanical violation rate (32/82) driven by two genuine new defects — un-deduplicated rolling-caption text (F-09) and anchor timestamps drifted up to 282 seconds on 10 of 18 units including both safety-tier DOSAGE cards (F-10), plus a near-duplicate that escaped Phase 2's dedup as a direct consequence (F-11) — confirmed zero hallucinated or clinically-wrong claims across all 18 units/8 pearls/8 edges, cleanly proved the SC3 review-queue gate and all four PROOF-02 session-content paths, wrote the dated report with all four modes marked CONDITIONAL (overall CONDITIONAL PASS, not a clean PASS), and left PROOF-01's checkbox open while flipping PROOF-02 to Complete — now paused at the Task 4 blocking checkpoint for Ryan's sign-off.**
+**Ran the committed verbatim-anchor verifier against the real proof analysis, found a 39% mechanical violation rate (32/82) driven by two genuine new defects — un-deduplicated rolling-caption text (F-09) and anchor timestamps drifted up to 282 seconds on 10 of 18 units including both safety-tier DOSAGE cards (F-10), plus a near-duplicate that escaped Phase 2's dedup as a direct consequence (F-11) — confirmed zero hallucinated or clinically-wrong claims across all 18 units/8 pearls/8 edges, cleanly proved the SC3 review-queue gate and all four PROOF-02 session-content paths, wrote the dated report with all four modes marked CONDITIONAL (overall CONDITIONAL PASS, not a clean PASS), and left PROOF-01's checkbox open while flipping PROOF-02 to Complete. Ryan approved the report acceptance checkpoint as-is on 2026-08-10 — Phase 4 closes CONDITIONAL PASS, PROOF-01 open, PROOF-02 complete, proof project retained as evidence.**
 
 ## Performance
 
-- **Duration:** ~55 min
+- **Duration:** ~58 min
 - **Started:** 2026-08-10T19:20:00Z (approx, first Read of PLAN.md)
-- **Completed (Tasks 1-3):** 2026-08-10T20:15:00Z (approx, Task 3 final commit) — Task 4 (blocking checkpoint) is pending Ryan's response, not yet resolved
-- **Tasks:** 3/4 complete (Task 4 is the blocking checkpoint itself)
-- **Files modified:** 8 created, 4 modified
+- **Completed:** 2026-08-10T20:18:00Z (approx, checkpoint approval received and this SUMMARY finalized)
+- **Tasks:** 4/4 complete (Task 4 — the blocking checkpoint — resolved by Ryan's explicit approval)
+- **Files modified:** 8 created, 5 modified
 
 ## Accomplishments
 
@@ -124,11 +127,12 @@ status: halted
 
 ## Task Commits
 
-Tasks 1-3 were committed atomically; Task 4 is the blocking checkpoint and has no code/doc commit of its own:
+Tasks 1-3 were committed atomically; Task 4 is the blocking checkpoint, resolved by Ryan's explicit approval message rather than a code/doc change of its own:
 
 1. **Task 1: Adversarial verification pass — anchors, safety values, hallucinations, and the review-queue gate (SC2, SC3)** - `f0bc8ce` (feat)
 2. **Task 2: Write the dated adversarial proof report (SC5, D-01, D-02, D-03)** - `880d0c6` (docs)
 3. **Task 3: CI green, requirement provenance, and a secret-free evidence commit** - `7e17d74` (docs)
+4. **Task 4: Report acceptance checkpoint** - resolved by Ryan's approval ("approved... Phase 4 closes as-is") — no separate code commit; this SUMMARY's finalization is the record of resolution
 
 **Plan metadata:** committed alongside this SUMMARY (see final commit below)
 
