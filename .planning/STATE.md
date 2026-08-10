@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 4
 current_phase_name: Real-Lecture Proof Re-Run
 status: awaiting-checkpoint
-stopped_at: 04-05 Tasks 1-3 complete (adversarial verification, dated report, CI + provenance) — awaiting Ryan's sign-off at Task 4's blocking checkpoint before Phase 4 closes
-last_updated: "2026-08-10T19:45:00.000Z"
-last_activity: 2026-08-10
-last_activity_desc: Phase 4 Plan 5 Tasks 1-3 — adversarial verification found a new anchor-timestamp-drift defect (F-10, up to ~282s off, both DOSAGE safety-tier units affected) that the committed anchor verifier (D-03) was specifically built to catch; zero hallucinated claims found across all 18 units/8 pearls/8 edges; SC3 review-queue gate cleanly proven (18/18 feedable, 0 violations); dated report written with all four modes CONDITIONAL, overall CONDITIONAL PASS; CI green (1047 server + 357 web); PROOF-02 flipped Complete, PROOF-01 stays open pending the anchor-drift finding
+stopped_at: Completed 04.1-01-PLAN.md
+last_updated: "2026-08-10T21:03:56.339Z"
 progress:
-  total_phases: 4
-  completed_phases: 3
-  total_plans: 15
-  completed_plans: 14
+  total_phases: 5
+  completed_phases: 4
+  total_plans: 22
+  completed_plans: 16
+last_activity: 2026-08-10
+last_activity_desc: Phase 04.1 Plan 1 (of 7) — end-to-end tracer proven offline, zero violations: dedupeRollingCaptions (F-09) collapses rolling-caption cue duplication, correctAnalysisAnchors (F-10, D-01 item 2) snaps drifted unit anchors to their quote's earliest real position via a matching primitive (findQuoteOccurrences) shared with the committed anchor verifier (D-03 preserved byte-for-byte, anchorVerify.test.ts diff empty), both wired into runAnalysisJobV3's post-merge tail; full suite 1059 server (1047 baseline + 12 new) + 357 web, both at/above baseline; PROOF-01 stays Pending (shared-ID gate — 04.1-02 through 04.1-07 still to run, plus D-02's live-lecture re-proof still required to close it)
 ---
 
 # Project State
@@ -31,8 +31,9 @@ Phase: 4 of 6 (Real-Lecture Proof Re-Run) — all 5 plans executed; VERIFICATION
 Status: CONDITIONAL PASS accepted by Ryan 2026-08-10 (report: docs/REAL-LECTURE-PROOF-2026-08-10.md).
 PROOF-02 complete; PROOF-01 open — carried to inserted Phase 04.1 (Anchor Fidelity Repair: F-09 rolling captions, F-10 anchor drift, F-11 dedup escape).
 Formal `phase complete 4` is gated on gap closure by design — it lands when Phase 04.1 closes PROOF-01.
-Next action: /gsd-plan-phase 04.1
 
+Phase 04.1 (Anchor Fidelity Repair, 7 plans, wave 1 of N): Plan 01 (tracer) complete — dedupeRollingCaptions + correctAnalysisAnchors wired end-to-end through runAnalysisJobV3, offline proof green, zero violations. PROOF-01 checkbox stays Pending: shared-ID gate across all 7 declared plans, plus D-02's live-lecture re-proof (04.1-04+) still required for verdict discipline (D-03).
+Next action: continue Phase 04.1 wave execution (04.1-02 onward, per depends_on in each PLAN.md)
 
 ## Performance Metrics
 
@@ -73,6 +74,7 @@ Next action: /gsd-plan-phase 04.1
 | Phase 04 P03 | 30 min | 3 tasks | 12 files |
 | Phase 04 P04 | 45 min | 3 tasks | 14 files |
 | Phase 04 P05 (Tasks 1-3; Task 4 checkpoint pending) | ~45 min | 3 tasks | 13 files |
+| Phase 04.1 P01 | 13min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -106,6 +108,8 @@ Recent decisions affecting current work:
   **Phase 5 entry gate — explicitly checked, not assumed:** ROADMAP's Phase 5 depends on "documented real-use extraction-accuracy evidence beyond the Phase 4 proof run." **This gate is NOT satisfied by Phase 4 alone** — this proof run itself surfaced a real, previously-unknown extraction-accuracy defect (F-10's anchor-timestamp drift) rather than establishing a clean accuracy baseline to build on. Phase 5 (DPTH-01/02/03, a prerequisite graph and cross-video lesson composer that depends on accurate concept extraction across a library) should not start until either (a) F-10 is root-caused and fixed with regression coverage, or (b) a separate real-use accuracy study (beyond this single proof project) is conducted and documented, per SPEC V3-D's deferral condition and FEATURE-REVIEW's identical gate. Recorded here as a blocker, not a recommendation — the gate is Ryan's call at the Phase 4→5 transition, but the evidence to make that call honestly is now on record.
   **Watch items carried forward for Phase 5+:** (1) F-10's anchor-timestamp drift and its root cause in `analysis.ts`'s chunk-to-unit pipeline — not investigated to a specific code location in this adversarial-verification pass, deliberately out of scope (this plan reports, it does not patch production code — matches 04-01/04-03/04-04's zero-server/src-touched pattern); (2) F-09's rolling-caption non-dedup in `captionParse.ts`/`ytdlp.ts` — likely the root enabler of F-10's drift measurement difficulty, same scope boundary; (3) F-11's near-duplicate-escapes-dedup mechanism, likely resolved as a side effect of fixing F-10 but not confirmed; (4) F-05's 0/18 evidence:"both" units — unresolved between "genuine topical narrowness" and "labeling-fidelity gap," worth a second genuinely-overlapping-deck test to disambiguate; (5) `pullYoutubeTranscript`'s no-fallback lazy caption pull (carried from Phase 1, still open, see Blockers below).
 
+- [2026-08-10 Phase 04.1 P01] Tracer proven end-to-end: dedupeRollingCaptions (F-09) + correctAnalysisAnchors (F-10, D-01 item 2) wired into runAnalysisJobV3's post-merge tail, sharing anchorVerify.ts's extracted findQuoteOccurrences with the committed verifier so a corrected anchor can never disagree with the oracle judging it (D-03 preserved byte-for-byte: anchorVerify.test.ts diff is empty). One existing test's assertions legitimately changed (captionParse.test.ts's real-bjj-captions.en.srt fixture, 19->10 segments) per the plan's own documented single exception, proven inline with the specific overlapping words, not silently edited. Full suite 1059 server (1047 baseline + 12 new) + 357 web, both at/above baseline. REQUIREMENTS.md's PROOF-01 checkbox stays Pending: all 7 phase plans (04.1-01 through 04.1-07) declare PROOF-01 and haven't all run yet — same shared-ID gate (#2388) precedent as prior phases; D-03's verdict discipline also requires the actual live-lecture re-proof (04.1-04+), not this offline tracer alone, to close it.
+
 ### Pending Todos
 
 None yet.
@@ -132,6 +136,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-10T19:19:00.000Z
-Stopped at: Completed 04-04-PLAN.md
+Last session: 2026-08-10T21:03:34.172Z
+Stopped at: Completed 04.1-01-PLAN.md
 Resume file: None
