@@ -30,8 +30,8 @@ Active scope for Milestone 1 (Student-Ready Real-Lecture Proof + accuracy-gated 
 
 ### Real-Lecture Proof (PROOF)
 
-- [ ] **PROOF-01**: A real nursing lecture passes the end-to-end proof with zero manual workarounds: URL paste → transcript in normal flow → clinical lens auto-selected → slides channel → document mode → attestation → compile. Clinical + slides + document each PASS with zero hallucinated claims, all anchor quotes verbatim-verified, and safety values exact. Setup is no longer CONDITIONAL. Review queue after the run contains only attested/learner-touched cards.
-- [ ] **PROOF-02**: The previously-unproven session-content rendering paths — notes, captures, watchedUpTo, lessonSummary — are exercised during the proof run and verified in the compiled export.
+- [ ] **PROOF-01**: A real nursing lecture passes the end-to-end proof with zero manual workarounds: URL paste → transcript in normal flow → clinical lens auto-selected → slides channel → document mode → attestation → compile. Clinical + slides + document each PASS with zero hallucinated claims, all anchor quotes verbatim-verified, and safety values exact. Setup is no longer CONDITIONAL. Review queue after the run contains only attested/learner-touched cards. (Provenance: the 2026-08-10 re-run (`docs/REAL-LECTURE-PROOF-2026-08-10.md`) proved zero manual UI workarounds (Bug 1's yt-dlp fallback confirmed twice), zero hallucinated or clinically-wrong claims across all 18 units/8 pearls/8 edges, and a clean SC3 review-queue gate (18/18 tracked+due cards feedable, 0 violations) — but the committed anchor verifier this same phase built (D-03, `server/src/lib/anchorVerify.ts`) found 32/82 anchor checks fail strict verbatim matching, and manual re-investigation traced this to a genuine defect: 10/18 units (including both DOSAGE safety-tier units) carry anchor timestamps drifted up to ~282s from their true spoken position, plus one chunk-overlap near-duplicate that escaped ANLZ-01's dedup as a direct consequence. "All anchor quotes verbatim-verified" and "Setup is no longer CONDITIONAL" are therefore not supported by this run's evidence — checkbox stays open per T-04-14. Full findings: `docs/proof-evidence-2026-08-10/FINDINGS.md` F-09/F-10/F-11; verdict discipline: `docs/REAL-LECTURE-PROOF-2026-08-10.md` per-mode table, all four modes CONDITIONAL.)
+- [x] **PROOF-02**: The previously-unproven session-content rendering paths — notes, captures, watchedUpTo, lessonSummary — are exercised during the proof run and verified in the compiled export. (Provenance: 04-04 populated all four paths through their own real UI affordance (notes with 3 real seek tokens, 3 mined captures, concept-doc-gated watchedUpTo with a genuine 2/4 partial coverage split, lesson synthesis) and 04-05's adversarial pass confirmed the compiled export renders all four with zero empty-state placeholders, byte-identical to the on-disk export file — this requirement's claim is independent of the anchor-timestamp-drift finding affecting PROOF-01 (notes/captures use learner-driven real-time seek positions, not model-generated anchors), so it is proven cleanly and completely. Full evidence: `docs/REAL-LECTURE-PROOF-2026-08-10.md` PROOF-02 section.)
 
 ### Depth Tier (DPTH) — accuracy-gated
 
@@ -118,8 +118,8 @@ Active v1 requirements → roadmap phases. Baseline requirements are guarded by 
 | GATE-02 | Phase 3 | Complete |
 | COMP-01 | Phase 3 | Complete |
 | COMP-02 | Phase 3 | Complete |
-| PROOF-01 | Phase 4 | Pending |
-| PROOF-02 | Phase 4 | Pending |
+| PROOF-01 | Phase 4 | Open — see provenance note (anchor-timestamp-drift finding) |
+| PROOF-02 | Phase 4 | Complete |
 | DPTH-01 | Phase 5 | Pending |
 | DPTH-02 | Phase 5 | Pending |
 | DPTH-03 | Phase 5 | Pending |
@@ -132,4 +132,4 @@ Active v1 requirements → roadmap phases. Baseline requirements are guarded by 
 
 ---
 *Requirements defined: 2026-08-09*
-*Last updated: 2026-08-10 — Phase 3 added provenance parentheticals to the GATE-01, GATE-02, COMP-01, and COMP-02 entries*
+*Last updated: 2026-08-10 — Phase 4 closed with PROOF-02 complete and PROOF-01 left open (anchor-timestamp-drift finding, see provenance note); Phase 3 added provenance parentheticals to the GATE-01, GATE-02, COMP-01, and COMP-02 entries*
