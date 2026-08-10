@@ -9,7 +9,7 @@
 // comment documents for every other server-shape mirror in this file.
 import type { UnitType } from "./types";
 
-export const SAFETY_TIER_UNIT_TYPES: ReadonlySet<UnitType> = new Set<UnitType>(["DOSAGE", "CONTRAINDICATION", "LAB_VALUE"]);
+export const SAFETY_TIER_UNIT_TYPES: ReadonlySet<UnitType> = new Set<UnitType>(["DOSAGE", "CONTRAINDICATION", "LAB_VALUE", "PRIORITIZATION"]);
 
 export function isSafetyTierUnitType(type: UnitType): boolean {
   return SAFETY_TIER_UNIT_TYPES.has(type);

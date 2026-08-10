@@ -13,5 +13,5 @@
   ],
   "questionStyle": "nclex",
   "glossaryRef": "nursing",
-  "safetyTier": ["DOSAGE", "CONTRAINDICATION", "LAB_VALUE"]
+  "safetyTier": ["DOSAGE", "CONTRAINDICATION", "LAB_VALUE", "PRIORITIZATION"]
 }

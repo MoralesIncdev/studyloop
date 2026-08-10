@@ -7,18 +7,20 @@ import { isSafetyTierUnitType, SAFETY_TIER_UNIT_TYPES } from "./safetyTier";
 import type { UnitType } from "./types";
 
 describe("isSafetyTierUnitType", () => {
-  it("is true for exactly DOSAGE, CONTRAINDICATION, and LAB_VALUE", () => {
+  it("is true for exactly DOSAGE, CONTRAINDICATION, LAB_VALUE, and PRIORITIZATION (D-02)", () => {
     expect(isSafetyTierUnitType("DOSAGE")).toBe(true);
     expect(isSafetyTierUnitType("CONTRAINDICATION")).toBe(true);
     expect(isSafetyTierUnitType("LAB_VALUE")).toBe(true);
+    expect(isSafetyTierUnitType("PRIORITIZATION")).toBe(true);
   });
 
-  it("is false for every other unit type, including the spine-level PRIORITIZATION addition", () => {
-    const nonSafetyTypes: UnitType[] = ["CLAIM", "MECHANISM", "PROCEDURE", "EXAMPLE", "BOUNDARY", "CLUSTER", "PRIORITIZATION"];
+  it("is false for every other unit type", () => {
+    const nonSafetyTypes: UnitType[] = ["CLAIM", "MECHANISM", "PROCEDURE", "EXAMPLE", "BOUNDARY", "CLUSTER"];
     for (const type of nonSafetyTypes) expect(isSafetyTierUnitType(type)).toBe(false);
   });
 
-  it("SAFETY_TIER_UNIT_TYPES has exactly three members", () => {
-    expect(SAFETY_TIER_UNIT_TYPES.size).toBe(3);
+  it("SAFETY_TIER_UNIT_TYPES has exactly four members and no more/fewer than the expected set (D-02)", () => {
+    expect(SAFETY_TIER_UNIT_TYPES.size).toBe(4);
+    expect([...SAFETY_TIER_UNIT_TYPES].sort()).toEqual(["CONTRAINDICATION", "DOSAGE", "LAB_VALUE", "PRIORITIZATION"].sort());
   });
 });

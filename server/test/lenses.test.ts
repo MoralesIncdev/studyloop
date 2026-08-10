@@ -58,12 +58,13 @@ describe("loadLensRegistry — repo-shipped lenses", () => {
     }
   });
 
-  it("clinical lens declares nclex questionStyle, nursing glossaryRef, and the three safety-tier unit types", () => {
+  it("clinical lens declares nclex questionStyle, nursing glossaryRef, and the four safety-tier unit types (D-02)", () => {
     const clinical = getLens("", "clinical");
     expect(clinical).toBeDefined();
     expect(clinical!.questionStyle).toBe("nclex");
     expect(clinical!.glossaryRef).toBe("nursing");
-    expect(clinical!.safetyTier).toEqual(expect.arrayContaining(["DOSAGE", "CONTRAINDICATION", "LAB_VALUE"]));
+    expect(clinical!.safetyTier).toEqual(expect.arrayContaining(["DOSAGE", "CONTRAINDICATION", "LAB_VALUE", "PRIORITIZATION"]));
+    expect(clinical!.safetyTier).toHaveLength(4);
   });
 
   it("clinical lens declares its six clinical overlay fields", () => {
