@@ -1270,6 +1270,36 @@ describe("LLMAnalysisClient — Phase 5 prompt assembly from the lens registry",
     expect(requests[0].system).toContain("safety-critical");
   });
 
+  // Phase 04.1-03 Task 3: closing timestamp-provenance/contiguity rule —
+  // GitNexus impact (upstream, run before this edit — repo CLAUDE.md MUST
+  // rule): buildChunkV3SystemPrompt has exactly 1 consumer,
+  // LLMAnalysisClient.runChunkV3 (LOW risk, reached only indirectly by this
+  // test file) — no second consumer exists, so this prompt edit changes
+  // only the chunk call path, nothing else. This is a DELIBERATE CONTRACT:
+  // if you are changing the prompt and this test fails, decide whether you
+  // meant to drop one of these three constraints before editing the
+  // assertion — don't just widen the substring to make it pass.
+  it("Task 3 contract: the chunk system prompt tells the model where a timestamp comes from and that a quote may never join two spans", async () => {
+    const { caller, requests } = spyCaller(JSON.stringify({ pearls: [], units: [], edges: [] }));
+    const client = new LLMAnalysisClient(caller, "");
+    const chunk = { index: 0, startSec: 0, endSec: 10, text: "[0:00] hello" };
+    await client.runChunkV3(chunk, "generic", "claude-opus-5");
+    const system = requests[0].system;
+
+    // 1. Timestamp provenance — copied from the line's own prefix, not estimated.
+    expect(system).toContain("copied from the timestamp prefix of the transcript line");
+    expect(system).toContain("never estimated or inferred");
+    // 2. Same-occurrence binding when a fact is stated more than once.
+    expect(system).toContain("stated more than once in this segment");
+    expect(system).toContain("SAME occurrence");
+    // 3. Contiguous-quote requirement (RESEARCH's edge-quote ellipsis shape).
+    expect(system).toContain("one unbroken run of words");
+    expect(system).toContain("never two separated spans joined together");
+    // The pre-existing in-range requirement is still present — this is
+    // additive, not a replacement.
+    expect(system).toContain("MUST fall within this segment's own time range");
+  });
+
   it("runChunkV3 falls back to the generic lens's unitTypeEmphasis for an unknown domain id", async () => {
     const { caller, requests } = spyCaller(JSON.stringify({ pearls: [], units: [], edges: [] }));
     const client = new LLMAnalysisClient(caller, "");
