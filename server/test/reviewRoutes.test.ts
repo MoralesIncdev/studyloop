@@ -260,4 +260,142 @@ describe("GET /api/review/queue — attestation gate (GATE-01)", () => {
       .catch(() => false);
     expect(reviewJsonWritten).toBe(true);
   });
+
+  // --- Case A: gate path (a) — linked unit attested ------------------------
+
+  it("admits a pearl whose linked unit is attested, and also serves that unit's own generation card (V3-B B4)", async () => {
+    app = await buildApp();
+    const unitId = "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa";
+    await seedProject({
+      analysis: buildAnalysis([pearlFixture(120, { unitId })], [claimUnit(unitId)]),
+      attestations: { [unitId]: { status: "attested", at: "2026-01-01T00:00:00Z" } },
+    });
+
+    const res = await app.inject({ method: "GET", url: "/api/review/queue" });
+    expect(res.statusCode).toBe(200);
+    const dueIds = (res.json().due as Array<{ id: string }>).map((c) => c.id);
+
+    expect(dueIds).toContain(`pearl:${PROJECT_ID}:120`);
+    expect(dueIds).toContain(`unit:${PROJECT_ID}:${unitId}`);
+  });
+
+  // --- Case B: gate path (b) — explicit learner add -------------------------
+
+  it("admits a pearl with no unit link once the learner explicitly adds it to review", async () => {
+    app = await buildApp();
+    await seedProject({
+      analysis: buildAnalysis([pearlFixture(180)]),
+      pearlReviewAdds: ["180"],
+    });
+
+    const res = await app.inject({ method: "GET", url: "/api/review/queue" });
+    expect(res.statusCode).toBe(200);
+    const dueIds = (res.json().due as Array<{ id: string }>).map((c) => c.id);
+
+    expect(dueIds).toContain(`pearl:${PROJECT_ID}:180`);
+  });
+
+  // --- Case C: legacy pearl with real progress is suspended, a legitimately
+  // scheduled card's persisted state is untouched (SC2's two clauses) -------
+
+  it("suspends a legacy pearl card carrying real progress without corrupting a legitimately scheduled card's persisted state (SC2)", async () => {
+    app = await buildApp();
+    const legitUnitId = "bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbbb";
+    await seedProject({
+      bubbles: [liveBubble()],
+      analysis: buildAnalysis([pearlFixture(900), pearlFixture(120, { unitId: legitUnitId })]),
+      attestations: { [legitUnitId]: { status: "attested", at: "2026-01-01T00:00:00Z" } },
+    });
+
+    const suspendedPearlState = cardState({
+      due: pastIso(HOUR_MS),
+      interval: 14,
+      reps: 2,
+      lastGrade: "good",
+      introducedAt: pastIso(6 * DAY_MS),
+    });
+    const legitPearlState = cardState({
+      due: futureIso(10 * DAY_MS),
+      interval: 14,
+      reps: 3,
+      lastGrade: "good",
+      introducedAt: pastIso(20 * DAY_MS),
+    });
+    const controlBubbleState = cardState({ due: pastIso(HOUR_MS), introducedAt: pastIso(HOUR_MS) });
+
+    await writeReviewState(dataRoot, {
+      version: 1,
+      cards: {
+        [`pearl:${PROJECT_ID}:900`]: suspendedPearlState,
+        [`pearl:${PROJECT_ID}:120`]: legitPearlState,
+        [`bubble:${PROJECT_ID}:b1`]: controlBubbleState,
+      },
+    });
+
+    const res = await app.inject({ method: "GET", url: "/api/review/queue" });
+    expect(res.statusCode).toBe(200);
+    const dueIds = (res.json().due as Array<{ id: string }>).map((c) => c.id);
+
+    // "Suspended" — a pre-gating pearl with real progress (reps > 0) never
+    // resurfaces once it's ungated, and isn't visible in the response.
+    expect(dueIds).not.toContain(`pearl:${PROJECT_ID}:900`);
+    // The legit card isn't due yet — a future `due` timestamp, untouched.
+    expect(dueIds).not.toContain(`pearl:${PROJECT_ID}:120`);
+    expect(dueIds).toContain(`bubble:${PROJECT_ID}:b1`);
+
+    // "Never delete learner progress" and "without corrupting scheduling"
+    // must be checked against the persisted file, not the response body — a
+    // suspended card is by definition invisible in the response.
+    const persisted = await readReviewState(dataRoot);
+    expect(persisted.cards[`pearl:${PROJECT_ID}:900`]).toBeDefined();
+    expect(persisted.cards[`pearl:${PROJECT_ID}:120`]).toEqual(legitPearlState);
+  });
+
+  // --- Case D: legacy pearl with no progress is dropped ---------------------
+
+  it("drops a legacy pearl card with no progress like any other orphan (SC2)", async () => {
+    app = await buildApp();
+    const legitUnitId = "cccccccc-3333-4ccc-8ccc-cccccccccccc";
+    await seedProject({
+      bubbles: [liveBubble()],
+      analysis: buildAnalysis([pearlFixture(900), pearlFixture(120, { unitId: legitUnitId })]),
+      attestations: { [legitUnitId]: { status: "attested", at: "2026-01-01T00:00:00Z" } },
+    });
+
+    const droppedPearlState = cardState({
+      due: pastIso(HOUR_MS),
+      interval: 0,
+      reps: 0,
+      lastGrade: null,
+      introducedAt: pastIso(HOUR_MS),
+    });
+    const legitPearlState = cardState({
+      due: futureIso(10 * DAY_MS),
+      interval: 14,
+      reps: 3,
+      lastGrade: "good",
+      introducedAt: pastIso(20 * DAY_MS),
+    });
+    const controlBubbleState = cardState({ due: pastIso(HOUR_MS), introducedAt: pastIso(HOUR_MS) });
+
+    await writeReviewState(dataRoot, {
+      version: 1,
+      cards: {
+        [`pearl:${PROJECT_ID}:900`]: droppedPearlState,
+        [`pearl:${PROJECT_ID}:120`]: legitPearlState,
+        [`bubble:${PROJECT_ID}:b1`]: controlBubbleState,
+      },
+    });
+
+    const res = await app.inject({ method: "GET", url: "/api/review/queue" });
+    expect(res.statusCode).toBe(200);
+    const dueIds = (res.json().due as Array<{ id: string }>).map((c) => c.id);
+
+    expect(dueIds).not.toContain(`pearl:${PROJECT_ID}:900`);
+    expect(dueIds).toContain(`bubble:${PROJECT_ID}:b1`);
+
+    const persisted = await readReviewState(dataRoot);
+    expect(persisted.cards[`pearl:${PROJECT_ID}:900`]).toBeUndefined();
+    expect(persisted.cards[`bubble:${PROJECT_ID}:b1`]).toBeDefined();
+  });
 });
