@@ -164,3 +164,20 @@ Stable key/value block appended to by every Phase 4 plan. Do not remove or reord
 | Overall verdict | **CONDITIONAL PASS** — Setup CONDITIONAL (7/10), Slides CONDITIONAL (8/10), Clinical CONDITIONAL (6/10), Document mode + compile CONDITIONAL (7/10). Zero hallucinated claims found; zero manual UI workarounds; SC3's review-queue gate cleanly proven (0 violations); PROOF-02's four session-content paths cleanly proven. The downgrade from a clean PASS is driven entirely by the anchor-timestamp-drift finding (F-10) this run's committed verifier (D-03) was specifically built to catch, plus its two direct consequences (F-09's role in the mechanical violation count, F-11's near-duplicate escape). |
 | PROOF-01 | Stays **open** (unchecked) — "all anchor quotes verbatim-verified" and "Setup is no longer CONDITIONAL" are not supported by this run's evidence; see REQUIREMENTS.md's provenance note |
 | PROOF-02 | **Complete** — its own claim (four session-content paths exercised and verified in the compiled export) is fully proven and untouched by the anchor-drift finding (notes/captures use learner-driven real-time positions, not model-generated anchors) |
+
+## Phase 04.1 re-run — D-02 live re-analysis on the fixed pipeline
+
+### Harness re-assertion (Task 1 — 04.1-05)
+
+| Key | Value |
+|---|---|
+| Real config checksum before this task | `33c07b026fe886fa654a7bfc031f97db817c92eaea672581f0af80816107f240` |
+| Pre-existing harness processes found at task start | Two stale/conflicting instances discovered bound to the same config dir/ports (one launched 2026-08-10T16:54:52-05:00 via a bare `tsx` invocation predating the phase's final commit `912d4b5` at 16:55:53-05:00; one launched 2026-08-10T12:59:35-05:00 via the root `npm run dev`/concurrently whose server child had already died, `EADDRINUSE`-shadowed by the first). Both killed (`kill`, non-destructive process termination, no file/git operation) before starting a fresh instance, per this task's own "verify explicitly, don't assume tsx-watch reload is enough" instruction. |
+| Harness restart command (this task) | `cd /Users/antemo/studyloop && STUDYLOOP_CONFIG_DIR="$HOME/.studyloop-proof-2026-08-10" STUDYLOOP_PORT=4620 WEB_PORT=4621 npm run dev` (identical to the manifest's original Harness section; `STUDYLOOP_FAKE_ANALYSIS` deliberately unset) |
+| Harness start time (server "listening" log line) | 2026-08-10T22:01:34.439Z |
+| Last code-touching commit this phase landed before restart | `912d4b5` (2026-08-10T21:55:53Z / 16:55:53-05:00) — the harness start time is after this commit, confirmed by comparing the log line's timestamp against `git log -1 --format=%cI` for that commit |
+| Combined server+web log file | `/private/tmp/claude-501/-Users-antemo/e702be0f-3d4a-42b0-9971-d19a226b9be5/scratchpad/04.1-05-harness.log` (session scratchpad; captures both `[server]`- and `[web]`-prefixed concurrently output for the correction-telemetry grep in Task 3) |
+| `GET /api/health` | `{"ok":true,"ffmpeg":true,"ytdlp":true}` |
+| `GET /api/config` isolation assertion | `dataDir: "/Users/antemo/StudyLoopProof-2026-08-10"` — the isolated proof root, not Ryan's real `~/StudyLoop` |
+| `zaiApiKeySet` (precondition check) | `true` — `llmProvider: "zai"`, `analysisModel: null` (provider default `glm-5`), matching the baseline run's provider/model |
+| Real config checksum after harness came up | `33c07b026fe886fa654a7bfc031f97db817c92eaea672581f0af80816107f240` (unchanged) |
