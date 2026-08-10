@@ -13,7 +13,7 @@ StudyLoop's engine is built (all 11 prior build phases merged) but the 2026-08-0
 
 - [x] **Phase 1: Ingestion Pipeline Repair** - Caption fallback runs in the normal flow; image-only slide PDFs warn instead of failing silently (completed 2026-08-09)
 - [x] **Phase 2: Analysis Fidelity Hardening** - Chunk-overlap dedup, enrichment marked or suppressed, overlay-field discipline (completed 2026-08-10)
-- [ ] **Phase 3: Attestation Gate & Compile Honesty** - Un-attested pearl review channel closed per LOCKED ADR; compile distinguishes Dismissed; anchors clickable
+- [x] **Phase 3: Attestation Gate & Compile Honesty** - Un-attested pearl review channel closed per LOCKED ADR; compile distinguishes Dismissed; anchors clickable (completed 2026-08-10)
 - [ ] **Phase 4: Real-Lecture Proof Re-Run** - Full end-to-end PASS on a real nursing lecture with zero manual workarounds
 - [ ] **Phase 5: Depth Tier (Accuracy-Gated)** - Library prerequisite graph, multi-video lesson composer, home-grid Threads
 
@@ -73,7 +73,7 @@ Plans:
   4. The compiled document lists dismissed units under a distinct "Dismissed" section, separate from "Not yet reviewed"
   5. Pearl/concept anchor timestamps in the compiled document are clickable links, matching user-note `^t:` token behavior
 
-**Plans:** 3/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 
@@ -121,6 +121,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Ingestion Pipeline Repair | 3/3 | Complete    | 2026-08-09 |
 | 2. Analysis Fidelity Hardening | 4/4 | Complete    | 2026-08-10 |
-| 3. Attestation Gate & Compile Honesty | 3/3 | In Progress|  |
+| 3. Attestation Gate & Compile Honesty | 3/3 | Complete    | 2026-08-10 |
 | 4. Real-Lecture Proof Re-Run | 0/TBD | Not started | - |
 | 5. Depth Tier (Accuracy-Gated) | 0/TBD | Not started | - |
