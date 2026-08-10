@@ -1,0 +1,46 @@
+{
+  "cpap-vs-peep-terminology": {
+    "status": "attested",
+    "userTake": "CPAP is the non-invasive name (mask) and PEEP is the invasive name (through a ventilator/ET tube) for the same continuous-pressure idea.",
+    "at": "2026-08-10T18:54:11.160Z"
+  },
+  "continuous-pressure-in-cpap-peep": {
+    "status": "attested",
+    "userTake": "You dial in a pressure, not a volume — it stays the same whether the patient is breathing in or breathing out.",
+    "at": "2026-08-10T18:54:11.576Z"
+  },
+  "cpap-and-peep-setting-range": {
+    "status": "attested",
+    "userTake": "Both CPAP and PEEP get dialed in somewhere in the 5 to 20 cm H2O range.",
+    "at": "2026-08-10T18:54:11.991Z"
+  },
+  "cpap-for-obstructive-sleep-apnea": {
+    "status": "attested",
+    "userTake": "The constant pressure holds the tongue forward so the airway doesn't obstruct — that's why CPAP helps with sleep apnea specifically in the non-invasive setting.",
+    "at": "2026-08-10T18:56:06.103Z"
+  },
+  "peep-alveolar-recruitment": {
+    "status": "attested",
+    "userTake": "PEEP holds the little alveolar clusters open at the end of exhale instead of letting them collapse — turning up PEEP recruits more of them.",
+    "at": "2026-08-10T18:56:06.620Z"
+  },
+  "pressure-support-ventilation": {
+    "status": "attested",
+    "userTake": "Pressure support only fires on a patient-triggered breath and delivers a set pressure instead of a set volume — no backup rate, and it's a common weaning mode.",
+    "at": "2026-08-10T18:56:07.137Z"
+  },
+  "four-ventilation-modes-compared": {
+    "status": "attested",
+    "at": "2026-08-10T18:56:18.120Z"
+  },
+  "peep-recruits-alveoli-for-oxygenation": {
+    "status": "attested",
+    "userTake": "Higher PEEP recruits more alveoli, and more recruited alveoli means better oxygenation.",
+    "userBody": "At the end of exhalation, PEEP leaves a set amount of pressure in the circuit to recruit alveoli. The higher the PEEP dial, the more alveoli get recruited -- and more recruited alveoli means better oxygenation. (edited to lead with the clinical takeaway)",
+    "at": "2026-08-10T18:57:09.919Z"
+  },
+  "ventilator-parameter-effects-on-gas-exchange": {
+    "status": "dismissed",
+    "at": "2026-08-10T18:58:44.513Z"
+  }
+}

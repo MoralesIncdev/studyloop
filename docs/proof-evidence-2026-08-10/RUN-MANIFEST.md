@@ -99,3 +99,20 @@ Stable key/value block appended to by every Phase 4 plan. Do not remove or reord
 | Enrichment-flagged count (units + pearls) | 0 |
 | Anchors to verify (units.anchors + edges) | 74 |
 | FINDINGS.md status after Task 3 | 1 new finding (F-05, OBSERVATION — evidence-from-both is 0, a genuine model judgment worth surfacing to 04-05's adversarial pass, not a bug) |
+
+## Attestation lifecycle — full spread exercised via UI (Task 1 — 04-04)
+
+| Key | Value |
+|---|---|
+| Attested (take → reveal → attest path) | 6: `cpap-vs-peep-terminology`, `continuous-pressure-in-cpap-peep`, `cpap-and-peep-setting-range`, `cpap-for-obstructive-sleep-apnea`, `peep-alveolar-recruitment`, `pressure-support-ventilation` — each with a genuine learner take typed into the card |
+| Attested (skip → reveal → attest path) | 1: `four-ventilation-modes-compared` (CLUSTER type) — no userTake, proving the skippable-generation guarantee |
+| Attested + Edited | 1: `peep-recruits-alveoli-for-oxygenation` — attested with a take, then Edit clicked, body textarea overwritten with a revised restatement, Save clicked; `userBody` in attestations.json now differs from the AI's original `unit.body` |
+| Dismissed (stays dismissed) | 1: `ventilator-parameter-effects-on-gas-exchange` (CLUSTER, 4 members) |
+| Dismissed → Undo dismiss | 1: `pressure-support-range` (DOSAGE, safety-tier) — dismissed, then Undo dismiss clicked; attestations.json entry fully removed (DELETE), proving the undo path round-trips to true "untouched" |
+| Untouched (no attestation entry) | 9: `pressure-support-range` (post-undo), `ac-mode-example-ventilator-settings`, `writing-ac-mode-ventilator-orders`, `ac-mode-breath-cycle-on-waveforms`, `vent-parameters-and-gas-exchange`, `triggered-vs-backup-breath-on-pressure-waveform`, `ac-mode-volume-set-pressure-variable`, `pressure-alarm-for-decreased-compliance`, `peak-and-plateau-pressures` |
+| Attested-with-take count | 7 of 8 attested units carry a non-empty `userTake` (all except the skip-path `four-ventilation-modes-compared`) |
+| Safety-tier cards screenshotted | 2 DOSAGE units in this analysis: `cpap-and-peep-setting-range` ("you can set CPAP anywhere from five cm of water pressure...") and `pressure-support-range` ("That could be anywhere from five to 15. Okay.") — both verbatim quote blocks captured in run-07/run-08/run-06 screenshots; both render unconditionally regardless of reveal/attestation state, confirmed |
+| Enrichment badge screenshot | N/A — this analysis carries 0 enrichment-flagged units/pearls (confirmed in the Task 3/04-03 manifest section above), so no enrichment-badged card exists to screenshot |
+| Optimistic-mutation-without-rollback check | No divergence found — every UI action that appeared to succeed was confirmed present in the persisted attestations.json once async completion was allowed for (see F-06/F-08) |
+| Automated verify script | PASS — `attested=8 withTake=7 dismissed=1 untouched=9` |
+| FINDINGS.md status after Task 1 | 1 new finding (F-06, OBSERVATION — browse-tooling ref ambiguity against this app's intentionally-duplicated DOM, not an app bug) |
