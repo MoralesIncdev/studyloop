@@ -457,6 +457,8 @@ export interface AnalysisUnit {
   members?: ClusterMember[];
   /** Phase 6 "Slide-text channel" provenance — absent means "transcript" (see UnitEvidence). */
   evidence?: UnitEvidence;
+  /** ANLZ-02 "Ungrounded enrichment marking": true when the chunk model self-reported this unit says more than its anchored transcript/slide text supports. Absent means not flagged. */
+  enrichment?: boolean;
 }
 
 export interface AnalysisEdge {

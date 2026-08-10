@@ -17,6 +17,7 @@ import { Icon } from "../components/icons";
 import { formatTimestamp } from "../lib/time";
 import { pickPrompt, promptPoolFor } from "../lib/notationPrompts";
 import { isSafetyTierUnitType } from "../lib/safetyTier";
+import { enrichmentNoticeText } from "../lib/enrichment";
 import type { AnalysisUnit, ClusterMember, UnitOverlay } from "../lib/types";
 import styles from "./UnitProposalCard.module.css";
 
@@ -189,6 +190,8 @@ export function UnitProposalCard({ unit }: Props): JSX.Element {
 
   const t = unit.anchors[0]?.t;
   const status = entry?.status;
+  // ANLZ-02: computed once here (01-03 decision) — never call enrichmentNoticeText twice inline in JSX.
+  const enrichmentNotice = enrichmentNoticeText(unit);
   const revealed = noviceMode || unlocked || Boolean(entry?.userTake?.trim());
   const canReveal = take.trim().length > 0;
 
@@ -261,6 +264,11 @@ export function UnitProposalCard({ unit }: Props): JSX.Element {
             <Icon name="key" size={13} />
           </span>
         )}
+        {enrichmentNotice && (
+          <span className={styles.enrichmentBadge} title="Enrichment — not stated in this lecture" aria-label="Enrichment — not stated in this lecture">
+            <Icon name="autoAwesome" size={13} />
+          </span>
+        )}
         {status === "attested" && (
           <span className={styles.statusBadge} title="Attested" aria-label="Attested">
             <Icon name="check" size={13} />
@@ -271,6 +279,9 @@ export function UnitProposalCard({ unit }: Props): JSX.Element {
 
       {/* V3-D D2: "one-line banner on the card ('This idea unlocks later material')". */}
       {unit.threshold && <p className={styles.thresholdBanner}>This idea unlocks later material</p>}
+
+      {/* ANLZ-02: independent conditional block, separate from the threshold banner above — provenance, not threshold-concept signaling. */}
+      {enrichmentNotice && <p className={styles.enrichmentNotice}>{enrichmentNotice}</p>}
 
       {/* V3-D D3: "Merged units display a subtle 'also in ⟨other project⟩' chip linking there." */}
       {mergedIn && mergedIn.length > 0 && (

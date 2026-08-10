@@ -338,6 +338,24 @@
   font-style: italic;
 }
 
+/* ANLZ-02 "Ungrounded enrichment marking": badge + one-line notice, colored
+   with --accent-blue (not --accent-amber) so this informational provenance
+   mark reads as distinct from the amber attention/safety signals above —
+   this is "here's where this came from", not "pay extra attention". */
+.enrichmentBadge {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent-blue);
+  flex-shrink: 0;
+}
+
+.enrichmentNotice {
+  margin: 0;
+  font-size: var(--type-11);
+  color: var(--accent-blue);
+  font-style: italic;
+}
+
 /* Phase 5 "Safety tier": verbatim transcript quote, unconditionally visible
    for safety-tier unit types (DOSAGE/CONTRAINDICATION/LAB_VALUE) — quiet but
    always-on, never gated behind reveal/attestation state. */
