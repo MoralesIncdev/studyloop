@@ -173,12 +173,26 @@ None — this plan is entirely investigation, verification, and reporting. No pr
 
 None — no external service configuration required. The isolated proof harness and zai/glm-5 credentials were already in place from 04-01; this plan performed zero configuration changes and made zero requests against the real (non-isolated) `~/.studyloop`/`~/StudyLoop` data.
 
+## Checkpoint Resolution (Task 4)
+
+**Ryan approved the report acceptance checkpoint on 2026-08-10**, verbatim:
+
+> "Ryan APPROVED the report acceptance checkpoint (2026-08-10): Phase 4 closes as-is — overall CONDITIONAL PASS, PROOF-01 stays open (unchecked, with provenance note), PROOF-02 complete. The proof project remains in place at /Users/antemo/StudyLoopProof-2026-08-10/ as evidence. F-10 (anchor drift) + F-09 (rolling captions) root-causing will be added to the roadmap as a follow-up phase by the orchestrator."
+
+**Accepted verdicts, as-is, no changes requested:**
+- Overall: **CONDITIONAL PASS** (Setup 7/10, Slides 8/10, Clinical 6/10, Document mode + compile 7/10 — all CONDITIONAL)
+- `.planning/REQUIREMENTS.md`: **PROOF-01 stays open/unchecked** (provenance note explains exactly what passed and what didn't); **PROOF-02 is Complete**
+- Proof project `41b2d9ea-a4b1-428a-b09a-7065ed3dee1f` at `/Users/antemo/StudyLoopProof-2026-08-10/` is **retained in place** as evidence, not quarantined or deleted
+- F-09/F-10/F-11 root-causing is **explicitly deferred** to a follow-up phase the orchestrator will add to the roadmap — this executor did not attempt that work, per Ryan's instruction
+
+No re-runs, re-verifications, or verdict changes were requested. Phase-level state (STATE.md, ROADMAP.md) is intentionally **not** touched by this SUMMARY finalization — the orchestrator owns phase-level state transitions, per Ryan's explicit instruction accompanying the approval.
+
 ## Next Phase Readiness
 
-- **Task 4 (the blocking checkpoint) is the only remaining step in this plan.** Ryan needs to read `docs/REAL-LECTURE-PROOF-2026-08-10.md`, spot-check the anchor-verification and safety-value evidence, review the compiled study document, and confirm the REQUIREMENTS.md checkboxes match the evidence before Phase 4 closes.
-- **Phase 5's entry gate is explicitly NOT satisfied by this run** — this proof surfaced a new extraction-accuracy defect (F-10) rather than establishing a clean accuracy baseline. Recorded in STATE.md's Blockers/Concerns; Phase 5 should not start until F-10 is either fixed with regression coverage or a separate real-use accuracy study is documented, per ROADMAP's own gate language.
+- **Phase 4 is closed** as a CONDITIONAL PASS with PROOF-01 open and PROOF-02 complete, per Ryan's explicit approval above.
+- **Phase 5's entry gate is explicitly NOT satisfied by this run** — this proof surfaced a new extraction-accuracy defect (F-10) rather than establishing a clean accuracy baseline. Already recorded in STATE.md's Blockers/Concerns as of Task 3's commit; the orchestrator will add a follow-up phase for F-09/F-10/F-11 root-causing per Ryan's message.
 - **Five watch items carried forward for Phase 5+**, all recorded in STATE.md: F-10's root cause (not yet located in application code), F-09's rolling-caption-dedup fix, F-11's likely-but-unconfirmed resolution as a side effect of fixing F-10, F-05's unresolved evidence:"both"=0 ambiguity (worth a second, more topically-overlapping deck test), and the pre-existing `pullYoutubeTranscript` no-fallback lazy-caption-pull gap (carried from Phase 1).
-- No blockers to returning the checkpoint itself — all automated verification for Tasks 1-3 passed, CI is green, and the evidence is secret-free.
+- No blockers. All automated verification for Tasks 1-3 passed, CI is green, the evidence is secret-free, and Task 4's human checkpoint is resolved.
 
 ## Self-Check: PASSED
 
@@ -186,4 +200,4 @@ All 8 created files confirmed present on disk; RUN-MANIFEST.md/FINDINGS.md/REQUI
 
 ---
 *Phase: 04-real-lecture-proof-re-run*
-*Completed: 2026-08-10 (Tasks 1-3; Task 4 checkpoint pending)*
+*Completed: 2026-08-10*
