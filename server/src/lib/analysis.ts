@@ -1752,6 +1752,39 @@ export function mergeUnitsByFingerprint(units: readonly ChunkUnitRaw[]): Analysi
  * its ANLZ-02 enrichment flag. `aliases` maps each absorbed id to its
  * surviving id so edges and pearl unitIds can be remapped instead of
  * dangling.
+ *
+ * Real-lecture proof finding (2026-08-10, F-11, Phase 04.1-04): a
+ * chunk-overlap near-duplicate can still escape this predicate even after
+ * F-10's anchor-drift correction (correctAnalysisAnchors, 04.1-01/03) runs.
+ * The observed pair — a MECHANISM unit id tokenizing to "vent" and a CLUSTER
+ * unit id tokenizing to "ventilator", both stating "the first two [AC]
+ * parameters affect CO2, the last two affect oxygenation" — is blocked by
+ * TWO of the three conditions independently of anchor time: (a) the model
+ * classified the same fact under two different unit types across its two
+ * chunk calls, and (c) "vent"/"ventilator" are different literal tokens (no
+ * stemming/fuzzy matching), so neither id's token set is a subset of the
+ * other's. Condition (b) (shared exact anchor) does not independently save
+ * the pair either — verified by running the real correction pass on the
+ * pair's real quotes: the corrected/already-in-tolerance positions land
+ * within a few seconds of each other but never exactly equal (server/test/
+ * analysisV3.test.ts, "F-11 predicate-condition evidence").
+ *
+ * Disposition (D-01 item 3, CONTEXT.md): carried as a documented limitation,
+ * not fixed. A token-alias normalization narrow enough to satisfy the
+ * safety predicate (relax ONLY the id-token subset check, never type
+ * equality or the shared-anchor requirement) would still leave this
+ * specific pair un-merged, because condition (a) — type equality — blocks
+ * it on its own, and relaxing type equality is explicitly out of scope: a
+ * MECHANISM and a CLUSTER carry different payloads (`members` exists on one
+ * and not the other; this function's collapse body has no defined semantics
+ * for folding them), so a same-type-relaxation would put a
+ * DOSAGE-into-CLAIM collapse one step away from the safety tier Phase 2
+ * D-02 deliberately hardened. With no case in the existing corpus a
+ * token-alias fix would actually resolve, adding one now would be a
+ * speculative merge-semantics change on top of a locked guarantee (D-01)
+ * for zero proven benefit — the narrowest-fix bar in D-01 item 3 is not
+ * met, so the predicate below is left untouched. See 04.1-04-SUMMARY.md for
+ * the full clause-by-clause evaluation.
  */
 export function dedupeNearDuplicateUnits(units: readonly AnalysisUnit[]): { units: AnalysisUnit[]; aliases: Map<string, string> } {
   const tokensOf = (id: string) => new Set(id.split("-").filter(Boolean));

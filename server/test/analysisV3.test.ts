@@ -1802,6 +1802,59 @@ describe("F-11 predicate-condition evidence (Phase 04.1-04 Task 1)", () => {
   });
 });
 
+// Phase 04.1-04 Task 2 (F-11, D-01 item 3): the disposition is
+// "documented limitation" (see the comment above dedupeNearDuplicateUnits
+// itself) — no token-alias normalization is adopted, because condition (a)
+// (type equality) blocks the real F-11 pair on its own and relaxing type
+// equality is explicitly out of scope (D-01 item 3, CONTEXT.md). The match
+// predicate is byte-unchanged by this task; these are the never-weaken
+// regressions the plan requires either way.
+describe("F-11 (Phase 04.1-04 Task 2): never-weaken regression — Phase 2 D-01/D-02's distinct-facts-never-merge guarantee is unaffected by this plan", () => {
+  const SAFETY_TIER_TYPES = ["DOSAGE", "CONTRAINDICATION", "LAB_VALUE", "PRIORITIZATION"] as const;
+
+  it.each(SAFETY_TIER_TYPES)("%s: two same-type safety-tier units stating DISTINCT facts, sharing an anchor timestamp, still do not auto-merge", (type) => {
+    const pair: Record<(typeof SAFETY_TIER_TYPES)[number], [string, string]> = {
+      DOSAGE: ["metoprolol-25mg-po-bid", "furosemide-40mg-iv-daily"],
+      CONTRAINDICATION: ["hold-metoprolol-if-hr-below-60", "hold-warfarin-if-inr-above-4"],
+      LAB_VALUE: ["potassium-normal-range-3-5-to-5", "sodium-normal-range-135-to-145"],
+      PRIORITIZATION: ["assess-airway-before-breathing", "reassess-vitals-before-medicating"],
+    };
+    const [labelA, labelB] = pair[type];
+    const { units, aliases } = dedupeNearDuplicateUnits([
+      finalUnit(labelA, { type, anchors: [{ t: 424.319, quote: "distinct fact a" }] }),
+      finalUnit(labelB, { type, anchors: [{ t: 424.319, quote: "distinct fact b" }] }),
+    ]);
+    expect(units).toHaveLength(2);
+    expect(aliases.size).toBe(0);
+  });
+
+  it("two units of different types stating related material — the real F-11 pair itself, forced to share an anchor — are not collapsed", () => {
+    // Reuses the real quote text/ids from the Task 1 block above: same
+    // underlying fact, same anchor, only the type differs from reality
+    // (which already blocks it) plus this explicit different-type check.
+    const mechanism = finalUnit("vent-parameters-and-gas-exchange", {
+      type: "MECHANISM",
+      anchors: [{ t: 424.319, quote: "the first two parameters are going to affect carbon dioxide." }],
+    });
+    const cluster = finalUnit("ventilator-parameter-effects-on-gas-exchange", {
+      type: "CLUSTER",
+      anchors: [{ t: 424.319, quote: "first two" }],
+    });
+    const { units, aliases } = dedupeNearDuplicateUnits([mechanism, cluster]);
+    expect(units).toHaveLength(2);
+    expect(aliases.size).toBe(0);
+  });
+
+  it("the match predicate's type-equality condition is unchanged: a same-type, proper-subset, shared-anchor pair still collapses (this plan did not tighten collapse behavior either)", () => {
+    const { units, aliases } = dedupeNearDuplicateUnits([
+      finalUnit("tidal-volume-setting-in-ac-mode", { anchors: [{ t: 449, quote: "q" }] }),
+      finalUnit("tidal-volume-in-ac-mode", { anchors: [{ t: 449, quote: "q" }] }),
+    ]);
+    expect(units).toHaveLength(1);
+    expect(aliases.get("tidal-volume-in-ac-mode")).toBe("tidal-volume-setting-in-ac-mode");
+  });
+});
+
 describe("remapEdgeAliases", () => {
   const edge = (source: string, target: string) => ({
     source,
