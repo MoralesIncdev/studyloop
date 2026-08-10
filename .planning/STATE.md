@@ -27,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-08-09)
 
 ## Current Position
 
-Phase: 4 of 5 (Real-Lecture Proof Re-Run)
-Plan: 5/5 in progress (04-05 Tasks 1-3 complete, Task 4 blocking checkpoint pending Ryan's sign-off)
-Status: Awaiting checkpoint
-Last activity: 2026-08-10 — 04-05-PLAN.md Tasks 1-3 complete: adversarial verification pass found a new anchor-timestamp-drift defect (F-10, 10/18 units up to ~282s off, both DOSAGE safety-tier units affected) plus a related near-duplicate escape (F-11) and the rolling-caption root cause (F-09) — zero hallucinated claims across all 18 units/8 pearls/8 edges, SC3 review-queue gate cleanly proven (0 violations); dated report written at docs/REAL-LECTURE-PROOF-2026-08-10.md with all four modes CONDITIONAL, overall CONDITIONAL PASS; CI green; PROOF-02 flipped Complete, PROOF-01 stays open with a provenance note
+Phase: 4 of 6 (Real-Lecture Proof Re-Run) — all 5 plans executed; VERIFICATION: passed-with-gaps
+Status: CONDITIONAL PASS accepted by Ryan 2026-08-10 (report: docs/REAL-LECTURE-PROOF-2026-08-10.md).
+PROOF-02 complete; PROOF-01 open — carried to inserted Phase 04.1 (Anchor Fidelity Repair: F-09 rolling captions, F-10 anchor drift, F-11 dedup escape).
+Formal `phase complete 4` is gated on gap closure by design — it lands when Phase 04.1 closes PROOF-01.
+Next action: /gsd-plan-phase 04.1
 
-Progress: [█████████░] 93% (advances to 100% once Task 4's checkpoint is approved and 04-05-SUMMARY.md is finalized)
 
 ## Performance Metrics
 
