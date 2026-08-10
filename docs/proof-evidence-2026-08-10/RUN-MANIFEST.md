@@ -66,3 +66,17 @@ Stable key/value block appended to by every Phase 4 plan. Do not remove or reord
 | Captions snapshot vs transcript segment count | 612 == 612, match |
 | Project created at | 2026-08-10T18:29:32.621Z |
 | FINDINGS.md status after Task 1 | 1 new finding (F-03, OBSERVATION — server-log branch confirmation unavailable to this subagent context) |
+
+## Slides — independent deck attached via UI (Task 2 — 04-03)
+
+| Key | Value |
+|---|---|
+| Attach method | UI's own "Attach slides (PDF)" control (`input[type=file]`, `gstack browse upload`, 1 action) — file path fed from a scratchpad copy of the vetted deck (browse's path-safety allowlist blocks paths outside cwd/tmp; content identical, sha256-verified before upload) |
+| Deck filename | `cdc-nhsn-vae-protocol-chapter10.pdf` |
+| pageCount | 44 |
+| emptyPageCount | 0 |
+| uploadedAt | 2026-08-10T18:32:15.206Z |
+| Attached-deck chip title (confirmed via UI) | "cdc-nhsn-vae-protocol-chapter10.pdf — 44 pages" |
+| Fold-into-analysis confirmation | No separate UI toggle exists — confirmed via source read (`server/src/routes/analyze.ts:95,113`): `readSlides()` result is unconditionally passed as `slidePages` into the analysis call whenever `slides.json` exists. Attaching IS enabling; there is nothing further to switch on. |
+| Per-page char-count comparison vs 04-01's independent extraction | MISMATCH on all 44 pages, ~3.3% aggregate shortfall in this run (128,726 vs 133,096 total chars) — same file (sha256-verified), same page count, same emptyPageCount(0); recorded as F-04 (MINOR), not averaged away. This run's number (the real upload route's output) is authoritative for what Task 3's analysis will actually consume. |
+| FINDINGS.md status after Task 2 | 1 new finding (F-04, MINOR — extraction char-count drift between 04-01's ephemeral vetting script and the real route) |
