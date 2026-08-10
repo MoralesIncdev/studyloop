@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 3
 current_phase_name: Attestation Gate & Compile Honesty
 status: in-progress
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-08-10T17:00:55.000Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-08-10T17:12:36.944Z"
 last_activity: 2026-08-10
-last_activity_desc: Phase 3 Plan 1 — route-level app.inject regressions prove GATE-01 holds end-to-end through the real GET /api/review/queue handler; GATE-01 checkbox stays Pending until 03-03 (shared declarer) also completes
+last_activity_desc: Phase 3 Plan 2 — compile.test.ts extended with the two COMP-01 partition edges (dismiss-outranks-userTake, empty-Dismissed-section truthfulness) and one COMP-02 anchor-link parity regression; COMP-01/COMP-02 checkboxes stay Pending until 03-03 (shared declarer) also completes
 progress:
-  total_phases: 2
+  total_phases: 3
   completed_phases: 2
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 10
+  completed_plans: 9
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-09)
 ## Current Position
 
 Phase: 3 of 5 (Attestation Gate & Compile Honesty)
-Plan: 1/3 executed (03-01 complete; 03-02, 03-03 pending)
+Plan: 2/3 executed (03-01, 03-02 complete; 03-03 pending)
 Status: In progress
-Last activity: 2026-08-10 — 03-01-PLAN.md complete: route-level attestation-gate proof
+Last activity: 2026-08-10 — 03-02-PLAN.md complete: COMP-01/COMP-02 compile honesty coverage
 
-Progress: [█████████░] 86%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Progress: [█████████░] 86%
 | Phase 02 P02 | 20 min | 2 tasks | 5 files |
 | Phase 02 P03 | 30 min | 3 tasks | 7 files |
 | Phase 03-attestation-gate-compile-honesty P01 | 20 min | 2 tasks | 1 file |
+| Phase 03 P02 | 15min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,7 @@ Recent decisions affecting current work:
 - [2026-08-10 Phase 2 P02] PRIORITIZATION added to `clinical.json`'s `safetyTier` array and mirrored into `safetyTier.ts`'s `SAFETY_TIER_UNIT_TYPES` (D-02, LOCKED). D-01's distinct-facts-never-merge guarantee and the verbatim-quote predicate are now regression-tested for all four safety-tier types (DOSAGE/CONTRAINDICATION/LAB_VALUE/PRIORITIZATION); `UnitProposalCard.tsx` was not touched. REQUIREMENTS.md's ANLZ-01 checkbox stays Pending: 02-04-PLAN.md also declares ANLZ-01 and hasn't run yet — shared-ID gate (#2388).
 - [2026-08-10 Phase 2 P03] ANLZ-02 repeated on the pearl channel (PearlSchema.enrichment, both LLM prompts, merge-dedupe OR in both the real prompt and FakeAnalysisClient) and extended into the compiled document (renderAnalysisPearls + renderAnalysisUnitsV3's attested branch), via a re-declared server-side ENRICHMENT_NOTE verified character-identical to the web copy. This was the second and final declaring plan for ANLZ-02 (02-01 was first) — REQUIREMENTS.md's ANLZ-02 checkbox is now Complete (shared-ID gate #2388 resolved).
 - [2026-08-10 Phase 3 P01] GATE-01 proven end-to-end at the route layer via server/test/reviewRoutes.test.ts (5 app.inject regressions against the real GET /api/review/queue handler), isolated via STUDYLOOP_CONFIG_DIR + two fs.mkdtemp roots + dynamic `await import()` of every StudyLoop module in beforeAll — no static `import ... from "../src/..."` line anywhere in the file, verified by grep. No server/src changes (test-only plan, hard constraint honored). REQUIREMENTS.md's GATE-01 checkbox stays Pending: 03-03-PLAN.md also declares GATE-01 and hasn't run yet — same shared-ID gate (#2388) precedent as ANLZ-01/ANLZ-02.
+- [2026-08-10 Phase 3 P02] COMP-01's two unguarded edges pinned (dismiss-outranks-userTake, empty-Dismissed-section truthfulness) and COMP-02/SC5 pinned as a cross-renderer parity test deriving its expected seek-link from renderNotesTokens rather than hardcoding it a second time. Renderer's analysisUnits/analysisConcepts mutual exclusivity under 'Concept breakdown' meant the parity test uses two renderCompiledDocument calls sharing one derived expectedLink, not the single call the plan described (test-authoring correction, no server/src change). Test-only plan, hard constraint honored (git diff --name-only -- server/src == 0). REQUIREMENTS.md's COMP-01/COMP-02 checkboxes stay Pending: 03-03-PLAN.md also declares both and hasn't run yet — shared-ID gate (#2388) precedent.
 
 ### Pending Todos
 
@@ -111,6 +113,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-10T17:00:55.000Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-08-10T17:12:36.937Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
