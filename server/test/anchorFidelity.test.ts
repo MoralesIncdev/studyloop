@@ -159,7 +159,9 @@ describe("correctAnalysisAnchors", () => {
     const { analysis: corrected, corrections, unresolved } = correctAnalysisAnchors(analysis, segments);
 
     expect(corrected.units![0].anchors[0].t).toBe(0);
-    expect(corrections).toEqual([{ unitId: "u-drifted", unitType: "CLAIM", before: 45, after: 0 }]);
+    // Phase 04.1-03 Task 1 widened AnchorCorrection with `locatedBy` (how
+    // the quote was located) — this quote is found as an exact substring.
+    expect(corrections).toEqual([{ unitId: "u-drifted", unitType: "CLAIM", before: 45, after: 0, locatedBy: "exact" }]);
     expect(unresolved).toEqual([]);
   });
 

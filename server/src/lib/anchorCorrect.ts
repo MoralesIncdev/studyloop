@@ -19,17 +19,46 @@
 // located it, or the oracle and the corrector could disagree).
 //
 // Pure module: no filesystem, network, or console I/O. Unit anchors are the
-// whole scope of this tracer — pearls, edges, and safety-tier reporting
-// belong to 04.1-03.
+// whole scope of this module through 04.1-01/04.1-03's Task 1 — pearls and
+// per-run correction telemetry belong to 04.1-03's Task 2.
 import { DEFAULT_TOLERANCE_SEC, buildCaptionIndex, findQuoteOccurrences, type CaptionIndex } from "./anchorVerify.js";
 import type { AnalysisUnit, UnitAnchor, UnitType } from "./analysis.js";
 import type { TranscriptSegmentInput } from "./models.js";
+
+// --- Clinical safety-tier accounting -----------------------------------------
+//
+// server/lenses/clinical.json's own `safetyTier` array (DOSAGE/
+// CONTRAINDICATION/LAB_VALUE/PRIORITIZATION) is per-lens DATA, threaded
+// through at evaluation time via conceptRegistry.ts's `EvaluateUnitParams.
+// safetyUnitTypes` — it is not a fixed set this (deliberately pure, no
+// filesystem I/O) module could read directly, and no server-side shipped
+// equivalent of web/src/lib/safetyTier.ts's `SAFETY_TIER_UNIT_TYPES` exists
+// yet (checked: grep across server/src/lib turned up only the per-lens
+// EvaluateUnitParams threading and clinical.json's own data — this is the
+// first server-side copy). Duplicated here as a plain constant, mirroring
+// web/src/lib/safetyTier.ts's set exactly, rather than invented fresh.
+export const SAFETY_TIER_UNIT_TYPES: ReadonlySet<UnitType> = new Set<UnitType>([
+  "DOSAGE",
+  "CONTRAINDICATION",
+  "LAB_VALUE",
+  "PRIORITIZATION",
+]);
+
+export function isSafetyTierUnitType(type: UnitType): boolean {
+  return SAFETY_TIER_UNIT_TYPES.has(type);
+}
+
+// --- Correction/unresolved record shapes -------------------------------------
+
+export type AnchorLocatedBy = "exact" | "normalized" | "ellipsis-first-span";
 
 export interface AnchorCorrection {
   unitId: string;
   unitType: UnitType;
   before: number;
   after: number;
+  /** How the corrected position was located — lets a caller separate an ordinary exact/normalized relocation from the ellipsis-first-span fallback without re-deriving anything. */
+  locatedBy: AnchorLocatedBy;
 }
 
 export interface UnresolvedAnchor {
@@ -61,6 +90,26 @@ export interface AnchorCorrectInput {
   units?: readonly AnalysisUnit[];
 }
 
+// --- Ellipsis-joined quote handling -------------------------------------------
+
+/**
+ * RESEARCH and 04.1-02's own cross-validation both found the model sometimes
+ * emits a quote that joins two non-contiguous transcript spans with an
+ * ellipsis (e.g. three dots or the unicode `…`) — those are unfindable as a
+ * contiguous substring by construction, no matter how good the caption
+ * stream is. Returns the trimmed text before the first ellipsis marker, or
+ * `null` when the quote carries no ellipsis (or the span before it is
+ * empty, e.g. a quote that OPENS with an ellipsis).
+ */
+const ELLIPSIS_MARKER = /\.{3,}|…/;
+
+function firstEllipsisSpan(quote: string): string | null {
+  const match = quote.match(ELLIPSIS_MARKER);
+  if (!match || match.index === undefined) return null;
+  const span = quote.slice(0, match.index).trim();
+  return span.length > 0 ? span : null;
+}
+
 /**
  * Corrects every unit anchor's `t` in `analysis.units` against `segments`
  * (the same caption stream the chunk prompts were built from). Every other
@@ -69,17 +118,23 @@ export interface AnchorCorrectInput {
  * original reference, whether or not its `t` moved.
  *
  * For each unit anchor:
- * - quote not found anywhere in the caption stream → left untouched,
- *   recorded as unresolved (a timestamp is never invented for a quote that
- *   cannot be located).
- * - some occurrence starts within tolerance of the claimed `t` → left
- *   untouched (the pass never "improves" an anchor the verifier would
- *   already accept).
- * - otherwise → `t` is set to the EARLIEST occurrence's start (D-01 item
+ * - the full quote is found (exact, then whitespace/case-normalized
+ *   substring) somewhere in the caption stream → the claimed `t` is left
+ *   untouched if any occurrence starts within tolerance of it (the pass
+ *   never "improves" an anchor the verifier would already accept);
+ *   otherwise `t` is snapped to the EARLIEST occurrence's start (D-01 item
  *   2's earliest-teaching-pass rule), recorded as a correction.
+ * - the full quote is not found, but it is two spans joined by an ellipsis
+ *   → the FIRST span is located the same way (exact, then normalized) and
+ *   its occurrence's start is used in its place; the quote text itself is
+ *   never rewritten to the matched span.
+ * - neither the full quote nor its first ellipsis span can be located →
+ *   left untouched, recorded as unresolved (a timestamp is never invented
+ *   for a quote that cannot be located).
  *
  * Never throws: an analysis with no units, or a caption stream with no
- * segments, both return with nothing corrected.
+ * segments, both return with nothing corrected (every anchor becomes
+ * unresolved rather than a false pass).
  */
 export function correctAnalysisAnchors<T extends AnchorCorrectInput>(
   analysis: T,
@@ -115,19 +170,40 @@ function correctOneAnchor(
   corrections: AnchorCorrection[],
   unresolved: UnresolvedAnchor[]
 ): UnitAnchor {
-  const occurrences = findQuoteOccurrences(index, anchor.quote);
-
-  if (occurrences.kind === "not-found") {
-    unresolved.push({ unitId: unit.id, unitType: unit.type, t: anchor.t, quote: anchor.quote });
-    return anchor;
+  const full = findQuoteOccurrences(index, anchor.quote);
+  if (full.kind !== "not-found") {
+    return applyOccurrences(unit, anchor, full.starts, full.kind, toleranceSec, corrections);
   }
 
-  const withinTolerance = occurrences.starts.some((s) => Math.abs(s - anchor.t) <= toleranceSec);
+  const firstSpan = firstEllipsisSpan(anchor.quote);
+  if (firstSpan) {
+    const spanOccurrences = findQuoteOccurrences(index, firstSpan);
+    if (spanOccurrences.kind !== "not-found") {
+      return applyOccurrences(unit, anchor, spanOccurrences.starts, "ellipsis-first-span", toleranceSec, corrections);
+    }
+  }
+
+  unresolved.push({ unitId: unit.id, unitType: unit.type, t: anchor.t, quote: anchor.quote });
+  return anchor;
+}
+
+function applyOccurrences(
+  unit: Pick<AnalysisUnit, "id" | "type">,
+  anchor: UnitAnchor,
+  starts: readonly number[],
+  locatedBy: AnchorLocatedBy,
+  toleranceSec: number,
+  corrections: AnchorCorrection[]
+): UnitAnchor {
+  const withinTolerance = starts.some((s) => Math.abs(s - anchor.t) <= toleranceSec);
   if (withinTolerance) {
     return anchor;
   }
 
-  const earliest = Math.min(...occurrences.starts);
-  corrections.push({ unitId: unit.id, unitType: unit.type, before: anchor.t, after: earliest });
+  const earliest = Math.min(...starts);
+  corrections.push({ unitId: unit.id, unitType: unit.type, before: anchor.t, after: earliest, locatedBy });
+  // The quote string is always the original reference — even the
+  // ellipsis-first-span path corrects only the position, never rewrites the
+  // quote to the span it matched against.
   return { t: earliest, quote: anchor.quote };
 }
