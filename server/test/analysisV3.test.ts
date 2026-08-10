@@ -1381,6 +1381,103 @@ describe("dedupeNearDuplicateUnits", () => {
     ]);
     expect(distinctNeighbors.units).toHaveLength(2);
   });
+
+  // D-01 (LOCKED, 02-CONTEXT.md): these cases pin the ALREADY-SHIPPED collapse
+  // semantics as regression tests — they document why the behavior is
+  // correct, not a new implementation. No edit to analysis.ts accompanies
+  // this block (git-diff-gated in the plan's <verify>).
+  describe("D-01: value-preservation on collapse — the merge is a union, never an average or truncation", () => {
+    it("preserves both distinct anchor timestamps and both quotes verbatim, sorted with no duplicates", () => {
+      // Units must share at least one anchor t to trigger the collapse at
+      // all — the shared t=449 is the trigger; t=461 and t=700 are each
+      // unique to one side and must both survive the union untouched.
+      const { units } = dedupeNearDuplicateUnits([
+        finalUnit("tidal-volume-setting-in-ac-mode", {
+          anchors: [
+            { t: 449, quote: "tidal volume is 500 mL in AC mode" },
+            { t: 700, quote: "reassessed at 700s, still 500 mL" },
+          ],
+        }),
+        finalUnit("tidal-volume-in-ac-mode", { anchors: [{ t: 449, quote: "q" }, { t: 461, quote: "set tidal volume to 500 mL" }] }),
+      ]);
+      expect(units).toHaveLength(1);
+      expect(units[0].anchors).toEqual([
+        { t: 449, quote: "tidal volume is 500 mL in AC mode" },
+        { t: 461, quote: "set tidal volume to 500 mL" },
+        { t: 700, quote: "reassessed at 700s, still 500 mL" },
+      ]);
+    });
+
+    it("confidence on the survivor is the MAXIMUM of the pair, never the mean", () => {
+      const { units } = dedupeNearDuplicateUnits([
+        finalUnit("tidal-volume-setting-in-ac-mode", { confidence: 0.4 }),
+        finalUnit("tidal-volume-in-ac-mode", { confidence: 0.95 }),
+      ]);
+      expect(units[0].confidence).toBe(0.95);
+      // Explicitly not the mean (0.675) — a high-confidence safety fact must
+      // never be dragged down by a low-confidence re-emission.
+      expect(units[0].confidence).not.toBeCloseTo(0.675);
+    });
+
+    it("the longer summary and the longer body win INDEPENDENTLY, even split across different units in the pair", () => {
+      const { units } = dedupeNearDuplicateUnits([
+        finalUnit("tidal-volume-setting-in-ac-mode", {
+          summary: "short summary",
+          body: "a much longer body with the full clinical reasoning attached",
+        }),
+        finalUnit("tidal-volume-in-ac-mode", {
+          summary: "a much longer, more complete summary of the same fact",
+          body: "short body",
+        }),
+      ]);
+      expect(units[0].summary).toBe("a much longer, more complete summary of the same fact");
+      expect(units[0].body).toBe("a much longer body with the full clinical reasoning attached");
+    });
+
+    it("when both units carry a quote at the SAME timestamp, the first-seen (survivor's) quote is kept — pinning shipped behavior, not changing it", () => {
+      const { units } = dedupeNearDuplicateUnits([
+        finalUnit("tidal-volume-setting-in-ac-mode", { anchors: [{ t: 449, quote: "survivor's quote" }] }),
+        finalUnit("tidal-volume-in-ac-mode", { anchors: [{ t: 449, quote: "absorbed unit's different quote" }] }),
+      ]);
+      expect(units).toHaveLength(1);
+      expect(units[0].anchors).toEqual([{ t: 449, quote: "survivor's quote" }]);
+    });
+  });
+
+  // D-01/D-02 (LOCKED, 02-CONTEXT.md): the four-type sweep proving the same
+  // collapse guard holds for every safety-tier type, data-driven so a fifth
+  // type is a one-line addition rather than four copied blocks.
+  describe("D-01/D-02: the four safety-tier types collapse identical twins and never merge distinct facts", () => {
+    const SAFETY_TIER_TYPES = ["DOSAGE", "CONTRAINDICATION", "LAB_VALUE", "PRIORITIZATION"] as const;
+
+    it.each(SAFETY_TIER_TYPES)("%s: two DISTINCT facts sharing an anchor timestamp, whose labels are not in a subset relation, stay as two units with an empty alias map", (type) => {
+      // Realistic clinical pairs that share an anchor only because the
+      // lecturer said them in the same breath — a different drug, or a
+      // dosage versus a lab range, must never fold into one card.
+      const pair: Record<(typeof SAFETY_TIER_TYPES)[number], [string, string]> = {
+        DOSAGE: ["metoprolol-25mg-po-bid", "furosemide-40mg-iv-daily"],
+        CONTRAINDICATION: ["hold-metoprolol-if-hr-below-60", "hold-warfarin-if-inr-above-4"],
+        LAB_VALUE: ["potassium-normal-range-3-5-to-5", "sodium-normal-range-135-to-145"],
+        PRIORITIZATION: ["assess-airway-before-breathing", "reassess-vitals-before-medicating"],
+      };
+      const [labelA, labelB] = pair[type];
+      const { units, aliases } = dedupeNearDuplicateUnits([
+        finalUnit(labelA, { type, anchors: [{ t: 449, quote: "distinct fact a" }] }),
+        finalUnit(labelB, { type, anchors: [{ t: 449, quote: "distinct fact b" }] }),
+      ]);
+      expect(units).toHaveLength(2);
+      expect(aliases.size).toBe(0);
+    });
+
+    it.each(SAFETY_TIER_TYPES)("%s: an identical twin pair (shared anchor, proper-subset labels) still collapses to one — the tier does not exempt itself from same-fact collapse", (type) => {
+      const { units, aliases } = dedupeNearDuplicateUnits([
+        finalUnit("tidal-volume-setting-in-ac-mode", { type, anchors: [{ t: 449, quote: "q" }] }),
+        finalUnit("tidal-volume-in-ac-mode", { type, anchors: [{ t: 449, quote: "q" }] }),
+      ]);
+      expect(units).toHaveLength(1);
+      expect(aliases.get("tidal-volume-in-ac-mode")).toBe("tidal-volume-setting-in-ac-mode");
+    });
+  });
 });
 
 describe("remapEdgeAliases", () => {
