@@ -12,7 +12,7 @@ StudyLoop's engine is built (all 11 prior build phases merged) but the 2026-08-0
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 - [x] **Phase 1: Ingestion Pipeline Repair** - Caption fallback runs in the normal flow; image-only slide PDFs warn instead of failing silently (completed 2026-08-09)
-- [ ] **Phase 2: Analysis Fidelity Hardening** - Chunk-overlap dedup, enrichment marked or suppressed, overlay-field discipline
+- [x] **Phase 2: Analysis Fidelity Hardening** - Chunk-overlap dedup, enrichment marked or suppressed, overlay-field discipline (completed 2026-08-10)
 - [ ] **Phase 3: Attestation Gate & Compile Honesty** - Un-attested pearl review channel closed per LOCKED ADR; compile distinguishes Dismissed; anchors clickable
 - [ ] **Phase 4: Real-Lecture Proof Re-Run** - Full end-to-end PASS on a real nursing lecture with zero manual workarounds
 - [ ] **Phase 5: Depth Tier (Accuracy-Gated)** - Library prerequisite graph, multi-video lesson composer, home-grid Threads
@@ -51,14 +51,14 @@ Plans:
   3. Stored analysis.json contains no overlay values in fields the active lens instructs to leave empty — no lone `[""]` entries survive
   4. The clinical safety tier still holds under the new merge logic: DOSAGE/CONTRAINDICATION/LAB_VALUE/PRIORITIZATION items never auto-merge and render verbatim quotes with exact values
 
-**Plans:** 2/4 plans complete
+**Plans:** 4/4 plans complete
 
 Plans:
 
 - [x] 02-01-PLAN.md — ANLZ-02 tracer: enrichment flag end-to-end, chunk wire schema to unit-card badge (wave 1)
 - [x] 02-02-PLAN.md — D-02: PRIORITIZATION joins the clinical safety tier, four-type never-auto-merge regression (wave 1)
 - [x] 02-03-PLAN.md — ANLZ-02 expansion: pearl channel through both LLM calls + compiled-document marking (wave 2)
-- [ ] 02-04-PLAN.md — ANLZ-01/ANLZ-03 audit coverage under D-01 + phase-gate human verification (wave 3)
+- [x] 02-04-PLAN.md — ANLZ-01/ANLZ-03 audit coverage under D-01 + phase-gate human verification (wave 3)
 
 ### Phase 3: Attestation Gate & Compile Honesty
 
@@ -114,7 +114,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Ingestion Pipeline Repair | 3/3 | Complete    | 2026-08-09 |
-| 2. Analysis Fidelity Hardening | 2/4 | In Progress | - |
+| 2. Analysis Fidelity Hardening | 4/4 | Complete    | 2026-08-10 |
 | 3. Attestation Gate & Compile Honesty | 0/TBD | Not started | - |
 | 4. Real-Lecture Proof Re-Run | 0/TBD | Not started | - |
 | 5. Depth Tier (Accuracy-Gated) | 0/TBD | Not started | - |
