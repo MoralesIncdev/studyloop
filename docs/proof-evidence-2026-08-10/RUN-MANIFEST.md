@@ -80,3 +80,22 @@ Stable key/value block appended to by every Phase 4 plan. Do not remove or reord
 | Fold-into-analysis confirmation | No separate UI toggle exists — confirmed via source read (`server/src/routes/analyze.ts:95,113`): `readSlides()` result is unconditionally passed as `slidePages` into the analysis call whenever `slides.json` exists. Attaching IS enabling; there is nothing further to switch on. |
 | Per-page char-count comparison vs 04-01's independent extraction | MISMATCH on all 44 pages, ~3.3% aggregate shortfall in this run (128,726 vs 133,096 total chars) — same file (sha256-verified), same page count, same emptyPageCount(0); recorded as F-04 (MINOR), not averaged away. This run's number (the real upload route's output) is authoritative for what Task 3's analysis will actually consume. |
 | FINDINGS.md status after Task 2 | 1 new finding (F-04, MINOR — extraction char-count drift between 04-01's ephemeral vetting script and the real route) |
+
+## Clinical analysis — real provider run via UI (Task 3 — 04-03)
+
+| Key | Value |
+|---|---|
+| Trigger | Clicked the study view's "Analyze" pill (`gstack browse click`, 1 UI action) — no fake-analysis override present in the running server's environment (confirmed via `ps eww` on the tsx-watch process and its node child: no `STUDYLOOP_FAKE_ANALYSIS` var set) |
+| Analyze clicked at | 2026-08-10T18:37:15Z |
+| Analyze completed (status → `done`) at | 2026-08-10T18:41:50Z |
+| Wall-clock duration | 4m35s (275s) — polled every ~10s throughout, full timestamped log in `run/analyze-status-log.json`; progress reported coarse-grained (0% → 25% for ~2m22s → 50% → done), consistent with 2 chunks at the 480s window 04-01 estimated |
+| Schema version | 3 |
+| Model (verbatim from payload) | `glm-5` — matches the configured provider default (`llmProvider: "zai"`, `analysisModel: null` in config → `PROVIDERS.zai.defaultModel === "glm-5"`, confirmed by source read of `server/src/lib/providers.ts`) |
+| source field | `model` (not `stub` — confirms the live-provider path, not `FakeAnalysisClient`) |
+| Fake-client synthetic-text scan | 0 matches — genuine provider output |
+| domain | `clinical` |
+| units / pearls / concepts / themes / edges | 18 / 8 / 18 / 4 / 8 |
+| Evidence-from-both count (units with `evidence: "both"`) | 0 (all 18 units: `evidence: "transcript"`) — a real model judgment, not forced: the attached deck is CDC/NHSN's VAE *surveillance* protocol (PEEP/FiO2 threshold definitions for infection reporting), topically narrower than the lecture's broader ventilation-modes teaching content (04-01's own provenance doc flags this deck as "not a full substitute for the lecture's broader mode coverage") — recorded honestly as 0 rather than assumed nonzero |
+| Enrichment-flagged count (units + pearls) | 0 |
+| Anchors to verify (units.anchors + edges) | 74 |
+| FINDINGS.md status after Task 3 | 1 new finding (F-05, OBSERVATION — evidence-from-both is 0, a genuine model judgment worth surfacing to 04-05's adversarial pass, not a bug) |

@@ -1,0 +1,131 @@
+[
+  {
+    "ts": "2026-08-10T18:37:32.058Z",
+    "phase": "poll-start",
+    "note": "clicked Analyze at 2026-08-10T18:37:15Z"
+  },
+  {
+    "ts": "2026-08-10T18:37:48Z",
+    "state": "running",
+    "pct": 0
+  },
+  {
+    "ts": "2026-08-10T18:37:58Z",
+    "state": "running",
+    "pct": 0
+  },
+  {
+    "ts": "2026-08-10T18:38:08Z",
+    "state": "running",
+    "pct": 0
+  },
+  {
+    "ts": "2026-08-10T18:38:18Z",
+    "state": "running",
+    "pct": 0
+  },
+  {
+    "ts": "2026-08-10T18:38:28Z",
+    "state": "running",
+    "pct": 0
+  },
+  {
+    "ts": "2026-08-10T18:38:38Z",
+    "state": "running",
+    "pct": 0
+  },
+  {
+    "ts": "2026-08-10T18:38:48Z",
+    "state": "running",
+    "pct": 0
+  },
+  {
+    "ts": "2026-08-10T18:38:58Z",
+    "state": "running",
+    "pct": 25
+  },
+  {
+    "ts": "2026-08-10T18:39:08Z",
+    "state": "running",
+    "pct": 25
+  },
+  {
+    "ts": "2026-08-10T18:39:18Z",
+    "state": "running",
+    "pct": 25
+  },
+  {
+    "ts": "2026-08-10T18:39:29Z",
+    "state": "running",
+    "pct": 25
+  },
+  {
+    "ts": "2026-08-10T18:39:39Z",
+    "state": "running",
+    "pct": 25
+  },
+  {
+    "ts": "2026-08-10T18:39:49Z",
+    "state": "running",
+    "pct": 25
+  },
+  {
+    "ts": "2026-08-10T18:39:59Z",
+    "state": "running",
+    "pct": 25
+  },
+  {
+    "ts": "2026-08-10T18:40:09Z",
+    "state": "running",
+    "pct": 25
+  },
+  {
+    "ts": "2026-08-10T18:40:19Z",
+    "state": "running",
+    "pct": 25
+  },
+  {
+    "ts": "2026-08-10T18:40:29Z",
+    "state": "running",
+    "pct": 25
+  },
+  {
+    "ts": "2026-08-10T18:40:39Z",
+    "state": "running",
+    "pct": 25
+  },
+  {
+    "ts": "2026-08-10T18:40:49Z",
+    "state": "running",
+    "pct": 25
+  },
+  {
+    "ts": "2026-08-10T18:40:59Z",
+    "state": "running",
+    "pct": 25
+  },
+  {
+    "ts": "2026-08-10T18:41:09Z",
+    "state": "running",
+    "pct": 25
+  },
+  {
+    "ts": "2026-08-10T18:41:20Z",
+    "state": "running",
+    "pct": 25
+  },
+  {
+    "ts": "2026-08-10T18:41:30Z",
+    "state": "running",
+    "pct": 50
+  },
+  {
+    "ts": "2026-08-10T18:41:40Z",
+    "state": "running",
+    "pct": 50
+  },
+  {
+    "ts": "2026-08-10T18:41:50Z",
+    "state": "done"
+  }
+]
