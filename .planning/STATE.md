@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 4
 current_phase_name: Real-Lecture Proof Re-Run
 status: executing
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-08-10T18:16:28.771Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-08-10T18:47:00.000Z"
 last_activity: 2026-08-10
-last_activity_desc: "Phase 4 Plan 1 — isolated proof harness stood up and isolation-asserted, smoke project created through the real UI with a 612-segment transcript (yt-dlp fallback fired), lecture content gate COMMIT verdict (4/5 topics taught), independent CDC/NHSN deck sourced with provenance, anchored concept doc authored for watchedUpTo"
+last_activity_desc: Phase 4 Plan 2 — committed verbatim-anchor verifier (server/src/lib/anchorVerify.ts + server/src/scripts/verifyAnchors.ts, 20 unit tests) built and cross-validated read-only against the real 2026-08-08 proof project (51 checked, 49 exact, 0 normalized, 2 genuine non-tuned violations flagged for 04-05)
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 15
-  completed_plans: 11
+  completed_plans: 12
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-09)
 ## Current Position
 
 Phase: 4 of 5 (Real-Lecture Proof Re-Run)
-Plan: 1/5 executed (04-01)
+Plan: 2/5 executed (04-02)
 Status: Executing
-Last activity: 2026-08-10 — 04-01-PLAN.md complete: isolated harness, lecture content gate (COMMIT), independent deck + concept doc
+Last activity: 2026-08-10 — 04-02-PLAN.md complete: committed verbatim-anchor verifier built, tested, and cross-validated against the real 2026-08-08 proof project
 
-Progress: [███████░░░] 73%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Progress: [███████░░░] 73%
 | Phase 03 P02 | 15min | 2 tasks | 1 files |
 | Phase 03 P03 | 20min | 2 tasks | 2 files |
 | Phase 04-real-lecture-proof-re-run P01 | 55min | 3 tasks | 10 files |
+| Phase 04 P02 | 25min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,7 @@ Recent decisions affecting current work:
 - [2026-08-10 Phase 3 P02] COMP-01's two unguarded edges pinned (dismiss-outranks-userTake, empty-Dismissed-section truthfulness) and COMP-02/SC5 pinned as a cross-renderer parity test deriving its expected seek-link from renderNotesTokens rather than hardcoding it a second time. Renderer's analysisUnits/analysisConcepts mutual exclusivity under 'Concept breakdown' meant the parity test uses two renderCompiledDocument calls sharing one derived expectedLink, not the single call the plan described (test-authoring correction, no server/src change). Test-only plan, hard constraint honored (git diff --name-only -- server/src == 0). REQUIREMENTS.md's COMP-01/COMP-02 checkboxes stay Pending: 03-03-PLAN.md also declares both and hasn't run yet — shared-ID gate (#2388) precedent.
 - [2026-08-10 Phase 3 P03] SPEC.md's F11 'Cards' and V3-B 'B4' sections corrected to the shipped attestation gate (813dc21, 468e0b8) via two 'Implementation notes' blocks in SPEC.md's own in-file convention; the model-source-analysis-is-sufficient clause is gone. REQUIREMENTS.md's GATE-01, GATE-02, COMP-01, COMP-02 entries now carry provenance parentheticals (PIPE-01 format); this is the final declaring plan for GATE-01/COMP-01/COMP-02 (shared-ID gate #2388) — all four Phase 3 checkboxes flip to Complete. Zero server/src or web/src changes across the whole phase.
 - [2026-08-10 Phase 4 P01] Isolated proof harness (STUDYLOOP_CONFIG_DIR=~/.studyloop-proof-2026-08-10, dataDir=~/StudyLoopProof-2026-08-10, ports 4620/4621) stood up and isolation-asserted before any UI interaction; smoke project 5b9601fd-4f6b-45b2-b5b9-b1b28504524b created entirely through the real browser UI with a 612-segment transcript via the yt-dlp caption fallback. Lecture content gate cleared COMMIT (4/5 topics Taught: PEEP, FiO2, pressure support, CPAP; SIMV absent). Rejected ardsnet.org for the independent deck on a genuine TLS hostname mismatch rather than bypass with curl -k; sourced CDC/NHSN's Chapter 10 VAE Protocol PDF instead (44 pages, real text layer, public-domain government work) via gstack browse's real-browser download path since CDC's Akamai edge 403s a bare curl UA. Concept doc authored with 4 anchored cards spanning 0:22-8:22 so watchedUpTo will be observable in 04-0x's compiled export.
+- [2026-08-10 Phase 4 P02] D-03's verbatim-anchor verifier committed: server/src/lib/anchorVerify.ts (pure, 20-test-covered) + server/src/scripts/verifyAnchors.ts (tsx CLI, exit-code gate) — placed inside server/tsconfig's src/test include list rather than D-03's suggested server/scripts/ or scripts/ (both outside typecheck/test surfaces), documented as a deliberate deviation. Cross-validated read-only against the real 2026-08-08 proof project: 51 checked (29 unit anchors/11 edge quotes/11 pearl timestamps), 49 exact, 0 normalized, **2 genuine violations** — both edge quotes are ellipsis-joined non-contiguous caption spans, confirmed by locating each half at separate offsets, not a verifier bug and not tuned away. This disagrees with the 2026-08-08 report's "0 violations, all 33 anchors exact substrings" claim on a strict-substring reading — 04-05 should read 04-02-SUMMARY.md's "Issues Encountered" before restating that claim. Full server suite 1047/1047 (1027 baseline + 20 new), typecheck clean. REQUIREMENTS.md's PROOF-01 checkbox stays Pending: 04-01/04-03/04-04/04-05 also declare PROOF-01 and haven't all run yet — same shared-ID gate (#2388) precedent as prior phases.
 
 ### Pending Todos
 
@@ -118,6 +120,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-10T18:16:28.761Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-08-10T18:47:00.000Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
