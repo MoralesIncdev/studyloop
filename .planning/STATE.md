@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 2
 current_phase_name: Analysis Fidelity Hardening
-status: planning
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-08-09T23:41:51.077Z"
-last_activity: 2026-08-09
-last_activity_desc: Project initialized from doc ingest (PROJECT.md, REQUIREMENTS.md, ROADMAP.md created)
+status: executing
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-08-10T01:53:59Z"
+last_activity: 2026-08-10
+last_activity_desc: Phase 2 Plan 1 — ANLZ-02 enrichment tracer executed end-to-end (server pipeline + web badge)
 progress:
-  total_phases: 1
+  total_phases: 2
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 7
+  completed_plans: 4
 ---
 
 # Project State
@@ -23,30 +23,31 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-09)
 
 **Core value:** A real lecture goes end-to-end with zero hallucinated claims and zero un-attested AI content in the review queue.
-**Current focus:** Phase 1 — Ingestion Pipeline Repair
+**Current focus:** Phase 2 — Analysis Fidelity Hardening
 
 ## Current Position
 
 Phase: 2 of 5 (Analysis Fidelity Hardening)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-08-09 — Phase 1 complete, transitioned to Phase 2
+Plan: 02-01 complete (1/4 plans in this phase)
+Status: Executing — ready for 02-02
+Last activity: 2026-08-10 — 02-01-PLAN.md executed (ANLZ-02 enrichment tracer, server pipeline + web badge)
 
-Progress: [███████░░░] 67%
+Progress: [█████░░░░░] 57%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 3
-- Average duration: -
-- Total execution time: 0.0 hours
+- Total plans completed: 4
+- Average duration: ~25 min
+- Total execution time: ~1.6 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 | 3 | - | - |
+| 2 | 1 | 35 min | 35 min |
 
 **Recent Trend:**
 
@@ -60,6 +61,7 @@ Progress: [███████░░░] 67%
 |------|----------|-------|-------|
 | Phase 01-ingestion-pipeline-repair P01 | 20 min | 3 tasks | 4 files |
 | Phase 01 P02 | 20min | 2 tasks | 6 files |
+| Phase 02-analysis-fidelity-hardening P01 | 35 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -75,6 +77,8 @@ Recent decisions affecting current work:
 - [2026-08-09 Phase 1] Descoped: the Innertube 15-minute cache wraps `resolveVideo` only, so the route-level yt-dlp caption merge is never cached and a repeat resolve of the same video re-spawns yt-dlp (up to its 30s timeout). Out of scope because PIPE-01's success criteria require the fallback to run, not to be cached; single-paste flows hit it once. Revisit if the Phase 4 proof run shows repeat-resolve latency.
 - [2026-08-09 Phase 1] Accepted: `text.trim().length === 0` is the emptiness threshold for PIPE-02; a page carrying only a footer or page number counts as non-empty. Revisit only if the Phase 4 proof deck exhibits that false negative.
 - [2026-08-09 Phase 1] emptyPageCount is computed inside PdfParseSlideExtractor's existing pagerender callback (not a second pass over pages) and defaults to 0 on SlidesMetaSchema so pre-existing slides.json files stay readable.
+- [2026-08-10 Phase 2 P01] ANLZ-02's `enrichment` field ships as `.optional()` (locked in 02-CONTEXT.md), never `.default(false)`, and both merge passes OR it rather than average/majority-vote it — same never-lose-a-signal rule as V3-D D2 threshold. D-01's `dedupeNearDuplicateUnits` match predicate is untouched; enrichment is passenger data on the collapse.
+- [2026-08-10 Phase 2 P01] REQUIREMENTS.md's ANLZ-02 checkbox stays Pending: 02-03-PLAN.md also declares ANLZ-02 (pearl/compiled-export surfaces) and hasn't run yet — shared-ID gate (#2388) flips it only once both declaring plans have a SUMMARY.
 
 ### Pending Todos
 
@@ -101,6 +105,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-09T23:21:18.437Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-08-10T01:53:59Z
+Stopped at: Completed 02-01-PLAN.md
 Resume file: None
