@@ -128,3 +128,15 @@ Stable key/value block appended to by every Phase 4 plan. Do not remove or reord
 | Concepts Covered (dock counter) | "Covered 2 / 4" — `CPAP – what it actually is` (0:22) and `Pressure support – patient does the work, machine just helps` (3:04) covered; `PEEP – the pressure that's always left over` (6:25) and `FiO2 – how much oxygen you're actually giving` (8:22) not covered — genuine partial split, screenshotted (run-11) |
 | Automated verify script | PASS — `notes=861ch tokens=3 captures=3 captioned=2 watchedUpTo=339.245...` |
 | FINDINGS.md status after Task 2 | 2 new findings (F-07 MINOR — concept-doc attach requires an undocumented prior Settings step; F-08 OBSERVATION — mine-this-moment's async chain lands after a delay, and a stray re-dispatch produced one duplicate bubble cleaned up via the UI's own Delete-capture action) |
+
+## Compile and export — full session-content render + byte-identity (Task 3 — 04-04)
+
+| Key | Value |
+|---|---|
+| Synthesis (lesson summary) | Typed into the compile flow's "In your own words" card and saved via Save & continue — `project.lessonSummary` persisted (455 chars), screenshotted pre-save (run-12) |
+| Caption step | 1 uncaptioned bubble (the 5:39 mined capture) prompted; captioned inline in the caption-pass modal ("The backup-rate explanation — ties back to unit7's cluster card...") before Save & compile |
+| Compiled document | All 5 named sections present with real content — In my own words, Notes (3 real `[mm:ss](#t=N)` seek links), Captures (3, all captioned), Concepts Covered (2/4, matching the dock counter), Concept breakdown (Pearls block + 7-of-8 attested units in full incl. the edited `userBody` + Not yet reviewed titles-only list of 9 + Dismissed titles-only list of 1) |
+| Export file | `/Users/antemo/StudyLoopProof-2026-08-10/projects/41b2d9ea-a4b1-428a-b09a-7065ed3dee1f/exports/study-2026-08-10.md` |
+| Byte-comparison result | IDENTICAL — `diff` between `run/compiled-study-doc.md` (extracted from the re-read `POST /compile` evidence-capture response) and the on-disk export file returns no differences |
+| Automated verify script | PASS — `compiled doc 10240 chars, all session sections populated, both partitions present, seek links present` |
+| FINDINGS.md status after Task 3 | None — no new findings; every session-content path rendered real content with no empty-state placeholder |
