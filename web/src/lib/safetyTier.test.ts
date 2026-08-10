@@ -23,4 +23,9 @@ describe("isSafetyTierUnitType", () => {
     expect(SAFETY_TIER_UNIT_TYPES.size).toBe(4);
     expect([...SAFETY_TIER_UNIT_TYPES].sort()).toEqual(["CONTRAINDICATION", "DOSAGE", "LAB_VALUE", "PRIORITIZATION"].sort());
   });
+
+  it("returns true for all four safety-tier types — the exact predicate UnitProposalCard's verbatim-quote block reads, so PRIORITIZATION units start rendering their quote unconditionally with zero component changes (D-02)", () => {
+    const safetyTierTypes: UnitType[] = ["DOSAGE", "CONTRAINDICATION", "LAB_VALUE", "PRIORITIZATION"];
+    for (const type of safetyTierTypes) expect(isSafetyTierUnitType(type)).toBe(true);
+  });
 });

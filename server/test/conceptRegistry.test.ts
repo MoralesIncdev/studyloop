@@ -346,6 +346,37 @@ describe("evaluateNewUnit — Phase 5 safety-tier never-auto-merge extension", (
     expect(result.outcome).toBe("auto-merged");
   });
 
+  it.each(["DOSAGE", "CONTRAINDICATION", "LAB_VALUE", "PRIORITIZATION"] as const)(
+    "D-02: never auto-merges a distinct %s fact across projects — always queues a candidate, never folds project two's value into project one's card",
+    (safetyType) => {
+      const safetyUnitTypes = new Set(["DOSAGE", "CONTRAINDICATION", "LAB_VALUE", "PRIORITIZATION"]);
+      let registry = emptyConceptRegistry();
+      registry = evaluateNewUnit(registry, {
+        projectId: "p1",
+        domain: "clinical",
+        unit: unit({ id: "u1", label: "Safety Fact", type: safetyType }),
+        nowIso: "t",
+        newId,
+      }).registry;
+
+      const result = evaluateNewUnit(registry, {
+        projectId: "p2",
+        domain: "clinical",
+        unit: unit({ id: "u2", label: "Safety Fact", type: safetyType }),
+        nowIso: "t",
+        newId,
+        safetyUnitTypes,
+      });
+
+      expect(result.outcome).toBe("candidate");
+      expect(result.registry.candidates).toHaveLength(1);
+      // The pre-existing registry unit is untouched — still only p1's original ref.
+      // No value from project two's distinct fact was folded into project one's card.
+      const original = Object.values(result.registry.units).find((u) => u.projectRefs.some((r) => r.projectId === "p1"))!;
+      expect(original.projectRefs).toEqual([{ projectId: "p1", unitId: "u1" }]);
+    }
+  );
+
   it("updateRegistryForProject threads safetyUnitTypes through to every unit in the run", () => {
     const registry = updateRegistryForProject(
       emptyConceptRegistry(),
