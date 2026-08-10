@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 3
 current_phase_name: Attestation Gate & Compile Honesty
-status: in-progress
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-08-10T17:12:36.944Z"
+status: complete
+stopped_at: Completed 03-03-PLAN.md
+last_updated: "2026-08-10T17:17:41.583Z"
 last_activity: 2026-08-10
-last_activity_desc: Phase 3 Plan 2 — compile.test.ts extended with the two COMP-01 partition edges (dismiss-outranks-userTake, empty-Dismissed-section truthfulness) and one COMP-02 anchor-link parity regression; COMP-01/COMP-02 checkboxes stay Pending until 03-03 (shared declarer) also completes
+last_activity_desc: Phase 3 Plan 3 — SPEC.md's F11/V3-B sections corrected to the shipped attestation gate, REQUIREMENTS.md provenance recorded for GATE-01/GATE-02/COMP-01/COMP-02 (all four now Complete, shared-ID gate #2388 resolved); Phase 3 (Attestation Gate & Compile Honesty) complete
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State
@@ -27,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-08-09)
 
 ## Current Position
 
-Phase: 3 of 5 (Attestation Gate & Compile Honesty)
-Plan: 2/3 executed (03-01, 03-02 complete; 03-03 pending)
-Status: In progress
-Last activity: 2026-08-10 — 03-02-PLAN.md complete: COMP-01/COMP-02 compile honesty coverage
+Phase: 3 of 5 (Attestation Gate & Compile Honesty) — complete
+Plan: 3/3 executed (03-01, 03-02, 03-03 complete)
+Status: Phase complete; ready for Phase 4 (Real-Lecture Proof Rerun)
+Last activity: 2026-08-10 — 03-03-PLAN.md complete: SPEC.md synced to shipped attestation gate; GATE-01/GATE-02/COMP-01/COMP-02 provenance recorded
 
-Progress: [█████████░] 90%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Progress: [█████████░] 90%
 | Phase 02 P03 | 30 min | 3 tasks | 7 files |
 | Phase 03-attestation-gate-compile-honesty P01 | 20 min | 2 tasks | 1 file |
 | Phase 03 P02 | 15min | 2 tasks | 1 files |
+| Phase 03 P03 | 20min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,7 @@ Recent decisions affecting current work:
 - [2026-08-10 Phase 2 P03] ANLZ-02 repeated on the pearl channel (PearlSchema.enrichment, both LLM prompts, merge-dedupe OR in both the real prompt and FakeAnalysisClient) and extended into the compiled document (renderAnalysisPearls + renderAnalysisUnitsV3's attested branch), via a re-declared server-side ENRICHMENT_NOTE verified character-identical to the web copy. This was the second and final declaring plan for ANLZ-02 (02-01 was first) — REQUIREMENTS.md's ANLZ-02 checkbox is now Complete (shared-ID gate #2388 resolved).
 - [2026-08-10 Phase 3 P01] GATE-01 proven end-to-end at the route layer via server/test/reviewRoutes.test.ts (5 app.inject regressions against the real GET /api/review/queue handler), isolated via STUDYLOOP_CONFIG_DIR + two fs.mkdtemp roots + dynamic `await import()` of every StudyLoop module in beforeAll — no static `import ... from "../src/..."` line anywhere in the file, verified by grep. No server/src changes (test-only plan, hard constraint honored). REQUIREMENTS.md's GATE-01 checkbox stays Pending: 03-03-PLAN.md also declares GATE-01 and hasn't run yet — same shared-ID gate (#2388) precedent as ANLZ-01/ANLZ-02.
 - [2026-08-10 Phase 3 P02] COMP-01's two unguarded edges pinned (dismiss-outranks-userTake, empty-Dismissed-section truthfulness) and COMP-02/SC5 pinned as a cross-renderer parity test deriving its expected seek-link from renderNotesTokens rather than hardcoding it a second time. Renderer's analysisUnits/analysisConcepts mutual exclusivity under 'Concept breakdown' meant the parity test uses two renderCompiledDocument calls sharing one derived expectedLink, not the single call the plan described (test-authoring correction, no server/src change). Test-only plan, hard constraint honored (git diff --name-only -- server/src == 0). REQUIREMENTS.md's COMP-01/COMP-02 checkboxes stay Pending: 03-03-PLAN.md also declares both and hasn't run yet — shared-ID gate (#2388) precedent.
+- [2026-08-10 Phase 3 P03] SPEC.md's F11 'Cards' and V3-B 'B4' sections corrected to the shipped attestation gate (813dc21, 468e0b8) via two 'Implementation notes' blocks in SPEC.md's own in-file convention; the model-source-analysis-is-sufficient clause is gone. REQUIREMENTS.md's GATE-01, GATE-02, COMP-01, COMP-02 entries now carry provenance parentheticals (PIPE-01 format); this is the final declaring plan for GATE-01/COMP-01/COMP-02 (shared-ID gate #2388) — all four Phase 3 checkboxes flip to Complete. Zero server/src or web/src changes across the whole phase.
 
 ### Pending Todos
 
@@ -113,6 +115,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-10T17:12:36.937Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-08-10T17:17:41.575Z
+Stopped at: Completed 03-03-PLAN.md
 Resume file: None
