@@ -41,4 +41,13 @@ Stable key/value block appended to by every Phase 4 plan. Do not remove or reord
 
 ## Deck + concept doc (Task 3 — 04-01)
 
-_Appended after Task 3 executes — see below._
+| Key | Value |
+|---|---|
+| Deck source URL | https://www.cdc.gov/nhsn/pdfs/pscmanual/10-vae_final.pdf |
+| Deck publisher | CDC / National Healthcare Safety Network (NHSN) — government health service |
+| Deck sha256 | `6f4b1cf15907e64c2f9bd737a2f6622ff437d84b6a33b9d9cccd045b06d4a822` |
+| Deck local path | `/Users/antemo/StudyLoopProof-2026-08-10/independent-deck/cdc-nhsn-vae-protocol-chapter10.pdf` (outside repo) |
+| Text-layer or image-only | Text-layer (44 pages, 0 empty, 928–4622 chars/page; 124 PEEP / 114 FiO2 mentions) |
+| Full provenance | `preflight/deck-provenance.md` |
+| Concept doc path | `docs/proof-evidence-2026-08-10/inputs/concept-doc.md` |
+| Concept doc parsed card count / anchor range | 4 cards, all anchored, anchors span 22s–502s (0:22–8:22, 480s spread) |
