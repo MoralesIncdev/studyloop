@@ -181,3 +181,22 @@ Stable key/value block appended to by every Phase 4 plan. Do not remove or reord
 | `GET /api/config` isolation assertion | `dataDir: "/Users/antemo/StudyLoopProof-2026-08-10"` — the isolated proof root, not Ryan's real `~/StudyLoop` |
 | `zaiApiKeySet` (precondition check) | `true` — `llmProvider: "zai"`, `analysisModel: null` (provider default `glm-5`), matching the baseline run's provider/model |
 | Real config checksum after harness came up | `33c07b026fe886fa654a7bfc031f97db817c92eaea672581f0af80816107f240` (unchanged) |
+
+### Re-ingest through the real UI, transcript-cleanliness check (Task 2 — 04.1-05)
+
+| Key | Value |
+|---|---|
+| Re-run proof project id | `0213f617-f887-4c33-8349-8dfdaf2213c8` |
+| Learner action count | 2 (fill URL input @e7 -> click Add @e8) — clean paste-then-submit, identical to every prior 04-0x plan, no workaround |
+| New captions.json segment count | **316** vs baseline **612** — a 48% drop, materially below |
+| Adjacent duplicate segment texts | **0** (automated verify: `adjacentDuplicateTexts=0`) |
+| First segment | `[2.63s] "Med."` — the real proof data's own shortest genuine reset cue (04.1-02-SUMMARY.md's own real-data justification for `MIN_OVERLAP_WORDS`'s complete-match escape hatch), now correctly collapsed to one clean segment rather than a duplicated stutter |
+| Resolve branch that fired | **yt-dlp caption fallback**, confirmed from the harness log file (not inferred from elapsed time — closes F-03's gap for this run): `"youtube resolve: innertube metadata-only, trying yt-dlp for captions"` (`videoId":"K0maLgTzIto","elapsedMs":1592`), request `req-k` `POST /api/youtube/resolve` completed in 20145ms (`responseTime`), same order of magnitude as the baseline's 18795ms |
+| Transcript-pane observation | Screenshotted (`screenshots/rerun-01-transcript-clean.png`) — the pane reads cleanly: `0:03 Med. / 0:03 Welcome to another MedCram lecture. / 0:04 We're going to continue in our series / 0:06 here. We're going to talk about / 0:08 additional modes of ventilation / 0:10 specifically now CPAP / 0:22 Okay, CPAP is typically the term that is` — no stutter, no repeated phrase, no visible duplication. A reader would NOT see the baseline run's stutter here; this is the concrete evidence that Setup's F-09-driven CONDITIONAL cause no longer applies to a fresh ingest. |
+| Deck sha256 (verified before upload) | `6f4b1cf15907e64c2f9bd737a2f6622ff437d84b6a33b9d9cccd045b06d4a822` — matches the manifest's recorded baseline value, confirmed on both the original path and the scratchpad copy used for upload (browse's path-safety allowlist blocks paths outside cwd/tmp, same constraint 04-03 hit) |
+| Attach method | UI's own "Attach slides (PDF)" control — the button itself isn't a file input (`gstack browse upload` on the button ref failed with "Node is not an HTMLInputElement"), so the upload was dispatched directly on the underlying `input[type=file]` element the button proxies to (one real DOM element, one genuine file-selection event) — the identical method 04-03's own manifest entry documents ("UI's own 'Attach slides (PDF)' control (`input[type=file]`, ...)"), not a new workaround |
+| pageCount / emptyPageCount | 44 / 0 — matches the baseline exactly (`slides.json` meta) |
+| Attached-deck chip (confirmed via UI text read) | `📄 cdc-nhsn-vae-protocol-chapter10.pdf · 44 pages` |
+| Original proof project (`41b2d9ea-...`) mtimes | `captions.json` Aug 10 13:29:32, `analysis.json` Aug 10 13:41:46 — unchanged from prior plans, confirmed untouched by this task |
+| Automated verify script | PASS — `project=0213f617-f887-4c33-8349-8dfdaf2213c8 segments=316 baseline=612 adjacentDuplicateTexts=0` |
+| FINDINGS.md status after Task 2 | None — no new findings; the deck-attach method matches 04-03's own documented approach exactly, not a fresh workaround |
