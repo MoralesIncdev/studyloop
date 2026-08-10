@@ -155,3 +155,12 @@ Stable key/value block appended to by every Phase 4 plan. Do not remove or reord
 | SC3 review-queue cross-check | `verification/review-queue-crosscheck.json` — **18/18 tracked+due cards resolve to a feedable attestation entry** (8 attested units + 4 pearls linked to those units + 3 learner-authored bubble captures + 4 cluster-member cards under the skip-attested `four-ventilation-modes-compared`); **0 violations**; no un-attested pearl or cluster-member card present. Data root is isolated (only the smoke project and this proof project exist), so this result is attributable to this run alone. |
 | reviewExport gate-inheritance observation | `GET /api/review/export.csv` independently re-derives the same 18-card set from the same on-disk sources as the queue (18 CSV data rows === 18 tracked/due cards) — no gate-inheritance gap observed |
 | FINDINGS.md status after Task 1 | 3 new findings, all MAJOR (F-09 rolling-caption non-dedup, F-10 anchor-timestamp drift, F-11 near-duplicate escaping dedup) + 1 clean observation (reviewExport gate-inheritance) |
+
+## Dated report (Task 2 — 04-05)
+
+| Key | Value |
+|---|---|
+| Report path | `docs/REAL-LECTURE-PROOF-2026-08-10.md` |
+| Overall verdict | **CONDITIONAL PASS** — Setup CONDITIONAL (7/10), Slides CONDITIONAL (8/10), Clinical CONDITIONAL (6/10), Document mode + compile CONDITIONAL (7/10). Zero hallucinated claims found; zero manual UI workarounds; SC3's review-queue gate cleanly proven (0 violations); PROOF-02's four session-content paths cleanly proven. The downgrade from a clean PASS is driven entirely by the anchor-timestamp-drift finding (F-10) this run's committed verifier (D-03) was specifically built to catch, plus its two direct consequences (F-09's role in the mechanical violation count, F-11's near-duplicate escape). |
+| PROOF-01 | Stays **open** (unchecked) — "all anchor quotes verbatim-verified" and "Setup is no longer CONDITIONAL" are not supported by this run's evidence; see REQUIREMENTS.md's provenance note |
+| PROOF-02 | **Complete** — its own claim (four session-content paths exercised and verified in the compiled export) is fully proven and untouched by the anchor-drift finding (notes/captures use learner-driven real-time positions, not model-generated anchors) |
