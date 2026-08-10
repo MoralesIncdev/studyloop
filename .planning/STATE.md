@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 2
 current_phase_name: Analysis Fidelity Hardening
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-08-10T01:53:59Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-08-10T01:59:09Z"
 last_activity: 2026-08-10
-last_activity_desc: Phase 2 Plan 1 — ANLZ-02 enrichment tracer executed end-to-end (server pipeline + web badge)
+last_activity_desc: Phase 2 Plan 2 — PRIORITIZATION added to safety tier on both mirror sides; D-01/D-02 regression coverage added
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 7
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-09)
 ## Current Position
 
 Phase: 2 of 5 (Analysis Fidelity Hardening)
-Plan: 02-01 complete (1/4 plans in this phase)
-Status: Executing — ready for 02-02
-Last activity: 2026-08-10 — 02-01-PLAN.md executed (ANLZ-02 enrichment tracer, server pipeline + web badge)
+Plan: 02-02 complete (2/4 plans in this phase)
+Status: Executing — ready for 02-03
+Last activity: 2026-08-10 — 02-02-PLAN.md executed (PRIORITIZATION joins safety tier on both mirror sides, D-01/D-02 regression coverage)
 
-Progress: [█████░░░░░] 57%
+Progress: [███████░░░] 71%
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Progress: [█████░░░░░] 57%
 | Phase 01-ingestion-pipeline-repair P01 | 20 min | 3 tasks | 4 files |
 | Phase 01 P02 | 20min | 2 tasks | 6 files |
 | Phase 02-analysis-fidelity-hardening P01 | 35 min | 2 tasks | 7 files |
+| Phase 02 P02 | 20 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,7 @@ Recent decisions affecting current work:
 - [2026-08-09 Phase 1] emptyPageCount is computed inside PdfParseSlideExtractor's existing pagerender callback (not a second pass over pages) and defaults to 0 on SlidesMetaSchema so pre-existing slides.json files stay readable.
 - [2026-08-10 Phase 2 P01] ANLZ-02's `enrichment` field ships as `.optional()` (locked in 02-CONTEXT.md), never `.default(false)`, and both merge passes OR it rather than average/majority-vote it — same never-lose-a-signal rule as V3-D D2 threshold. D-01's `dedupeNearDuplicateUnits` match predicate is untouched; enrichment is passenger data on the collapse.
 - [2026-08-10 Phase 2 P01] REQUIREMENTS.md's ANLZ-02 checkbox stays Pending: 02-03-PLAN.md also declares ANLZ-02 (pearl/compiled-export surfaces) and hasn't run yet — shared-ID gate (#2388) flips it only once both declaring plans have a SUMMARY.
+- [2026-08-10 Phase 2 P02] PRIORITIZATION added to `clinical.json`'s `safetyTier` array and mirrored into `safetyTier.ts`'s `SAFETY_TIER_UNIT_TYPES` (D-02, LOCKED). D-01's distinct-facts-never-merge guarantee and the verbatim-quote predicate are now regression-tested for all four safety-tier types (DOSAGE/CONTRAINDICATION/LAB_VALUE/PRIORITIZATION); `UnitProposalCard.tsx` was not touched. REQUIREMENTS.md's ANLZ-01 checkbox stays Pending: 02-04-PLAN.md also declares ANLZ-01 and hasn't run yet — shared-ID gate (#2388).
 
 ### Pending Todos
 
@@ -105,6 +107,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-10T01:53:59Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-08-10T01:59:09Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None
