@@ -195,6 +195,30 @@ describe("renderCompiledDocument — V2-C analysis sections", () => {
     expect(markdown.indexOf("## Concepts Covered")).toBeLessThan(markdown.indexOf("## Pearls"));
   });
 
+  it("ANLZ-02: a flagged pearl's bullet carries the enrichment note; an unflagged pearl's does not", () => {
+    const pearls: Pearl[] = [
+      { t: 65, label: "Grounded insight", insight: "Backed by what was said.", importance: 3 },
+      { t: 300, label: "Enriched insight", insight: "Goes beyond the transcript.", importance: 2, enrichment: true },
+    ];
+    const markdown = renderCompiledDocument({
+      title: "With flagged pearl",
+      source,
+      notes: "",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+      analysisPearls: pearls,
+    });
+    expect(markdown).toContain(
+      "★★ **[5:00](#t=300) Enriched insight** — Goes beyond the transcript. _(Not stated in this lecture — added for context)_"
+    );
+    expect(markdown).toContain("★★★ **[1:05](#t=65) Grounded insight** — Backed by what was said.");
+    // The grounded pearl's bullet does not pick up the marker.
+    const groundedLine = markdown.split("\n").find((l) => l.includes("Grounded insight"));
+    expect(groundedLine).not.toContain("Not stated in this lecture");
+  });
+
   it("renders a Concept breakdown section with anchor timestamps and body markdown", () => {
     const concepts: AnalysisConcept[] = [
       { id: "grip-fighting", title: "Grip Fighting", summary: "How to control grips.", body: "Detailed body text.", anchors: [{ t: 65 }, { t: 500 }] },
@@ -363,5 +387,58 @@ describe("renderCompiledDocument — V3-B B2 attested vs 'Not yet reviewed' unit
     });
     expect(markdown).not.toContain("Legacy Concept");
     expect(markdown).toContain("Attested Unit");
+  });
+
+  it("ANLZ-02: an attested flagged unit carries the enrichment note on its own line under the heading, above the summary", () => {
+    const flaggedUnits: AnalysisUnit[] = [{ ...units[0], enrichment: true }];
+    const markdown = renderCompiledDocument({
+      title: "V3 compile",
+      source,
+      notes: "",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+      analysisUnits: flaggedUnits,
+      unitAttestations: { "u-attested": { status: "attested", at: "t" } },
+    });
+    const heading = "### Attested Unit ([1:05](#t=65))";
+    const expectedBlock = [heading, "", "_Not stated in this lecture — added for context_", "", "Summary of the attested unit.", "", "Full AI body of the attested unit."].join("\n");
+    expect(markdown).toContain(expectedBlock);
+  });
+
+  it("ANLZ-02: an attested UNFLAGGED unit's rendered block is byte-identical to before this plan (no marker line)", () => {
+    const markdown = renderCompiledDocument({
+      title: "V3 compile",
+      source,
+      notes: "",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+      analysisUnits: [units[0]],
+      unitAttestations: { "u-attested": { status: "attested", at: "t" } },
+    });
+    const expectedBlock = ["### Attested Unit ([1:05](#t=65))", "", "Summary of the attested unit.", "", "Full AI body of the attested unit."].join("\n");
+    expect(markdown).toContain(expectedBlock);
+    expect(markdown).not.toContain("Not stated in this lecture");
+  });
+
+  it("ANLZ-02: the 'Not yet reviewed' titles-only list carries no marker, even for a flagged unattested unit", () => {
+    const flaggedUnits: AnalysisUnit[] = [units[0], { ...units[1], enrichment: true }];
+    const markdown = renderCompiledDocument({
+      title: "V3 compile",
+      source,
+      notes: "",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+      analysisUnits: flaggedUnits,
+      unitAttestations: {},
+    });
+    expect(markdown).toContain("### Not yet reviewed");
+    expect(markdown).toContain("- Untouched Unit");
+    expect(markdown).not.toContain("Not stated in this lecture");
   });
 });

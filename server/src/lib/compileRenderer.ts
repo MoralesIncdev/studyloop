@@ -75,11 +75,24 @@ function isCovered(card: ConceptCard, watchedUpTo: number): boolean {
   return card.anchors.some((a) => a.t !== null && a.t <= watchedUpTo);
 }
 
+/**
+ * ANLZ-02 "Ungrounded enrichment marking": the compiled document leaves the
+ * app and is studied/shared outside any UI that could add context, so
+ * flagged units/pearls carry the same caveat here as the in-app card. The
+ * server intentionally RE-DECLARES this string rather than importing it from
+ * `web/src/lib/enrichment.ts` — server and web are separate packages with no
+ * shared runtime module, the same "plain interface mirror, not a
+ * cross-workspace import" convention every other server/web shared shape in
+ * this codebase already follows. Must stay character-identical to
+ * `ENRICHMENT_NOTICE_TEXT` there; a dedicated test asserts the match.
+ */
+const ENRICHMENT_NOTE = "Not stated in this lecture — added for context";
+
 /** SPEC: "Pearls ... importance-starred" — ★×importance, importance-sorted then chronological. */
 function renderAnalysisPearls(pearls: readonly Pearl[]): string {
   const sorted = [...pearls].sort((a, b) => b.importance - a.importance || a.t - b.t);
   return sorted
-    .map((p) => `- ${"★".repeat(p.importance)} **${timestampLink(p.t)} ${p.label}** — ${p.insight}`)
+    .map((p) => `- ${"★".repeat(p.importance)} **${timestampLink(p.t)} ${p.label}** — ${p.insight}${p.enrichment ? ` _(${ENRICHMENT_NOTE})_` : ""}`)
     .join("\n");
 }
 
@@ -106,7 +119,9 @@ function renderAnalysisUnitsV3(units: readonly AnalysisUnit[], attestations: Att
           const entry = attestations[u.id];
           const anchorList = u.anchors.map((a) => timestampLink(a.t)).join(", ");
           const body = entry?.userBody?.trim() || u.body;
-          const lines = [`### ${u.label}${anchorList ? ` (${anchorList})` : ""}`, "", u.summary, "", body];
+          const lines = [`### ${u.label}${anchorList ? ` (${anchorList})` : ""}`, ""];
+          if (u.enrichment) lines.push(`_${ENRICHMENT_NOTE}_`, "");
+          lines.push(u.summary, "", body);
           if (entry?.userTake?.trim()) lines.push("", `**Your take:** ${entry.userTake.trim()}`);
           return lines.join("\n");
         })
