@@ -33,10 +33,13 @@ import {
   type AnalysisUnit,
   type ChunkV3Result,
   type MergeV3Result,
+  type UnitAnchor,
 } from "../src/lib/analysis.js";
+import { correctAnalysisAnchors } from "../src/lib/anchorCorrect.js";
 import { FakeLensGenerationClient, __resetLensRegistryCacheForTests, type LensGenerationLLMClient } from "../src/lib/lenses.js";
 import type { StructuredLLMCaller, StructuredLLMRequest, StructuredCallResult } from "../src/lib/providers.js";
 import type { TranscriptSegment } from "../src/lib/transcripts.js";
+import type { TranscriptSegmentInput } from "../src/lib/models.js";
 
 function segment(start: number, end: number, text = "word"): TranscriptSegment {
   return { start, end, text };
@@ -1697,6 +1700,105 @@ describe("dedupeNearDuplicateUnits", () => {
       expect(units).toHaveLength(1);
       expect(aliases.get("tidal-volume-in-ac-mode")).toBe("tidal-volume-setting-in-ac-mode");
     });
+  });
+});
+
+// Phase 04.1-04 (F-11, D-01 item 3): the real F-11 pair from
+// docs/proof-evidence-2026-08-10/FINDINGS.md and 04.1-RESEARCH.md's "Root
+// Cause: F-11" — vent-parameters-and-gas-exchange (MECHANISM, abbreviated
+// id tokens) and ventilator-parameter-effects-on-gas-exchange (CLUSTER,
+// expanded id tokens) state the same fact ("the first two [AC] parameters
+// affect CO2/minute ventilation, the last two affect oxygenation") but
+// escape dedupeNearDuplicateUnits's match predicate. This block establishes,
+// condition by condition, WHY — with a passing test behind each claim,
+// rather than asserting the RESEARCH doc's reading is still true after
+// 04.1-03's F-10 correction pass shipped. No analysis.ts edit accompanies
+// this block (git-diff-gated in this task's own <verify>).
+describe("F-11 predicate-condition evidence (Phase 04.1-04 Task 1)", () => {
+  // Real quote text and real, verified-locatable true positions — reused
+  // verbatim from server/test/anchorCorrect.test.ts's own committed
+  // REAL_DRIFT_TABLE/REAL_CORRECT_UNITS fixtures (04.1-03), which already
+  // proved these exact quotes resolve correctly through the real shipped
+  // correction pipeline. Not re-invented here.
+  const MECHANISM_QUOTE =
+    "the first two parameters are going to affect carbon dioxide. How fast you're breathing and how much breath you're taking with each breath is going to affect your minute ventilation. And the last two is going to affect your oxygenation.";
+  const MECHANISM_CLAIMED_T = 710;
+  const MECHANISM_TRUE_POSITION = 424.319;
+
+  const CLUSTER_ANCHORS: { quote: string; claimed: number; truePosition: number }[] = [
+    { quote: "first two", claimed: 430, truePosition: 427.36 },
+    { quote: "parameters are going to affect carbon", claimed: 433, truePosition: 430.08 },
+    { quote: "ventilation. And the last two", claimed: 446, truePosition: 441.919 },
+    { quote: "is going to affect your oxygenation.", claimed: 448, truePosition: 446.08 },
+  ];
+
+  function mechanismUnit(anchors: UnitAnchor[]): AnalysisUnit {
+    return finalUnit("vent-parameters-and-gas-exchange", { type: "MECHANISM", anchors });
+  }
+  function clusterUnit(anchors: UnitAnchor[]): AnalysisUnit {
+    return finalUnit("ventilator-parameter-effects-on-gas-exchange", { type: "CLUSTER", anchors });
+  }
+  function realPairSegments(): TranscriptSegmentInput[] {
+    return [
+      { start: MECHANISM_TRUE_POSITION, end: MECHANISM_TRUE_POSITION + 0.5, text: MECHANISM_QUOTE },
+      ...CLUSTER_ANCHORS.map((c) => ({ start: c.truePosition, end: c.truePosition + 0.5, text: c.quote })),
+    ];
+  }
+
+  it("condition (b) — shared exact anchor — does NOT hold after F-10's correction runs: the corrected positions land close but never exactly equal", () => {
+    const mechanism = mechanismUnit([{ t: MECHANISM_CLAIMED_T, quote: MECHANISM_QUOTE }]);
+    const cluster = clusterUnit(CLUSTER_ANCHORS.map((c) => ({ t: c.claimed, quote: c.quote })));
+
+    const { analysis: corrected, corrections } = correctAnalysisAnchors({ units: [mechanism, cluster] }, realPairSegments());
+
+    // The MECHANISM unit's drifted anchor is corrected to its true position
+    // (out-of-window, RESEARCH's largest-drift case); the CLUSTER unit's
+    // anchors were already within tolerance in the real run and stay
+    // byte-identical — matches 04.1-03's own committed drift-table finding
+    // for these same two units.
+    expect(corrections.map((c) => c.unitId)).toEqual(["vent-parameters-and-gas-exchange"]);
+    const mechanismT = corrected.units!.find((u) => u.id === "vent-parameters-and-gas-exchange")!.anchors.map((a) => a.t);
+    const clusterT = corrected.units!.find((u) => u.id === "ventilator-parameter-effects-on-gas-exchange")!.anchors.map((a) => a.t);
+    expect(mechanismT).toEqual([424.319]);
+    expect(clusterT).toEqual([430, 433, 446, 448]); // unchanged — already within tolerance, not snapped to the real position
+
+    // Assert the actual post-correction outcome rather than assuming it —
+    // the predicate requires exact numeric equality with no tolerance
+    // window, and none of the corrected/unchanged values coincide.
+    const sharesExactAnchor = mechanismT.some((t) => clusterT.includes(t));
+    expect(sharesExactAnchor).toBe(false);
+  });
+
+  it("condition (a) — type equality — blocks the pair independently of anchor time: forcing an identical shared anchor, MECHANISM vs CLUSTER still keeps the pair apart", () => {
+    const sharedT = MECHANISM_TRUE_POSITION;
+    const mechanism = mechanismUnit([{ t: sharedT, quote: MECHANISM_QUOTE }]);
+    const cluster = clusterUnit([{ t: sharedT, quote: CLUSTER_ANCHORS[0].quote }]);
+
+    const { units, aliases } = dedupeNearDuplicateUnits([mechanism, cluster]);
+    expect(units).toHaveLength(2);
+    expect(aliases.size).toBe(0);
+  });
+
+  it("condition (c) — id-token proper subset — blocks the pair independently of anchor time: forcing the SAME type and a shared anchor, 'vent' vs 'ventilator' tokenize as different literal tokens with no subset relation in either direction", () => {
+    const sharedT = MECHANISM_TRUE_POSITION;
+    // Coerce the MECHANISM unit's type to CLUSTER so condition (a) cannot
+    // also be the thing blocking the pair here — this isolates condition
+    // (c) alone. The id (and therefore its token set) is untouched.
+    const mechanismAsCluster: AnalysisUnit = { ...mechanismUnit([{ t: sharedT, quote: MECHANISM_QUOTE }]), type: "CLUSTER" };
+    const cluster = clusterUnit([{ t: sharedT, quote: CLUSTER_ANCHORS[0].quote }]);
+
+    const { units, aliases } = dedupeNearDuplicateUnits([mechanismAsCluster, cluster]);
+    expect(units).toHaveLength(2);
+    expect(aliases.size).toBe(0);
+  });
+
+  it("the current dedup pass leaves the real pair — real types, post-correction anchors — as two units: F-11 does not resolve as a side effect of F-10's fix", () => {
+    const mechanism = mechanismUnit([{ t: MECHANISM_TRUE_POSITION, quote: MECHANISM_QUOTE }]);
+    const cluster = clusterUnit(CLUSTER_ANCHORS.map((c) => ({ t: c.claimed, quote: c.quote })));
+
+    const { units, aliases } = dedupeNearDuplicateUnits([mechanism, cluster]);
+    expect(units).toHaveLength(2);
+    expect(aliases.size).toBe(0);
   });
 });
 
