@@ -339,6 +339,46 @@ describe("renderCompiledDocument — V3-B B2 attested vs 'Not yet reviewed' unit
     expect(notYetSection).not.toContain("- Attested Unit");
   });
 
+  // COMP-01 shipped in commit 468e0b8 alongside the dismissed-partition test
+  // above; these two cases pin the two edges that test left unguarded —
+  // dismiss-outranks-userTake (isUnitFeedable's dismiss-always-wins ordering),
+  // and the section's truthful absence when nothing is dismissed.
+  it("COMP-01 / SC4: dismissal outranks a generation attempt — a dismissed unit carrying a userTake still renders only in the Dismissed titles list, never its AI body or the learner's take", () => {
+    const markdown = renderCompiledDocument({
+      title: "V3 compile",
+      source,
+      notes: "",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+      analysisUnits: units,
+      unitAttestations: { "u-attested": { status: "dismissed", userTake: "I typed this before dismissing it.", at: "t" } },
+    });
+    expect(markdown).toContain("### Dismissed");
+    expect(markdown).toContain("- Attested Unit");
+    expect(markdown).not.toContain("Full AI body of the attested unit.");
+    expect(markdown).not.toContain("I typed this before dismissing it.");
+    expect(markdown).not.toContain("**Your take:**");
+  });
+
+  it("COMP-01 / SC4: the Dismissed heading is absent from the document when nothing is dismissed — the section is truthful, not a permanent empty shell", () => {
+    const markdown = renderCompiledDocument({
+      title: "V3 compile",
+      source,
+      notes: "",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+      analysisUnits: units,
+      unitAttestations: { "u-attested": { status: "attested", at: "t" } },
+    });
+    expect(markdown).not.toContain("### Dismissed");
+    expect(markdown).toContain("### Not yet reviewed");
+    expect(markdown).toContain("- Untouched Unit");
+  });
+
   it("a bare userTake (no explicit attest) is still enough to render a unit in full", () => {
     const markdown = renderCompiledDocument({
       title: "V3 compile",
