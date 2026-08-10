@@ -147,6 +147,36 @@ describe("mergeUnitsByFingerprint — V3-D D1 overlay merging", () => {
     ]);
     expect(merged[0].overlay?.mechanismType).toBe("feedback loop");
   });
+
+  // ANLZ-03 (02-04): empty-string and empty-overlay edge cases through
+  // mergeOverlayFields' only exported caller — no edit to analysis.ts
+  // accompanies this block (git-diff-gated in the plan's <verify>).
+  it("ANLZ-03: a group whose only value for an array overlay key is a single empty string yields that key absent, not a lone empty-string array", () => {
+    const merged = mergeUnitsByFingerprint([{ ...base, overlay: { entities: [""] } }]);
+    expect(merged[0].overlay?.entities).toBeUndefined();
+    expect(merged[0].overlay).toBeUndefined();
+  });
+
+  it("ANLZ-03: a group with a mix of empty and non-empty array entries keeps only the non-empty entries, in order, with no empty placeholder", () => {
+    const merged = mergeUnitsByFingerprint([
+      { ...base, overlay: { entities: ["", "mitochondria", "", "ribosome"] } },
+    ]);
+    expect(merged[0].overlay?.entities).toEqual(["mitochondria", "ribosome"]);
+  });
+
+  it("ANLZ-03: a whitespace-only scalar overlay value is dropped rather than persisted as blank", () => {
+    const merged = mergeUnitsByFingerprint([{ ...base, overlay: { mechanismType: "   " } }]);
+    expect(merged[0].overlay?.mechanismType).toBeUndefined();
+    expect(merged[0].overlay).toBeUndefined();
+  });
+
+  it("ANLZ-03: a group whose every overlay value is empty (blank scalars and empty-string-only arrays) yields overlay === undefined, never an empty object", () => {
+    const merged = mergeUnitsByFingerprint([
+      { ...base, overlay: { mechanismType: "", sourceType: "  ", entities: [""], triggers: ["", ""] } },
+      { ...base, overlay: { levelOfOrganization: "\t" } },
+    ]);
+    expect(merged[0].overlay).toBeUndefined();
+  });
 });
 
 describe("mergeUnitsByFingerprint — V3-D D2 threshold merging", () => {
@@ -1522,5 +1552,53 @@ describe("scrubOverlayToLens", () => {
     expect(scrubbed[0].overlay).toEqual({ drugClass: "beta blocker" });
     expect(scrubbed[1].overlay).toBeUndefined();
     expect(scrubbed[2].overlay).toBeUndefined();
+  });
+
+  // ANLZ-03 (02-04): edge coverage for the zero-declared-keys lens case and
+  // the no-overlay-at-all passthrough — no edit to analysis.ts accompanies
+  // this block (git-diff-gated in the plan's <verify>).
+  it("ANLZ-03: an EMPTY declared-key set collapses every unit's overlay to undefined (the zero-overlayFields lens case)", () => {
+    const scrubbed = scrubOverlayToLens(
+      [finalUnit("a", { overlay: { drugClass: "beta blocker", entities: ["x"] } })],
+      new Set()
+    );
+    expect(scrubbed[0].overlay).toBeUndefined();
+  });
+
+  it("ANLZ-03: a unit with no overlay at all is left untouched — no overlay key is introduced", () => {
+    const input = finalUnit("no-overlay");
+    expect(input.overlay).toBeUndefined();
+    expect("overlay" in input).toBe(false); // finalUnit() never sets the key when no override supplies it
+    const scrubbed = scrubOverlayToLens([input], new Set(["drugClass"]));
+    expect(scrubbed[0]).toBe(input); // early-return path: same reference, nothing spread in
+    expect("overlay" in scrubbed[0]).toBe(false);
+  });
+
+  it("ANLZ-03: the merge-then-scrub composition mirrors runAnalysisJobV3's production path — no empty-string entry and no undeclared key survives to a serialized unit", () => {
+    const clinicalKeys = new Set(["drugClass", "genericName", "brandName", "route", "normalRange", "nclexCategory"]);
+    const fingerprintUnits = mergeUnitsByFingerprint([
+      {
+        type: "DOSAGE",
+        label: "metoprolol dosing",
+        summary: "s",
+        body: "b",
+        anchors: [{ t: 100, quote: "q" }],
+        confidence: 0.9,
+        overlay: {
+          drugClass: "beta blocker",
+          entities: ["", "off-lens-value"], // off-lens key AND an in-array empty string
+          keyContext: "stray, undeclared for this lens",
+          route: "   ", // whitespace-only — must not survive as blank
+        },
+      },
+    ]);
+    const scrubbed = scrubOverlayToLens(fingerprintUnits, clinicalKeys);
+
+    const serialized = JSON.stringify(scrubbed);
+    expect(serialized).not.toContain('""'); // no empty-string entry anywhere, array or scalar
+    expect(scrubbed[0].overlay).toEqual({ drugClass: "beta blocker" });
+    for (const key of Object.keys(scrubbed[0].overlay ?? {})) {
+      expect(clinicalKeys.has(key)).toBe(true);
+    }
   });
 });
