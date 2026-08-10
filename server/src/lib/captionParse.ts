@@ -12,6 +12,16 @@
 // rips — cues whose timestamps or body don't parse cleanly. Those are
 // skipped rather than thrown on, with a running count so a caller can log
 // "N cues could not be parsed" instead of silently losing them.
+//
+// Phase 04.1 "Anchor Fidelity Repair" (D-01 item 1, F-09): after sorting,
+// every cue block runs through `dedupeRollingCaptions` (rollingCaptions.ts)
+// to collapse YouTube's rolling-caption duplication — this is the one
+// place both `parseSrtCaptions` and `parseVttCaptions` (and therefore
+// transcripts.ts's wrappers and ytdlp.ts's auto-sub path) get it from. A
+// cue dropped as a rolling duplicate is not a malformed cue — malformedCount
+// only counts cues that failed to parse at all.
+import { dedupeRollingCaptions } from "./rollingCaptions.js";
+
 export interface CaptionSegment {
   start: number;
   end: number;
@@ -107,7 +117,7 @@ function parseCueBlocks(raw: string, options: CueBlockOptions): CaptionParseResu
   }
 
   segments.sort((a, b) => a.start - b.start);
-  return { segments, malformedCount };
+  return { segments: dedupeRollingCaptions(segments), malformedCount };
 }
 
 /** Parses SubRip (.srt) subtitle text into canonical segments. */

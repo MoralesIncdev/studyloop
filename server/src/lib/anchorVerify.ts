@@ -161,52 +161,83 @@ function findAllOccurrences(haystack: string, needle: string): number[] {
 
 // --- Quote matching --------------------------------------------------------------
 
+export type QuoteOccurrenceKind = "exact" | "normalized" | "not-found";
+
+export interface QuoteOccurrences {
+  kind: QuoteOccurrenceKind;
+  /** Owning-segment start seconds for every occurrence found, in the order found (left-to-right through the joined caption stream). Empty when kind is "not-found". */
+  starts: readonly number[];
+}
+
+/**
+ * Phase 04.1 "Anchor Fidelity Repair" (D-03): the ONE occurrence-search
+ * implementation both `matchQuote` (this file, read-time verification) and
+ * `correctAnalysisAnchors` (anchorCorrect.ts, write-time correction) use —
+ * a corrected anchor can never disagree with the oracle that judges it
+ * because they share this exact search, not two independently-tuned ones.
+ *
+ * Finds every exact-substring occurrence of `quote` in `index`, falling
+ * back to a whitespace/case-normalized substring search if none is found.
+ * Returns the ordered (left-to-right) list of owning-segment start seconds
+ * for whichever bucket matched, or a "not-found" result with an empty list
+ * when no occurrence exists at all under either search.
+ */
+export function findQuoteOccurrences(index: CaptionIndex, quote: string): QuoteOccurrences {
+  if (quote.trim().length === 0) return { kind: "not-found", starts: [] };
+
+  const exactStarts = findAllOccurrences(index.exactText, quote)
+    .map((pos) => findOwningSegment(index.exactEntries, pos))
+    .filter((s): s is TranscriptSegmentInput => s !== undefined)
+    .map((s) => s.start);
+  if (exactStarts.length > 0) {
+    return { kind: "exact", starts: exactStarts };
+  }
+
+  const normalizedQuote = normalizeText(quote);
+  if (normalizedQuote.length > 0) {
+    const normalizedStarts = findAllOccurrences(index.normalizedText, normalizedQuote)
+      .map((pos) => findOwningSegment(index.normalizedEntries, pos))
+      .filter((s): s is TranscriptSegmentInput => s !== undefined)
+      .map((s) => s.start);
+    if (normalizedStarts.length > 0) {
+      return { kind: "normalized", starts: normalizedStarts };
+    }
+  }
+
+  return { kind: "not-found", starts: [] };
+}
+
 type QuoteMatch =
   | { kind: "exact" | "normalized"; segmentStart: number; withinTolerance: boolean }
   | { kind: "not-found" };
 
 /**
- * Finds every exact-substring occurrence of `quote` (falling back to a
- * whitespace/case-normalized search if none is found), and — when
- * `anchorT`/`toleranceSec` are given — prefers whichever occurrence's owning
- * segment starts within tolerance of `anchorT` over the first occurrence
- * found, so a repeated quote doesn't misreport time-drift against the wrong
- * instance. When no occurrence exists at all, returns "not-found".
+ * Finds every occurrence of `quote` (via `findQuoteOccurrences`) and — when
+ * `anchorT`/`toleranceSec` are given — prefers whichever occurrence starts
+ * within tolerance of `anchorT` over the first occurrence found, so a
+ * repeated quote doesn't misreport time-drift against the wrong instance.
+ * When no occurrence exists at all, returns "not-found". Pure extraction:
+ * this applies `findQuoteOccurrences`'s result with the same tolerance
+ * preference the pre-extraction implementation used — `verifyAnchors`
+ * classifies every input exactly as it did before.
  */
 function matchQuote(index: CaptionIndex, quote: string, anchorT?: number, toleranceSec = DEFAULT_TOLERANCE_SEC): QuoteMatch {
-  if (quote.trim().length === 0) return { kind: "not-found" };
-
-  const exactCandidates = findAllOccurrences(index.exactText, quote)
-    .map((pos) => findOwningSegment(index.exactEntries, pos))
-    .filter((s): s is TranscriptSegmentInput => s !== undefined);
-  if (exactCandidates.length > 0) {
-    return pickCandidate("exact", exactCandidates, anchorT, toleranceSec);
-  }
-
-  const normalizedQuote = normalizeText(quote);
-  if (normalizedQuote.length > 0) {
-    const normalizedCandidates = findAllOccurrences(index.normalizedText, normalizedQuote)
-      .map((pos) => findOwningSegment(index.normalizedEntries, pos))
-      .filter((s): s is TranscriptSegmentInput => s !== undefined);
-    if (normalizedCandidates.length > 0) {
-      return pickCandidate("normalized", normalizedCandidates, anchorT, toleranceSec);
-    }
-  }
-
-  return { kind: "not-found" };
+  const occurrences = findQuoteOccurrences(index, quote);
+  if (occurrences.kind === "not-found") return { kind: "not-found" };
+  return pickCandidate(occurrences.kind, occurrences.starts, anchorT, toleranceSec);
 }
 
 function pickCandidate(
   kind: "exact" | "normalized",
-  candidates: readonly TranscriptSegmentInput[],
+  starts: readonly number[],
   anchorT: number | undefined,
   toleranceSec: number
 ): QuoteMatch {
   if (anchorT !== undefined) {
-    const within = candidates.find((s) => Math.abs(s.start - anchorT) <= toleranceSec);
-    if (within) return { kind, segmentStart: within.start, withinTolerance: true };
+    const within = starts.find((s) => Math.abs(s - anchorT) <= toleranceSec);
+    if (within !== undefined) return { kind, segmentStart: within, withinTolerance: true };
   }
-  return { kind, segmentStart: candidates[0].start, withinTolerance: false };
+  return { kind, segmentStart: starts[0], withinTolerance: false };
 }
 
 function lastSegmentEnd(segments: readonly TranscriptSegmentInput[]): number | undefined {

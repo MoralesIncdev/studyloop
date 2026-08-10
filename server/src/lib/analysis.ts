@@ -30,6 +30,7 @@ import { formatTimestamp } from "./time.js";
 import { DomainSchema, type Domain, type Lens } from "./models.js";
 import { generateAndPersistLens, listLensesOrFallback, resolveLensOrGeneric, type LensGenerationLLMClient } from "./lenses.js";
 import type { TranscriptSegment } from "./transcripts.js";
+import { correctAnalysisAnchors } from "./anchorCorrect.js";
 
 // --- Public analysis.json shape (SPEC) --------------------------------------
 
@@ -1982,6 +1983,13 @@ export async function runAnalysisJobV3(params: AnalysisJobParamsV3): Promise<Ana
   // the fields kept are exactly the fields the lens told the model to fill.
   const analysisLens = resolveLensOrGeneric(params.dataDir ?? "", domain);
   const mergedUnits = scrubOverlayToLens(dedupedUnits, new Set(analysisLens.overlayFields.map((f) => f.key)));
+  // Phase 04.1 D-01 item 2 (F-10): post-merge anchor correction — cross-
+  // checks every unit anchor's claimed `t` against where its own quote
+  // really occurs in the (F-09-deduped) caption stream `params.segments`
+  // already holds, using the same matching machinery `verifyAnchors` will
+  // later judge it against (D-03's oracle is not tuned, it is satisfied).
+  const { analysis: unitsWithCorrectedAnchors } = correctAnalysisAnchors({ units: mergedUnits }, params.segments);
+  const correctedUnits = unitsWithCorrectedAnchors.units ?? mergedUnits;
   // Edges/pearls were collected against raw labels: resolve them in the
   // PRE-dedupe id space, then remap absorbed ids to their survivors.
   const knownUnitIds = new Set(fingerprintUnits.map((u) => u.id));
@@ -2015,9 +2023,9 @@ export async function runAnalysisJobV3(params: AnalysisJobParamsV3): Promise<Ana
     source: params.source ?? "model",
     domain,
     pearls: finalPearls,
-    concepts: unitsToConceptsMirror(mergedUnits),
+    concepts: unitsToConceptsMirror(correctedUnits),
     themes: merge.data.themes,
-    units: mergedUnits,
+    units: correctedUnits,
     edges: mergedEdges,
   };
 }
