@@ -482,3 +482,82 @@ describe("renderCompiledDocument — V3-B B2 attested vs 'Not yet reviewed' unit
     expect(markdown).not.toContain("Not stated in this lecture");
   });
 });
+
+describe("renderCompiledDocument — COMP-02 anchor convention parity (ROADMAP SC5)", () => {
+  // COMP-02 / SC5: pearl anchors, attested-unit anchors, and legacy analysis-
+  // concept anchors must all render the identical [mm:ss](#t=N) seek-link
+  // form a user note's ^t: token produces via renderNotesTokens — the shipped
+  // implementation is the shared private timestampLink() helper in
+  // compileRenderer.ts, called from all three sites. This test derives its
+  // expected string from renderNotesTokens's own output rather than
+  // hardcoding the link text a second time, so it guards against a future
+  // edit forking any one call site onto a different format: it only stays
+  // green if all conventions move together.
+  //
+  // renderCompiledDocument treats `analysisUnits` and `analysisConcepts` as
+  // mutually exclusive alternatives under the same "Concept breakdown"
+  // heading (analysisUnits wins whenever both are present — see "analysisUnits
+  // takes priority over analysisConcepts" above), so seeding a pearl, an
+  // attested unit, AND a legacy concept into one call would silently drop the
+  // concept heading rather than render it. The pearl+unit surfaces are proven
+  // from one call; the concept surface is proven from a second call so its
+  // heading actually renders — both assertions share the same expectedLink
+  // derived once from renderNotesTokens, which is what makes this a parity
+  // test rather than two independent per-renderer checks.
+  const source: Source = { type: "youtube", videoId: "abc123", url: "https://youtu.be/abc123" };
+  const ANCHOR_SECOND = 65; // same second the file's existing renderNotesTokens/pearl/concept tests already use
+
+  it("COMP-02: pearl, attested-unit, and legacy-concept anchors all render the same seek-link form renderNotesTokens produces for a ^t: token at the same second", () => {
+    const expectedLink = renderNotesTokens(`^t:${ANCHOR_SECOND}`);
+
+    const pearl: Pearl = { t: ANCHOR_SECOND, label: "Anchored pearl", insight: "insight text", importance: 1 };
+    const attestedUnit: AnalysisUnit = {
+      id: "u-parity",
+      type: "MECHANISM",
+      label: "Anchored Unit",
+      summary: "summary",
+      body: "body",
+      anchors: [{ t: ANCHOR_SECOND, quote: "q" }],
+      confidence: 0.9,
+      threshold: false,
+    };
+    const concept: AnalysisConcept = {
+      id: "c-parity",
+      title: "Anchored Concept",
+      summary: "summary",
+      body: "body",
+      anchors: [{ t: ANCHOR_SECOND }],
+    };
+
+    const withPearlAndUnit = renderCompiledDocument({
+      title: "Parity — pearl + attested unit",
+      source,
+      notes: "",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+      analysisPearls: [pearl],
+      analysisUnits: [attestedUnit],
+      unitAttestations: { "u-parity": { status: "attested", at: "t" } },
+    });
+    const withConcept = renderCompiledDocument({
+      title: "Parity — legacy concept",
+      source,
+      notes: "",
+      bubbles: [],
+      concepts: [],
+      watchedUpTo: 0,
+      compiledAt: "2026-07-28",
+      analysisConcepts: [concept],
+    });
+
+    const pearlLine = withPearlAndUnit.split("\n").find((l) => l.includes("Anchored pearl"));
+    const unitHeading = withPearlAndUnit.split("\n").find((l) => l.startsWith("### Anchored Unit"));
+    const conceptHeading = withConcept.split("\n").find((l) => l.startsWith("### Anchored Concept"));
+
+    expect(pearlLine).toContain(expectedLink);
+    expect(unitHeading).toContain(expectedLink);
+    expect(conceptHeading).toContain(expectedLink);
+  });
+});
