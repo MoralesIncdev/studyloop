@@ -1,0 +1,215 @@
+{
+  "checkedAt": "2026-08-10T19:34:09.892Z",
+  "dataDir": "/Users/antemo/StudyLoopProof-2026-08-10",
+  "projectId": "41b2d9ea-a4b1-428a-b09a-7065ed3dee1f",
+  "note": "Data root is isolated (STUDYLOOP_CONFIG_DIR-scoped) and contains only the smoke project (5b9601fd-..., no analysis, contributes nothing) and this proof project — every card below is attributable to this run alone, which is what makes the crosscheck meaningful rather than incidentally clean.",
+  "totalTrackedCards": 18,
+  "totalDueCards": 18,
+  "counts": {
+    "due": 18,
+    "new": 18,
+    "total": 18
+  },
+  "cards": [
+    {
+      "id": "unit:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:continuous-pressure-in-cpap-peep",
+      "kind": "unit",
+      "unitId": "continuous-pressure-in-cpap-peep",
+      "pearlDerived": false,
+      "attestationStatus": "attested",
+      "hasUserTake": true,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "unit:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:peep-alveolar-recruitment",
+      "kind": "unit",
+      "unitId": "peep-alveolar-recruitment",
+      "pearlDerived": false,
+      "attestationStatus": "attested",
+      "hasUserTake": true,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "unit:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:cpap-vs-peep-terminology",
+      "kind": "unit",
+      "unitId": "cpap-vs-peep-terminology",
+      "pearlDerived": false,
+      "attestationStatus": "attested",
+      "hasUserTake": true,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "pearl:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:25",
+      "kind": "pearl",
+      "unitId": "cpap-vs-peep-terminology",
+      "pearlDerived": true,
+      "attestationStatus": "attested",
+      "hasUserTake": true,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "bubble:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:850b5848-958b-4750-a495-28febaef0984",
+      "kind": "bubble",
+      "unitId": null,
+      "pearlDerived": false,
+      "attestationStatus": null,
+      "hasUserTake": false,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "pearl:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:106",
+      "kind": "pearl",
+      "unitId": "continuous-pressure-in-cpap-peep",
+      "pearlDerived": true,
+      "attestationStatus": "attested",
+      "hasUserTake": true,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "unit:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:cpap-and-peep-setting-range",
+      "kind": "unit",
+      "unitId": "cpap-and-peep-setting-range",
+      "pearlDerived": false,
+      "attestationStatus": "attested",
+      "hasUserTake": true,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "bubble:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:a7dfb943-7765-46df-8262-52dbd80d2fd9",
+      "kind": "bubble",
+      "unitId": null,
+      "pearlDerived": false,
+      "attestationStatus": null,
+      "hasUserTake": false,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "unit:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:cpap-for-obstructive-sleep-apnea",
+      "kind": "unit",
+      "unitId": "cpap-for-obstructive-sleep-apnea",
+      "pearlDerived": false,
+      "attestationStatus": "attested",
+      "hasUserTake": true,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "pearl:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:244",
+      "kind": "pearl",
+      "unitId": "peep-alveolar-recruitment",
+      "pearlDerived": true,
+      "attestationStatus": "attested",
+      "hasUserTake": true,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "unit:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:pressure-support-ventilation",
+      "kind": "unit",
+      "unitId": "pressure-support-ventilation",
+      "pearlDerived": false,
+      "attestationStatus": "attested",
+      "hasUserTake": true,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "bubble:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:04ebdaac-ef08-4a68-9b01-64bf338da84f",
+      "kind": "bubble",
+      "unitId": null,
+      "pearlDerived": false,
+      "attestationStatus": null,
+      "hasUserTake": false,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "pearl:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:406",
+      "kind": "pearl",
+      "unitId": "pressure-support-ventilation",
+      "pearlDerived": true,
+      "attestationStatus": "attested",
+      "hasUserTake": true,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "four-ventilation-modes-compared::m0",
+      "kind": "clusterMember",
+      "unitId": "four-ventilation-modes-compared",
+      "pearlDerived": false,
+      "attestationStatus": "attested",
+      "hasUserTake": false,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "unit:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:peep-recruits-alveoli-for-oxygenation",
+      "kind": "unit",
+      "unitId": "peep-recruits-alveoli-for-oxygenation",
+      "pearlDerived": false,
+      "attestationStatus": "attested",
+      "hasUserTake": true,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "four-ventilation-modes-compared::m1",
+      "kind": "clusterMember",
+      "unitId": "four-ventilation-modes-compared",
+      "pearlDerived": false,
+      "attestationStatus": "attested",
+      "hasUserTake": false,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "four-ventilation-modes-compared::m2",
+      "kind": "clusterMember",
+      "unitId": "four-ventilation-modes-compared",
+      "pearlDerived": false,
+      "attestationStatus": "attested",
+      "hasUserTake": false,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    },
+    {
+      "id": "four-ventilation-modes-compared::m3",
+      "kind": "clusterMember",
+      "unitId": "four-ventilation-modes-compared",
+      "pearlDerived": false,
+      "attestationStatus": "attested",
+      "hasUserTake": false,
+      "feedable": true,
+      "trackedInReviewState": true,
+      "inDueResponse": true
+    }
+  ],
+  "violations": [],
+  "pearlOrClusterCardsWithNoUnitLink": []
+}

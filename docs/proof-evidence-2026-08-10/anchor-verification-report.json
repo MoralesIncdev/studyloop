@@ -1,0 +1,233 @@
+{
+  "checkedAt": "2026-08-10T19:25:11.091Z",
+  "toleranceSec": 15,
+  "totals": {
+    "checked": 82,
+    "units": 66,
+    "edges": 8,
+    "pearls": 8
+  },
+  "results": {
+    "exact": 50,
+    "normalized": 0
+  },
+  "violations": [
+    {
+      "kind": "unit",
+      "id": "cpap-vs-peep-terminology",
+      "t": 22,
+      "quote": "CPAP is typically the term that is used if this is non-invasive ventilation. In other words, if instead of putting a tube down into someone's throat, we instead did a mask to fit over their face like a BiPAP mask or a CPAP mask in fact is what it's called.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "cpap-vs-peep-terminology",
+      "t": 45,
+      "quote": "you have a ventilator on uh and invasively then it's kind of known as PEEP",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "continuous-pressure-in-cpap-peep",
+      "t": 53,
+      "quote": "This mode of ventilation is simply you're not dialing in a vent setting. You're not dialing in a specific volume. In fact, what you're do what you are dialing in, however, is a pressure. But this pressure is continuous.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "continuous-pressure-in-cpap-peep",
+      "t": 112,
+      "quote": "it doesn't matter whether the patient is breathing in or whether the patient is breathing out, they're always getting the same amount of pressure",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "continuous-pressure-in-cpap-peep",
+      "t": 142,
+      "quote": "PEEP stands for positive and expiratory pressure. that positive end expiratory pressure is there even at the end of exhalation. So that when you breathe out instead of having zero pressure in your lungs, there's actually still pressure in there.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "cpap-and-peep-setting-range",
+      "t": 122,
+      "quote": "you can set CPAP anywhere from five cm of water pressure all the way up to 20. PE can be anywhere from 5 to 20 as well.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "peep-alveolar-recruitment",
+      "t": 232,
+      "quote": "these airways come down to small little tiny airways where they have little grape-like clusters. That PEEP or that positive end expiratory pressure is really good at keeping those alveoli open and what we call recruited.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "peep-alveolar-recruitment",
+      "t": 249,
+      "quote": "if you'd like to keep those alveoli open, you can increase the PEEP on the ventilator",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "cpap-for-obstructive-sleep-apnea",
+      "t": 216,
+      "quote": "this could have a lot of good impact in the non-invasive mode if you've got obstructive sleep apnea because that pressure in your airway is going to keep your tongue forward. It's going to keep your airway open so that you don't have obstructive sleep apnea.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "pressure-support-ventilation",
+      "t": 306,
+      "quote": "pressure support or just PS. Now, this is kind of like PEEP and CPAP except it only occurs",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "pressure-support-ventilation",
+      "t": 328,
+      "quote": "this is kind of like AC except that instead of delivering a specific volume, this patient is going to get a certain amount of pressure. So it delivers a specific pressure support for each breath. Now the patient initiates all the breaths.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "pressure-support-ventilation",
+      "t": 354,
+      "quote": "This is a little different from pressure control where in pressure control you can actually set the rate.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "pressure-support-ventilation",
+      "t": 400,
+      "quote": "higher pressure supports give bigger breaths. The bigger the pressure, the bigger the breath is going to be. This is a very popular weaning mode of ventilation",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "pressure-support-range",
+      "t": 448,
+      "quote": "That could be anywhere from five to 15. Okay.",
+      "reason": "time-drift",
+      "matchedSegmentStart": 288.32
+    },
+    {
+      "kind": "unit",
+      "id": "four-ventilation-modes-compared",
+      "t": 410,
+      "quote": "we've already talked about four different modes. We've talked about AC, where the patient triggers the ventilator and the patient gets a specific volume of breath. We've talked about pressure control, where the patient or the ventilator can both cause the ventilator to give a specific pressure and then come back down to specific pressure. And we've talked about CPAP, where the patient is on a continuous pressure regardless of whether or not they're taking a breath in or out. And then we just talked about pressure support ventilation where on each breath that the patient triggers the ventilator on, they get a specific amount of pressure.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "writing-ac-mode-ventilator-orders",
+      "t": 501,
+      "quote": "there's four things that you should know about writing the orders for vent",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "writing-ac-mode-ventilator-orders",
+      "t": 511,
+      "quote": "The first thing you need to know is you need to write a mode. In this case, we're going to do AC. Remember that's assist control continuous mandatory ventilation.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "writing-ac-mode-ventilator-orders",
+      "t": 537,
+      "quote": "if we put 16, that means the patient is going to receive at least 16 breaths per minute. If he doesn't breathe, the ventilator is going to give that to him.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "writing-ac-mode-ventilator-orders",
+      "t": 552,
+      "quote": "you need to put in a tidal volume. And let's just say it's going to be 550 milliliters.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "writing-ac-mode-ventilator-orders",
+      "t": 605,
+      "quote": "The next thing you put in is the FiO2. So what is that? The FiO2 is the fractional inspiration of oxygen.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "writing-ac-mode-ventilator-orders",
+      "t": 615,
+      "quote": "let's just say we're going to set it to about 50%. That means 50% of the volume of the patient's breathing is going to be oxygen.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "writing-ac-mode-ventilator-orders",
+      "t": 626,
+      "quote": "the last thing that we set is the PEEP. Let's say it's five.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "vent-parameters-and-gas-exchange",
+      "t": 710,
+      "quote": "the first two parameters are going to affect carbon dioxide. How fast you're breathing and how much breath you're taking with each breath is going to affect your minute ventilation. And the last two is going to affect your oxygenation.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "unit",
+      "id": "vent-parameters-and-gas-exchange",
+      "t": 730,
+      "quote": "the amount of oxygen you put in is going to affect how much oxygen you read on your saturation. And as it turns out, the higher the PEEP, the more alveoli you can recruit and therefore the better the oxygenation is going to be.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "edge",
+      "id": "cpap-for-obstructive-sleep-apnea->continuous-pressure-in-cpap-peep",
+      "quote": "this could have a lot of good impact in the non-invasive mode if you've got obstructive sleep apnea because that pressure in your airway is going to keep your tongue forward.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "edge",
+      "id": "peep-alveolar-recruitment->continuous-pressure-in-cpap-peep",
+      "quote": "That PEEP or that positive end expiratory pressure is really good at keeping those alveoli open and what we call recruited.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "edge",
+      "id": "pressure-support-ventilation->four-ventilation-modes-compared",
+      "quote": "we've already talked about four different modes...And then we just talked about pressure support ventilation",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "edge",
+      "id": "writing-ac-mode-ventilator-orders->four-ventilation-modes-compared",
+      "quote": "The first thing you need to know is you need to write a mode. In this case, we're going to do AC.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "edge",
+      "id": "vent-parameters-and-gas-exchange->writing-ac-mode-ventilator-orders",
+      "quote": "the first two parameters are going to affect carbon dioxide...And the last two is going to affect your oxygenation.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "edge",
+      "id": "pressure-alarm-for-decreased-compliance->ac-mode-volume-set-pressure-variable",
+      "quote": "you can actually set a pressure alarm here so that if the compliance of the lung does go down",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "edge",
+      "id": "ac-mode-breath-cycle-on-waveforms->ac-mode-volume-set-pressure-variable",
+      "quote": "we're still going to give the same volume. But what you would see is you would see a higher pressure.",
+      "reason": "quote-not-found"
+    },
+    {
+      "kind": "edge",
+      "id": "ac-mode-example-ventilator-settings->ac-mode-breath-cycle-on-waveforms",
+      "quote": "So what we have here recall is AC 16, tidal volume 550, FiO2 of 50% and a PEEP of five. So the first thing you want to notice",
+      "reason": "quote-not-found"
+    }
+  ]
+}

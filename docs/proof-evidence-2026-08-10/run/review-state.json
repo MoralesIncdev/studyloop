@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "cards": {
+    "unit:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:continuous-pressure-in-cpap-peep": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "unit:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:peep-alveolar-recruitment": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "unit:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:cpap-vs-peep-terminology": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "pearl:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:25": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "bubble:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:850b5848-958b-4750-a495-28febaef0984": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "pearl:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:106": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "unit:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:cpap-and-peep-setting-range": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "bubble:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:a7dfb943-7765-46df-8262-52dbd80d2fd9": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "unit:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:cpap-for-obstructive-sleep-apnea": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "pearl:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:244": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "unit:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:pressure-support-ventilation": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "bubble:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:04ebdaac-ef08-4a68-9b01-64bf338da84f": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "pearl:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:406": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "four-ventilation-modes-compared::m0": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "unit:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:peep-recruits-alveoli-for-oxygenation": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "four-ventilation-modes-compared::m1": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "four-ventilation-modes-compared::m2": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    },
+    "four-ventilation-modes-compared::m3": {
+      "due": "2026-08-10T19:31:56.211Z",
+      "interval": 0,
+      "lapses": 0,
+      "reps": 0,
+      "lastGrade": null,
+      "introducedAt": "2026-08-10T19:31:56.211Z"
+    }
+  },
+  "transformed": {
+    "pearl:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:25": {
+      "front": "A patient requires positive pressure via a face mask without an endotracheal tube. Which therapy is this?\nA) PEEP\nB) CPAP\nC) Ventilator\nD) Invasive PEEP",
+      "back": "B) CPAP",
+      "why": "CPAP is delivered non-invasively via a face mask, whereas PEEP uses an invasive ventilator circuit with an endotracheal tube.",
+      "sourceHash": "65c9cb6e8c325ba1"
+    },
+    "pearl:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:106": {
+      "front": "A patient is on CPAP. How does the set pressure behave? A) Varies with volume B) Stays constant in and out C) Only on expiration D) Only on inspiration",
+      "back": "B) Stays constant in and out",
+      "why": "CPAP/PEEP dials in a pressure that stays the same whether breathing in or out, ruling out volume (A) and single-phase options (C, D).",
+      "sourceHash": "a6a81483a6a1b29d"
+    },
+    "pearl:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:244": {
+      "front": "A nurse increases a ventilated patient's PEEP. This improves oxygenation by:\nA) Recruiting alveoli\nB) Reducing pressure\nC) Collapsing alveoli\nD) Shortening exhalation",
+      "back": "A) Recruiting alveoli",
+      "why": "PEEP keeps airways and alveoli open at end-exhalation (recruitment); higher PEEP recruits more alveoli and improves O2—options B-D are not supported.",
+      "sourceHash": "12e196d65eb36e30"
+    },
+    "pearl:41b2d9ea-a4b1-428a-b09a-7065ed3dee1f:406": {
+      "front": "A patient is being weaned from the ventilator. Which mode delivers a set pressure with each patient-triggered breath, where higher pressure yields larger breaths? A) Pressure support B) PEEP C) CPAP D) SIMV",
+      "back": "A) Pressure support",
+      "why": "Pressure support delivers a set pressure with each patient-triggered breath and is a popular weaning mode; the other options are not described this way in the source text.",
+      "sourceHash": "b8d7a6f17bb8f4dc"
+    }
+  }
+}
