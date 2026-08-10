@@ -15,7 +15,7 @@ Active scope for Milestone 1 (Student-Ready Real-Lecture Proof + accuracy-gated 
 ### Analysis Fidelity (ANLZ)
 
 - [ ] **ANLZ-01**: The merge pass dedups anchor-time-aware, not by label fingerprint alone — chunk-overlap re-emissions of the same fact under different labels no longer survive as near-duplicate units (e.g. the two identical tidal-volume DOSAGE cards at t=449). (Proof Bug 3; `mergeUnitsByFingerprint` in `server/src/lib/analysis.ts`.)
-- [ ] **ANLZ-02**: Ungrounded-but-correct enrichment (definitions/terms the lecture only name-drops) is marked as enrichment or suppressed — no claim absent from the transcript/slides evidence presents as lecture-derived at an anchor timestamp. (Proof Bug 6.)
+- [x] **ANLZ-02**: Ungrounded-but-correct enrichment (definitions/terms the lecture only name-drops) is marked as enrichment or suppressed — no claim absent from the transcript/slides evidence presents as lecture-derived at an anchor timestamp. (Proof Bug 6.)
 - [ ] **ANLZ-03**: Overlay fields a lens instructs to leave empty stay empty in stored analysis.json — empty-string entries (including lone `[""]`) are filtered at generation/validation, not only at merge. (Proof Bug 5; `analysis.ts:155-158`.)
 
 ### Attestation Gate (GATE)
@@ -112,7 +112,7 @@ Active v1 requirements → roadmap phases. Baseline requirements are guarded by 
 | PIPE-01 | Phase 1 | Complete |
 | PIPE-02 | Phase 1 | Complete |
 | ANLZ-01 | Phase 2 | Pending |
-| ANLZ-02 | Phase 2 | Pending |
+| ANLZ-02 | Phase 2 | Complete |
 | ANLZ-03 | Phase 2 | Pending |
 | GATE-01 | Phase 3 | Pending |
 | GATE-02 | Phase 3 | Pending |

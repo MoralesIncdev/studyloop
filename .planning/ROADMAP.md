@@ -57,7 +57,7 @@ Plans:
 
 - [x] 02-01-PLAN.md — ANLZ-02 tracer: enrichment flag end-to-end, chunk wire schema to unit-card badge (wave 1)
 - [x] 02-02-PLAN.md — D-02: PRIORITIZATION joins the clinical safety tier, four-type never-auto-merge regression (wave 1)
-- [ ] 02-03-PLAN.md — ANLZ-02 expansion: pearl channel through both LLM calls + compiled-document marking (wave 2)
+- [x] 02-03-PLAN.md — ANLZ-02 expansion: pearl channel through both LLM calls + compiled-document marking (wave 2)
 - [ ] 02-04-PLAN.md — ANLZ-01/ANLZ-03 audit coverage under D-01 + phase-gate human verification (wave 3)
 
 ### Phase 3: Attestation Gate & Compile Honesty

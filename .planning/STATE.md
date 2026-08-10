@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 2
 current_phase_name: Analysis Fidelity Hardening
 status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-08-10T01:59:09Z"
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-08-10T02:13:27.774Z"
 last_activity: 2026-08-10
-last_activity_desc: Phase 2 Plan 2 — PRIORITIZATION added to safety tier on both mirror sides; D-01/D-02 regression coverage added
+last_activity_desc: Phase 2 Plan 3 — ANLZ-02 enrichment extended across the pearl channel and the compiled document; requirement now Complete
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -28,19 +28,19 @@ See: .planning/PROJECT.md (updated 2026-08-09)
 ## Current Position
 
 Phase: 2 of 5 (Analysis Fidelity Hardening)
-Plan: 02-02 complete (2/4 plans in this phase)
-Status: Executing — ready for 02-03
-Last activity: 2026-08-10 — 02-02-PLAN.md executed (PRIORITIZATION joins safety tier on both mirror sides, D-01/D-02 regression coverage)
+Plan: 02-03 complete (3/4 plans in this phase)
+Status: Executing — ready for 02-04
+Last activity: 2026-08-10 — 02-03-PLAN.md executed (ANLZ-02 enrichment extended to the pearl channel + compiled document; ANLZ-02 requirement now Complete)
 
-Progress: [███████░░░] 71%
+Progress: [█████████░] 86%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: ~25 min
-- Total execution time: ~1.6 hours
+- Total execution time: ~2.1 hours
 
 **By Phase:**
 
@@ -63,6 +63,7 @@ Progress: [███████░░░] 71%
 | Phase 01 P02 | 20min | 2 tasks | 6 files |
 | Phase 02-analysis-fidelity-hardening P01 | 35 min | 2 tasks | 7 files |
 | Phase 02 P02 | 20 min | 2 tasks | 5 files |
+| Phase 02 P03 | 30 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,7 @@ Recent decisions affecting current work:
 - [2026-08-10 Phase 2 P01] ANLZ-02's `enrichment` field ships as `.optional()` (locked in 02-CONTEXT.md), never `.default(false)`, and both merge passes OR it rather than average/majority-vote it — same never-lose-a-signal rule as V3-D D2 threshold. D-01's `dedupeNearDuplicateUnits` match predicate is untouched; enrichment is passenger data on the collapse.
 - [2026-08-10 Phase 2 P01] REQUIREMENTS.md's ANLZ-02 checkbox stays Pending: 02-03-PLAN.md also declares ANLZ-02 (pearl/compiled-export surfaces) and hasn't run yet — shared-ID gate (#2388) flips it only once both declaring plans have a SUMMARY.
 - [2026-08-10 Phase 2 P02] PRIORITIZATION added to `clinical.json`'s `safetyTier` array and mirrored into `safetyTier.ts`'s `SAFETY_TIER_UNIT_TYPES` (D-02, LOCKED). D-01's distinct-facts-never-merge guarantee and the verbatim-quote predicate are now regression-tested for all four safety-tier types (DOSAGE/CONTRAINDICATION/LAB_VALUE/PRIORITIZATION); `UnitProposalCard.tsx` was not touched. REQUIREMENTS.md's ANLZ-01 checkbox stays Pending: 02-04-PLAN.md also declares ANLZ-01 and hasn't run yet — shared-ID gate (#2388).
+- [2026-08-10 Phase 2 P03] ANLZ-02 repeated on the pearl channel (PearlSchema.enrichment, both LLM prompts, merge-dedupe OR in both the real prompt and FakeAnalysisClient) and extended into the compiled document (renderAnalysisPearls + renderAnalysisUnitsV3's attested branch), via a re-declared server-side ENRICHMENT_NOTE verified character-identical to the web copy. This was the second and final declaring plan for ANLZ-02 (02-01 was first) — REQUIREMENTS.md's ANLZ-02 checkbox is now Complete (shared-ID gate #2388 resolved).
 
 ### Pending Todos
 
@@ -107,6 +109,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-10T01:59:09Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-08-10T02:11:47.703Z
+Stopped at: Completed 02-03-PLAN.md
 Resume file: None
