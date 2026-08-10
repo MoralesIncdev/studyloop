@@ -253,7 +253,7 @@ export function renderNotesTokens(notes: string): string {
 | A2 | No other route or code path (besides `routes/review.ts`, `routes/reviewExport.ts`, `routes/compile.ts`) constructs review cards or reads pearls into a review-like surface | Architecture Patterns, Don't Hand-Roll | If a code path was missed (e.g. a dev-only debug route), an un-attested pearl could leak through it. Mitigated by: `grep -rn "ReviewCard\|deriveLiveCards\|pearl:" server/src/routes/` during planning should be a cheap confirmation step before declaring SC1 verified. |
 | A3 | Ryan's real `dataDir`/`review.json` has been read (and thus continuously migrated) at least once since 2026-07-29 | Runtime State Inventory | If his real data directory was never re-opened since before the gate fix (e.g. he only reviews via a stale browser tab / has not restarted the server), his real review.json could still contain un-migrated legacy state. This has zero code risk (the migration is idempotent and happens automatically on next read) but is worth a one-line callout to Ryan rather than assuming. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Is there a genuine SC1/SC2 test gap worth closing, or is existing coverage sufficient?**
    - What we know: `server/test/review.test.ts` covers `deriveLiveCards`'s two gate paths (lines 193, 199) and `buildReviewQueue`'s migration exception (lines 348-374) individually.
