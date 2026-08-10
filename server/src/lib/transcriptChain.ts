@@ -30,12 +30,19 @@
 // segments — this is the one function every read site (routes/transcript.ts,
 // routes/analyze.ts, routes/heatmap.ts) should call instead of re-deriving
 // any of the above themselves.
+//
+// Phase 04.1 "Anchor Fidelity Repair" (D-01 item 1, F-09, Open Question 3):
+// `dedupeRollingCaptions` (rollingCaptions.ts) is ALSO applied uniformly
+// here, on all four branches, immediately before `correctTranscriptSegments`
+// — see each branch below for the shared reasoning and the Open Question 3
+// determination.
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ResolvedRoots } from "../config.js";
 import { readAsrCache } from "./asr.js";
 import type { Project } from "./models.js";
 import { resolveVideo } from "./innertube.js";
+import { dedupeRollingCaptions } from "./rollingCaptions.js";
 import { findSidecarTranscript, deriveYoutubeVideoId } from "./sidecar.js";
 import { readJsonIfExists, writeJsonAtomic } from "./store.js";
 import { correctTranscriptSegments } from "./terms.js";
@@ -161,12 +168,51 @@ export async function resolveEffectiveTranscript(
   // Step 1: already-declared transcript file (pipeline, hand-picked, a
   // sidecar captured at scan/project-creation time, or pre-resolved YouTube
   // captions.json).
+  //
+  // Phase 04.1 Open Question 3 determination (D-01 item 1): is Innertube's
+  // caption path (step 3 below, `pullYoutubeTranscript` -> `resolveVideo` ->
+  // `innertube.ts`'s `normalizeCaptions`) also susceptible to F-09-style
+  // rolling duplication? `normalizeCaptions` builds segments directly from
+  // the transcript/timedtext API's own `initial_segments` node tree
+  // (`start_ms`/`end_ms`/`snippet.text` per node) — this is Innertube's own
+  // pre-segmented structure, never VTT/SRT cue TEXT. It is a genuinely
+  // DIFFERENT shape than the yt-dlp VTT path this phase's dedup was
+  // designed against, and a static read of `normalizeCaptions` cannot prove
+  // whether Innertube's own segment tree carries a reset/grow alternation
+  // for a video whose Innertube caption pull actually succeeds — this
+  // machine's Innertube calls have twice fallen through to yt-dlp on the
+  // proof project's own network (FINDINGS.md F-02), so no live rolling
+  // Innertube data was ever observed to check against. Recorded here as
+  // CHECKED-BUT-UNRESOLVED, not assumed either way.
+  //
+  // `dedupeRollingCaptions` is applied uniformly on ALL FOUR branches below
+  // regardless of how that open question resolves, for two independent
+  // reasons that hold either way:
+  //   1. It is provably a no-op on non-rolling input (Task 1's real-fixture
+  //      deep-equality regression) — applying it where it isn't needed
+  //      costs nothing.
+  //   2. An already-written rolling `captions.json` — exactly what the
+  //      2026-08-10 proof project holds — reaches this function through
+  //      chain step 1's JSON file path, which `loadTranscriptFromText`
+  //      routes to the JSON parser (transcripts.ts) and NEVER through the
+  //      cue-block parser (captionParse.ts) Task 1's parse-time dedup lives
+  //      in. Parse-time dedup alone would leave every existing rolling
+  //      project stuttering forever, since its captions.json is never
+  //      re-parsed as VTT/SRT text again.
+  //
+  // Ordering is deliberate and identical on all four branches: dedup runs
+  // BEFORE `correctTranscriptSegments` (Phase 2's terms rewrite), not after.
+  // Terms correction rewrites words (e.g. "metro pro law" -> "metoprolol"),
+  // so running dedup first means the overlap comparison sees the same text
+  // YouTube/the ASR adapter actually emitted, not a post-correction rewrite
+  // that could shift word boundaries the overlap search depends on.
   if (project.transcript.type === "file") {
     const resolved = await resolveTranscriptPath(dataDir, roots, project.transcript.path, project.id);
     if (resolved.ok) {
       const segments = await readAndParseTranscriptFile(resolved.filePath);
       if (segments) {
-        const corrected = await correctTranscriptSegments(dataDir, project.id, segments, project.domain);
+        const deduped = dedupeRollingCaptions(segments);
+        const corrected = await correctTranscriptSegments(dataDir, project.id, deduped, project.domain);
         return { segments: corrected, source: transcriptSourceForDeclaredPath(project.transcript.path), transcribable: false };
       }
     }
@@ -178,33 +224,41 @@ export async function resolveEffectiveTranscript(
   // Step 2: same-dir sidecar — re-checked live (not only at scan time) so a
   // project stuck at transcript.type "none" picks up a sidecar that appears
   // (or that this phase didn't exist yet to capture) without recreating it.
+  // dedup-then-terms-correction ordering: see step 1's comment above.
   if (project.source.type === "local") {
     const sidecar = await findSidecarTranscript(project.source.path);
     if (sidecar) {
       const segments = await readAndParseTranscriptFile(sidecar.path);
       if (segments) {
-        const corrected = await correctTranscriptSegments(dataDir, project.id, segments, project.domain);
+        const deduped = dedupeRollingCaptions(segments);
+        const corrected = await correctTranscriptSegments(dataDir, project.id, deduped, project.domain);
         return { segments: corrected, source: "sidecar", transcribable: false };
       }
     }
   }
 
-  // Step 3: lazy YouTube caption pull.
+  // Step 3: lazy YouTube caption pull — the Innertube path Open Question 3
+  // (see step 1's comment above) is about; dedup applied uniformly for the
+  // same two reasons regardless of that question's unresolved status.
+  // dedup-then-terms-correction ordering: see step 1's comment above.
   const videoId = derivableVideoId(project);
   if (videoId) {
     const captions = await pullYoutubeTranscript(dataDir, videoId);
     if (captions) {
-      const corrected = await correctTranscriptSegments(dataDir, project.id, captions, project.domain);
+      const deduped = dedupeRollingCaptions(captions);
+      const corrected = await correctTranscriptSegments(dataDir, project.id, deduped, project.domain);
       return { segments: corrected, source: "youtube", transcribable: false };
     }
   }
 
   // Step 4: Phase 11 "Bring-your-own local ASR adapters" — a prior
   // transcribe job's cached output (see this module's header comment).
+  // dedup-then-terms-correction ordering: see step 1's comment above.
   if (project.source.type === "local") {
     const cached = await readAsrCache(dataDir, project.source.path);
     if (cached) {
-      const corrected = await correctTranscriptSegments(dataDir, project.id, cached, project.domain);
+      const deduped = dedupeRollingCaptions(cached);
+      const corrected = await correctTranscriptSegments(dataDir, project.id, deduped, project.domain);
       return { segments: corrected, source: "asr", transcribable: false };
     }
   }

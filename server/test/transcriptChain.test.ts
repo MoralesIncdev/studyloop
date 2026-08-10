@@ -247,6 +247,157 @@ describe("resolveEffectiveTranscript (Phase 10 chain)", () => {
     expect(await pathExists(cachePath)).toBe(true);
   });
 
+  // Phase 04.1 Plan 2 (D-01 item 1, F-09, Open Question 3): dedupeRollingCaptions
+  // is applied uniformly on all four chain branches, immediately before terms
+  // correction — see transcriptChain.ts's step-1 comment for the full
+  // determination and reasoning. One dedup case and one clean-input
+  // (unchanged) case per branch, below.
+  describe("dedupeRollingCaptions applied uniformly on every chain branch", () => {
+    const rolling = [
+      { start: 0, end: 2, text: "hello world" },
+      { start: 2, end: 2.01, text: "world" }, // pure "reset" cue, fully contained in the tail
+    ];
+    const dedupedRolling = [{ start: 0, end: 2, text: "hello world" }];
+    const clean = [
+      { start: 0, end: 2, text: "hello world" },
+      { start: 5, end: 7, text: "totally unrelated content" }, // real time gap, no shared boundary words
+    ];
+
+    it("step 1 (pipeline/declared captions.json) — an already-written rolling captions.json comes back deduped", async () => {
+      const project = baseProject({
+        id: "proj-pipeline-rolling",
+        source: { type: "local", path: path.join(libDir, "rolling.mp4") },
+        transcript: { type: "file", path: "captions.json" },
+      });
+      await fs.writeFile(path.join(libDir, "rolling.mp4"), "fake video bytes");
+      await writeProject(dataDir, project);
+      // This is the exact scenario the plan's Task 2 wiring exists for: a
+      // pre-Phase-04.1 captions.json written by the ytdlp fallback at
+      // project-creation time, never re-parsed as VTT text again (JSON files
+      // route to transcripts.ts's JSON parser, not captionParse.ts's
+      // cue-block parser Task 1's parse-time dedup lives in).
+      await writeJsonAtomic(path.join(dataDir, "projects", project.id, "captions.json"), { segments: rolling });
+
+      const result = await resolveEffectiveTranscript(dataDir, noRoots, project);
+      expect(result.source).toBe("youtube"); // captions.json's declared-path provenance
+      expect(result.segments).toEqual(dedupedRolling);
+    });
+
+    it("step 1 (pipeline) — clean, non-rolling segments come back unchanged", async () => {
+      const project = baseProject({
+        id: "proj-pipeline-clean",
+        source: { type: "local", path: path.join(libDir, "clean.mp4") },
+        transcript: { type: "file", path: "captions.json" },
+      });
+      await fs.writeFile(path.join(libDir, "clean.mp4"), "fake video bytes");
+      await writeProject(dataDir, project);
+      await writeJsonAtomic(path.join(dataDir, "projects", project.id, "captions.json"), { segments: clean });
+
+      const result = await resolveEffectiveTranscript(dataDir, noRoots, project);
+      expect(result.segments).toEqual(clean);
+    });
+
+    it("step 2 (sidecar) — rolling sidecar text comes back deduped", async () => {
+      const videoPath = path.join(libDir, "rolling-sidecar.mp4");
+      await fs.writeFile(videoPath, "fake video bytes");
+      await fs.writeFile(
+        path.join(libDir, "rolling-sidecar.en.srt"),
+        ["1", "00:00:00,000 --> 00:00:02,000", "hello world", "", "2", "00:00:02,000 --> 00:00:02,010", "world"].join("\n")
+      );
+      const project = baseProject({
+        id: "proj-sidecar-rolling",
+        source: { type: "local", path: videoPath },
+        transcript: { type: "none" },
+      });
+      await writeProject(dataDir, project);
+
+      const result = await resolveEffectiveTranscript(dataDir, noRoots, project);
+      expect(result.source).toBe("sidecar");
+      expect(result.segments).toEqual(dedupedRolling);
+    });
+
+    it("step 2 (sidecar) — clean, non-rolling segments come back unchanged", async () => {
+      const videoPath = path.join(libDir, "clean-sidecar.mp4");
+      await fs.writeFile(videoPath, "fake video bytes");
+      await fs.writeFile(
+        path.join(libDir, "clean-sidecar.en.srt"),
+        ["1", "00:00:00,000 --> 00:00:02,000", "hello world", "", "2", "00:00:05,000 --> 00:00:07,000", "totally unrelated content"].join(
+          "\n"
+        )
+      );
+      const project = baseProject({
+        id: "proj-sidecar-clean",
+        source: { type: "local", path: videoPath },
+        transcript: { type: "none" },
+      });
+      await writeProject(dataDir, project);
+
+      const result = await resolveEffectiveTranscript(dataDir, noRoots, project);
+      expect(result.segments).toEqual(clean);
+    });
+
+    it("step 3 (lazy youtube/Innertube pull) — rolling Innertube segments come back deduped", async () => {
+      const project = baseProject({
+        id: "proj-youtube-rolling",
+        source: { type: "youtube", videoId: "rollingVideoId", url: "https://youtu.be/rollingVideoId" },
+        transcript: { type: "none" },
+      });
+      await writeProject(dataDir, project);
+      // normalizeCaptions builds segments straight from Innertube's own
+      // initial_segments node tree — never cue-block-parsed VTT text — so
+      // this is the read-time dedup's first (and only) chance to fire.
+      __setInnertubeClientForTests(fakeClient({ segments: rolling }));
+
+      const result = await resolveEffectiveTranscript(dataDir, noRoots, project);
+      expect(result.source).toBe("youtube");
+      expect(result.segments).toEqual(dedupedRolling);
+    });
+
+    it("step 3 (Innertube pull) — clean, non-rolling segments come back unchanged", async () => {
+      const project = baseProject({
+        id: "proj-youtube-clean",
+        source: { type: "youtube", videoId: "cleanVideoId", url: "https://youtu.be/cleanVideoId" },
+        transcript: { type: "none" },
+      });
+      await writeProject(dataDir, project);
+      __setInnertubeClientForTests(fakeClient({ segments: clean }));
+
+      const result = await resolveEffectiveTranscript(dataDir, noRoots, project);
+      expect(result.segments).toEqual(clean);
+    });
+
+    it("step 4 (ASR cache) — rolling cached ASR segments come back deduped", async () => {
+      const videoPath = path.join(libDir, "rolling-asr.mp4");
+      await fs.writeFile(videoPath, "fake video bytes");
+      const project = baseProject({
+        id: "proj-asr-rolling",
+        source: { type: "local", path: videoPath },
+        transcript: { type: "none" },
+      });
+      await writeProject(dataDir, project);
+      await writeAsrCache(dataDir, videoPath, rolling, "command");
+
+      const result = await resolveEffectiveTranscript(dataDir, noRoots, project);
+      expect(result.source).toBe("asr");
+      expect(result.segments).toEqual(dedupedRolling);
+    });
+
+    it("step 4 (ASR cache) — clean, non-rolling segments come back unchanged", async () => {
+      const videoPath = path.join(libDir, "clean-asr.mp4");
+      await fs.writeFile(videoPath, "fake video bytes");
+      const project = baseProject({
+        id: "proj-asr-clean",
+        source: { type: "local", path: videoPath },
+        transcript: { type: "none" },
+      });
+      await writeProject(dataDir, project);
+      await writeAsrCache(dataDir, videoPath, clean, "command");
+
+      const result = await resolveEffectiveTranscript(dataDir, noRoots, project);
+      expect(result.segments).toEqual(clean);
+    });
+  });
+
   it("marks transcribable when no pipeline transcript, no sidecar, and no derivable youtube id exist", async () => {
     const videoPath = path.join(libDir, "OpenGuardSeatedVolume1.mp4");
     await fs.writeFile(videoPath, "fake video bytes");
