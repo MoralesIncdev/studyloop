@@ -29,7 +29,15 @@ Stable key/value block appended to by every Phase 4 plan. Do not remove or reord
 
 ## Lecture content gate (Task 2 — 04-01)
 
-_Appended after Task 2 executes — see below._
+| Key | Value |
+|---|---|
+| Final chosen video URL | https://www.youtube.com/watch?v=K0maLgTzIto |
+| Final chosen video title | Mechanical Ventilation Explained Clearly by MedCram.com \| 2 of 5 |
+| Duration | 870s (14:30) |
+| Audit verdict | **COMMIT** (4 of 5 topics Taught: PEEP, FiO2, pressure support, CPAP; SIMV absent) |
+| Candidates evaluated | 1 (passed on first evaluation, no replacement search needed) |
+| Expected chunk count at 8-min (480s) chunk window | 2 chunks (`ceil(870/480)`) |
+| Full audit | `preflight/transcript-topic-audit.md` |
 
 ## Deck + concept doc (Task 3 — 04-01)
 
