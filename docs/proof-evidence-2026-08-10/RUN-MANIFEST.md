@@ -51,3 +51,18 @@ Stable key/value block appended to by every Phase 4 plan. Do not remove or reord
 | Full provenance | `preflight/deck-provenance.md` |
 | Concept doc path | `docs/proof-evidence-2026-08-10/inputs/concept-doc.md` |
 | Concept doc parsed card count / anchor range | 4 cards, all anchored, anchors span 22s–502s (0:22–8:22, 480s spread) |
+
+## Setup — proof project created via UI paste (Task 1 — 04-03)
+
+| Key | Value |
+|---|---|
+| Proof project id | `41b2d9ea-a4b1-428a-b09a-7065ed3dee1f` (this is THE proof project used for the rest of 04-03/04-04/04-05) |
+| Smoke project id (04-01, distinct, not deleted — no delete route exists, carries no analysis, contributes nothing to the review queue) | `5b9601fd-4f6b-45b2-b5b9-b1b28504524b` |
+| Learner action count | 2 (fill URL input @e6 → click Add @e7) — clean paste-then-submit, no workaround |
+| transcriptSource (declared path category, `GET /api/transcript`) | `youtube` |
+| Resolve branch that fired | yt-dlp caption fallback (inferred from elapsed time: `POST /api/youtube/resolve` took 18795ms — consistent with a yt-dlp subprocess spawn, not a <2s Innertube-cache hit; see F-03 for why this run could not capture the literal server log line 04-01 captured) |
+| `POST /api/youtube/resolve` (UI-triggered, via project creation) | 18795ms, 200, 63535B |
+| Transcript segment count | 612 (matches smoke project's count for the same video, as expected — same source) |
+| Captions snapshot vs transcript segment count | 612 == 612, match |
+| Project created at | 2026-08-10T18:29:32.621Z |
+| FINDINGS.md status after Task 1 | 1 new finding (F-03, OBSERVATION — server-log branch confirmation unavailable to this subagent context) |
