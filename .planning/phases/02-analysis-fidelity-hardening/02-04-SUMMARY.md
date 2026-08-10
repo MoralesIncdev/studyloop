@@ -34,7 +34,7 @@ key-decisions:
   - "Task 2's no-overlay scrubOverlayToLens case asserts scrubbed[0] === input (same object reference) because the function's early return (`if (!u.overlay) return u;`) means a unit with no overlay key never gets an `overlay` key introduced — confirmed via `'overlay' in scrubbed[0]` === false, not merely `.overlay === undefined`"
   - "Task 2's composition case builds a raw ChunkUnitRaw literal with both an off-lens array key (entities, which IS a real OVERLAY_ARRAY_KEYS member but not one of clinical.json's six declared keys) and an in-array empty string, so the single test proves both the merge-stage empty-string filter AND the scrub-stage undeclared-key removal in one call chain mirroring the actual runAnalysisJobV3 sequence"
 
-requirements-completed: []
+requirements-completed: [ANLZ-01, ANLZ-03]
 
 coverage:
   - id: D1
@@ -78,24 +78,33 @@ coverage:
   - id: D5
     description: "A human confirms the enrichment badge/notice is visible on a flagged unit card, a tag is visible on a flagged pearl row, an italic note is present in the compiled export for both, a PRIORITIZATION unit renders its verbatim quote, no emoji glyphs appear, and unflagged content is unchanged across all three surfaces"
     requirement: "ANLZ-03"
-    verification: []
+    verification:
+      - kind: manual_procedural
+        ref: "Ryan, 2026-08-10 — throwaway project (Wim Deputter library video + its real .en.srt), STUDYLOOP_FAKE_ANALYSIS=1, fully cleaned up afterward. Unit card: badge + notice exactly 'Not stated in this lecture — added for context', informational blue rgb(62,166,255) not amber; unflagged units show neither. Pearls list: flagged pearl carries the .pearlEnrichmentTag 'context' tag; unflagged rows unchanged. Compiled document: flagged pearl bullet carries the italic '(Not stated in this lecture — added for context)' note; the flagged unit was unattested so it correctly rendered title-only under 'Not yet reviewed' per pedagogy rules (attestation gating, not enrichment marking, controls that list); unflagged content unchanged. PRIORITIZATION: hand-edited a throwaway unit's type to PRIORITIZATION — the .quote verbatim transcript block rendered unconditionally, same treatment as DOSAGE, zero component changes. Zero emoji glyphs in any new mark."
+        status: pass
+      - kind: unit
+        ref: "npm test (root) — 1019 server / 357 web, re-confirmed green post-approval"
+        status: pass
+      - kind: other
+        ref: "npm run typecheck (both workspaces) — exits 0, re-confirmed post-approval"
+        status: pass
     human_judgment: true
-    rationale: "web/src/concepts/ has no component-test harness in this codebase (01-03/02-01/02-02/02-03 precedent) — placement, legibility, and the correct-absence case on unflagged content are rendering/UX judgments no unit test asserts. This is Task 3, a blocking checkpoint:human-verify gate; it has NOT yet been performed as of this SUMMARY. Coverage will be updated by the continuation agent once Ryan confirms or reports a defect."
+    rationale: "web/src/concepts/ has no component-test harness in this codebase (01-03/02-01/02-02/02-03 precedent) — placement, legibility, and the correct-absence case on unflagged content are rendering/UX judgments no unit test asserts. Ryan performed the checkpoint on 2026-08-10 and approved; evidence recorded above."
 
-duration: 25min
+duration: 30min
 completed: 2026-08-10
-status: halted
+status: complete
 ---
 
 # Phase 2 Plan 4: D-01 Audit + ANLZ-03 Overlay-Discipline Regression Coverage Summary
 
-**Closed the audit half of Phase 2 with regression tests pinning the already-shipped `dedupeNearDuplicateUnits` (D-01 value-preservation + four-type distinct-facts-never-merge sweep) and `scrubOverlayToLens`/`mergeOverlayFields` (ANLZ-03 empty-string/undeclared-key discipline, including a merge-then-scrub composition case) — zero production code changed; the plan's Task 3 human-verify checkpoint (enrichment visibility + PRIORITIZATION verbatim rendering) is reached and awaiting Ryan.**
+**Closed the audit half of Phase 2 with regression tests pinning the already-shipped `dedupeNearDuplicateUnits` (D-01 value-preservation + four-type distinct-facts-never-merge sweep) and `scrubOverlayToLens`/`mergeOverlayFields` (ANLZ-03 empty-string/undeclared-key discipline, including a merge-then-scrub composition case) — zero production code changed — and closed with Ryan's human-verify confirmation that the enrichment marks (unit badge, pearl tag, compiled-export note) and PRIORITIZATION's verbatim-quote rendering are all actually visible.**
 
 ## Performance
 
-- **Duration:** 25 min
-- **Tasks:** 2 of 3 completed (Task 3 is a blocking checkpoint, not yet performed)
-- **Files modified:** 1
+- **Duration:** 30 min
+- **Tasks:** 3 of 3 completed
+- **Files modified:** 1 (+ REQUIREMENTS.md)
 
 ## Accomplishments
 
@@ -113,8 +122,9 @@ Each task was committed atomically:
 
 1. **Task 1: Pin D-01's merge semantics — twins collapse, distinct facts never do, values never blur** - `4984b11` (test)
 2. **Task 2: Pin overlay-field discipline — no undeclared keys, no empty strings, no lone empty array entry** - `e9c5ad3` (test)
+3. **Task 3: Confirm the enrichment marks and the PRIORITIZATION verbatim quote are actually visible** - human-verify checkpoint, no code commit (Ryan approved 2026-08-10 on a throwaway project; see D5 coverage entry for evidence)
 
-**Task 3 (checkpoint:human-verify) not yet performed** — this SUMMARY and metadata commit close out the automated half of the plan; a continuation agent picks up at Task 3 once Ryan responds to the checkpoint.
+**Plan metadata:** `23ba0eb` (docs: halt at checkpoint), this commit (docs: finalize post-approval)
 
 ## Files Created/Modified
 
@@ -134,19 +144,19 @@ None blocking. The one test-authoring correction above was caught by the test it
 
 ## User Setup Required
 
-None for Tasks 1-2. Task 3 requires Ryan's visual confirmation — see the checkpoint returned alongside this SUMMARY for exact steps.
+None - no external service configuration required. Task 3's throwaway-project verification (STUDYLOOP_FAKE_ANALYSIS=1 analyze run + hand-edited analysis.json) was performed and fully cleaned up by the orchestrator/Ryan; no artifact from it remains on disk.
 
 ## Next Phase Readiness
 
-- ROADMAP SC1 and SC3 are now proven by regression test, and SC4's distinct-facts-never-merge half is proven for all four safety-tier types
-- SC4's PRIORITIZATION-verbatim-quote half and SC2's visibility half both depend on Task 3's human confirmation — NOT yet closed
-- No blockers for Task 3 beyond Ryan's time: dev servers are already up, `STUDYLOOP_FAKE_ANALYSIS=1` is a documented one-shot env var for the analyze call (not something already set on the running dev server), and the plan's hand-edit-a-throwaway-project step is fully specified in the checkpoint instructions
-- Once Task 3 resolves ("approved" or a named defect), a continuation agent updates this SUMMARY's D5 coverage entry, flips `status: halted` to `status: complete`, records requirements-completed, and performs the plan's `state_updates`/`final_commit` steps that this halted SUMMARY intentionally does not yet perform
+- ROADMAP SC1, SC3, and SC4 (both halves — distinct-facts-never-merge for all four safety-tier types AND PRIORITIZATION verbatim-quote rendering) are now proven: SC1/SC3/SC4's merge guarantees by regression test, SC4's rendering half and SC2's visibility half by Ryan's human-verify confirmation
+- `ANLZ-01` and `ANLZ-03` flip to Complete in `.planning/REQUIREMENTS.md` (checklist + Traceability table) — both were this plan's sole declaring plan (ANLZ-01's shared-ID gate with 02-02 is also resolved: 02-02 landed the config/predicate side, this plan lands the merge-audit side)
+- Phase 2 (Analysis Fidelity Hardening)'s four requirements — ANLZ-01, ANLZ-02, ANLZ-03, and the enrichment/PRIORITIZATION work across 02-01/02-02/02-03/02-04 — are now all Complete
+- No blockers for Phase 3 (Attestation Gate / GATE-01/GATE-02/COMP-01/COMP-02) or Phase 4 (real-lecture proof)
 
 ## Self-Check: PASSED
 
-Both task commits (`4984b11`, `e9c5ad3`) verified present in `git log --oneline`. `server/test/analysisV3.test.ts` verified present on disk with all new describe blocks. Full re-run: `npm run test -w server -- analysisV3 -t "dedupeNearDuplicateUnits"` 19/19 pass, `npm run test -w server -- analysisV3 -t "overlay"` 16/16 pass, `npm run test -w server -- analysisV3 -t "scrubOverlayToLens"` 4/4 pass, `git diff --quiet server/src/lib/analysis.ts` exits 0 after both tasks, `npm test` (root) 1019/1019 server (1000 baseline + 19 new) / 357/357 web (no regression), `npm run typecheck` (both workspaces) exits 0.
+All three task-level commits (`4984b11`, `e9c5ad3`) and both metadata commits (`23ba0eb` halt, this commit finalize) verified present in `git log --oneline`. `server/test/analysisV3.test.ts` verified present on disk with all new describe blocks. `.planning/REQUIREMENTS.md` verified: ANLZ-01 and ANLZ-03 checkboxes `[x]`, Traceability table rows both `Complete`. Full re-run: `npm run test -w server -- analysisV3 -t "dedupeNearDuplicateUnits"` 19/19 pass, `npm run test -w server -- analysisV3 -t "overlay"` 16/16 pass, `npm run test -w server -- analysisV3 -t "scrubOverlayToLens"` 4/4 pass, `git diff --quiet server/src/lib/analysis.ts` exits 0 after both automated tasks, `npm test` (root) 1019/1019 server (1000 baseline + 19 new) / 357/357 web (no regression), `npm run typecheck` (both workspaces) exits 0.
 
 ---
 *Phase: 02-analysis-fidelity-hardening*
-*Completed: 2026-08-10 (Tasks 1-2; Task 3 pending human verification)*
+*Completed: 2026-08-10*
