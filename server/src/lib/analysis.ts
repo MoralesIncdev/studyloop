@@ -40,6 +40,8 @@ export const PearlSchema = z.object({
   importance: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   /** V3-B B1: links this pearl to a typed unit (analysis.units) when the merge pass could resolve one — see resolvePearlUnitId. Absent for v2 analyses and for v3 pearls with no matching unit. */
   unitId: z.string().optional(),
+  /** ANLZ-02 — this pearl's insight states more than this segment's transcript/slide text actually says (self-reported by the chunk model, same field/semantics as AnalysisUnit's enrichment). Optional (not `.default(false)`) because PearlSchema is also v2's ChunkPearlSchema, shared by ~61 existing pearl literals across 22 files — absent means not flagged, never `false`. */
+  enrichment: z.boolean().optional(),
 });
 export type Pearl = z.infer<typeof PearlSchema>;
 
@@ -750,8 +752,17 @@ const CHUNK_V3_JSON_SCHEMA = {
           insight: { type: "string" },
           importance: { type: "integer", enum: [1, 2, 3] },
           unitLabel: { type: "string" },
+          // ANLZ-02: required at the wire level for the same reason as the
+          // units block's enrichment field above — structured-output
+          // json_schema mode wants every property present; false is the
+          // not-flagged value. MERGE_V3_JSON_SCHEMA aliases this same pearls
+          // object below, so the merge call gets this property for free —
+          // which is exactly why the merge PROMPT must explain it too (see
+          // buildMergeV3UserPrompt/MERGE_V3_SYSTEM_PROMPT), since a required
+          // wire property the prompt never mentions gets filled arbitrarily.
+          enrichment: { type: "boolean" },
         },
-        required: ["t", "label", "insight", "importance", "unitLabel"],
+        required: ["t", "label", "insight", "importance", "unitLabel", "enrichment"],
         additionalProperties: false,
       },
     },
@@ -914,7 +925,7 @@ function buildChunkV3SystemPrompt(lens: Lens, slideContext?: string): string {
   return `You are analyzing one segment of an instructional video's transcript to help a learner study it later. The subject matter could be anything — cooking, martial arts, software, history, music theory, a lecture — extract what is actually being taught in THIS segment, never assume a fixed domain or template beyond the lens noted below.
 
 Extract:
-- "pearls": specific, memorable insights worth remembering, each anchored to the timestamp (in seconds) where it's said. A label under 60 characters, a 1-3 sentence insight, an importance rating (3 = critical/central point, 2 = useful supporting point, 1 = minor/incidental detail), and "unitLabel": the exact label of the unit below this pearl illustrates, or "" if none fits.
+- "pearls": specific, memorable insights worth remembering, each anchored to the timestamp (in seconds) where it's said. A label under 60 characters, a 1-3 sentence insight, an importance rating (3 = critical/central point, 2 = useful supporting point, 1 = minor/incidental detail), "unitLabel": the exact label of the unit below this pearl illustrates, or "" if none fits, and "enrichment": true when the insight states more than THIS segment's transcript or supplied slide text actually says, false when the insight is carried by what was said at that timestamp.
 - "units": typed knowledge units on a universal spine — each is exactly one of CLAIM (an assertion), MECHANISM (how/why something works), PROCEDURE (an ordered how-to), EXAMPLE (a concrete instance), BOUNDARY (a limit, exception, or "this doesn't apply when…"), CLUSTER (a parent concept covering 3 or more closely-related atomic facts — e.g. "side effects of metoprolol" listing bradycardia, hypotension, fatigue, etc. as separate facts), DOSAGE (a medication amount/frequency), CONTRAINDICATION (when NOT to do/give something), LAB_VALUE (a normal/abnormal test range or result), or PRIORITIZATION ("what do you do first" judgment material). Each unit has a short "label" (used to link edges/pearls to it — keep it stable and specific, not a generic phrase), a 1-2 sentence "summary", a longer markdown "body", one or more "anchors" (each an exact "quote" from the transcript plus its timestamp "t" in seconds), a "confidence" 0-1 for how clearly the transcript supports this unit as extracted, an "overlay" object of domain-specific structured fields (which ones to fill in is named by the lens below — leave the rest as "" or []), "threshold": true only when this unit is a transformative/integrative/troublesome idea — one that later material genuinely depends on understanding, a concept that "unlocks" the rest of the video once grasped (most units are NOT threshold — false otherwise), "evidence": one of "transcript" (default — this unit's content came from what was actually said/shown in the video), "slides" (this unit's content came primarily from the supplementary slide-deck text below, not something actually said), or "both" — use "transcript" unless slide deck text was supplied below AND plausibly contributed to this specific unit, "enrichment": true when this unit's summary, body, or CLUSTER member bodies state more than THIS segment's transcript or supplied slide text actually says (canonical case: the speaker name-drops a term and you supply the definition), false when every claim is backed by the anchored quotes, and "members": for a CLUSTER unit ONLY, 2 to 12 objects each with its own short "label" (the specific fact, e.g. "Bradycardia"), a 1-2 sentence "body" (that fact alone, phrased so it stands on its own as a flashcard answer), and "anchorSec" (seconds — reuse this unit's own anchor time if you have nothing more precise); for every non-CLUSTER unit, "members" MUST be an empty array. IMPORTANT: whenever the transcript states 3 or more closely-related atomic facts under one shared parent concept, emit ONE CLUSTER unit with those facts as members rather than 3+ separate CLAIM units for the same facts — this is what lets a learner attest the parent concept once instead of restating every fact individually. Use individual CLAIM (or other) units as usual for anything that isn't part of such a group.
 - "edges": relationships between two units you extracted THIS segment — "sourceLabel"/"targetLabel" must exactly match "label" fields above, "type" is one of REQUIRES (source requires target as a prerequisite), PART_OF (source is part of target), EXAMPLE_OF (source is an example of target), or PROCEDURE_STEP (source is the step before target in the same procedure), plus the supporting "quote" and a "confidence" 0-1. Only emit edges between two units both present in this same segment's "units" list.
 
@@ -926,12 +937,12 @@ Every timestamp you output MUST fall within this segment's own time range — ne
 
 function buildMergeV3UserPrompt(pearls: readonly ChunkPearlV3[]): string {
   return [
-    "Collected pearls (JSON, possibly containing near-duplicates from overlapping segments — each may carry a unitLabel field; copy it through unchanged on whichever merged pearl you keep):",
+    "Collected pearls (JSON, possibly containing near-duplicates from overlapping segments — each may carry a unitLabel field; copy it through unchanged on whichever merged pearl you keep. Each also carries an \"enrichment\" flag; when you merge two near-identical pearls and either was flagged true, the kept pearl stays flagged true.):",
     JSON.stringify(pearls),
   ].join("\n");
 }
 
-const MERGE_V3_SYSTEM_PROMPT = `You are merging pearls collected from multiple overlapping segments of ONE instructional video's transcript into a single coherent set. The segments overlap by design, so the same insight may appear more than once — merge/deduplicate near-identical pearls rather than listing them twice (keep the more precise or earlier timestamp, and preserve a non-empty "unitLabel" field from whichever duplicate has one).
+const MERGE_V3_SYSTEM_PROMPT = `You are merging pearls collected from multiple overlapping segments of ONE instructional video's transcript into a single coherent set. The segments overlap by design, so the same insight may appear more than once — merge/deduplicate near-identical pearls rather than listing them twice (keep the more precise or earlier timestamp, and preserve a non-empty "unitLabel" field from whichever duplicate has one, and preserve the "enrichment" flag from whichever duplicate carried it true).
 
 Re-rank "importance" (1-3) across the whole video now that you can see everything, not just what looked important within one segment. Then identify 2-6 overarching themes that span the entire video — these are unanchored, big-picture takeaways, not tied to a specific timestamp. Do not invent new pearls that aren't grounded in the input you were given; you are consolidating, not generating fresh content.`;
 
@@ -1250,6 +1261,10 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
             insight: `A notable point comes up around ${formatTimestamp(mid)}, worth revisiting.`,
             importance,
             unitLabel: primaryLabel,
+            // ANLZ-02: same deterministic cadence as the primary unit's
+            // enrichment flag above, so a fake run always produces at least
+            // one flagged pearl (chunk.index 0 always flagged).
+            enrichment,
           },
         ],
         units: [
@@ -1293,7 +1308,17 @@ export class FakeAnalysisClient implements AnalysisLLMClient, AnalysisLLMClientV
     for (const p of pearls) {
       const key = p.label;
       const existing = dedupedPearls.get(key);
-      if (!existing || p.t < existing.t) dedupedPearls.set(key, p);
+      // ANLZ-02: OR the enrichment flag across the dedupe group — a flagged
+      // duplicate must not lose its signal purely because another duplicate
+      // under the same label had an earlier timestamp and won the survivor
+      // slot. Mirrors the copy-through-and-OR rule the real merge prompt is
+      // told to follow.
+      const orEnrichment: true | undefined = existing?.enrichment || p.enrichment ? true : undefined;
+      if (!existing || p.t < existing.t) {
+        dedupedPearls.set(key, { ...p, enrichment: orEnrichment });
+      } else {
+        dedupedPearls.set(key, { ...existing, enrichment: orEnrichment });
+      }
     }
     return {
       kind: "ok",
@@ -1976,6 +2001,10 @@ export async function runAnalysisJobV3(params: AnalysisJobParamsV3): Promise<Ana
       insight: p.insight,
       importance: p.importance,
       unitId: resolved ? (aliases.get(resolved) ?? resolved) : undefined,
+      // ANLZ-02: field-by-field rebuild — a field not named here is silently
+      // discarded even though it validated at the wire and survived the
+      // merge call. undefined (not false) when the merge omitted it.
+      enrichment: p.enrichment ? true : undefined,
     };
   });
 

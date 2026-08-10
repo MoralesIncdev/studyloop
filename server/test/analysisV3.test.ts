@@ -394,6 +394,45 @@ describe("mergeUnitsByFingerprint — ANLZ-02 enrichment merging", () => {
   });
 });
 
+describe("FakeAnalysisClient.runMergeV3 — ANLZ-02 pearl enrichment merge-dedupe", () => {
+  const client = new FakeAnalysisClient();
+  const base = { t: 10, label: "Same Pearl", insight: "insight text", importance: 2 as const, unitLabel: "Unit A" };
+
+  it("keeps enrichment when the surviving (earlier-timestamp) pearl was flagged", async () => {
+    const outcome = await client.runMergeV3([
+      { ...base, t: 5, enrichment: true },
+      { ...base, t: 20, enrichment: undefined },
+    ]);
+    expect(outcome.kind).toBe("ok");
+    if (outcome.kind !== "ok") throw new Error("unreachable");
+    expect(outcome.data.pearls).toHaveLength(1);
+    expect(outcome.data.pearls[0].t).toBe(5);
+    expect(outcome.data.pearls[0].enrichment).toBe(true);
+  });
+
+  it("ORs the flag onto the survivor when the dedupe drops a flagged duplicate in favor of an earlier unflagged one — the signal is never lost to timestamp ordering", async () => {
+    const outcome = await client.runMergeV3([
+      { ...base, t: 5, enrichment: undefined },
+      { ...base, t: 20, enrichment: true },
+    ]);
+    expect(outcome.kind).toBe("ok");
+    if (outcome.kind !== "ok") throw new Error("unreachable");
+    expect(outcome.data.pearls).toHaveLength(1);
+    expect(outcome.data.pearls[0].t).toBe(5);
+    expect(outcome.data.pearls[0].enrichment).toBe(true);
+  });
+
+  it("leaves enrichment undefined (not false) when no duplicate in the group was flagged", async () => {
+    const outcome = await client.runMergeV3([
+      { ...base, t: 5, enrichment: undefined },
+      { ...base, t: 20, enrichment: undefined },
+    ]);
+    expect(outcome.kind).toBe("ok");
+    if (outcome.kind !== "ok") throw new Error("unreachable");
+    expect(outcome.data.pearls[0].enrichment).toBeUndefined();
+  });
+});
+
 describe("AnalysisSchema — Phase 6 staleReason 'slides-changed'", () => {
   it("accepts 'slides-changed' alongside the existing 'terms-changed'", () => {
     const base = {
@@ -838,6 +877,22 @@ describe("runAnalysisJobV3 (fake client end-to-end — no live API calls)", () =
 
     const parsed = AnalysisSchema.parse(analysis);
     expect(parsed.units!.some((u) => u.enrichment === true)).toBe(true);
+  });
+
+  it("ANLZ-02: a fake-mode-flagged pearl's enrichment flag reaches the returned analysis and round-trips through AnalysisSchema, with unitId resolution unaffected", async () => {
+    const segments: TranscriptSegment[] = [];
+    for (let t = 0; t < 1000; t += 5) segments.push(segment(t, t + 5, `text at ${t}`));
+
+    const analysis = await runAnalysisJobV3({ segments, model: "claude-opus-5", client: new FakeAnalysisClient() });
+
+    // Fake mode deterministically flags every 4th chunk's primary pearl (same cadence as the primary unit).
+    expect(analysis.pearls.some((p) => p.enrichment === true)).toBe(true);
+    expect(analysis.pearls.some((p) => p.enrichment === undefined)).toBe(true);
+    // resolvePearlUnitId / the unitId alias remap is unchanged by the addition.
+    expect(analysis.pearls.some((p) => p.unitId)).toBe(true);
+
+    const parsed = AnalysisSchema.parse(analysis);
+    expect(parsed.pearls.some((p) => p.enrichment === true)).toBe(true);
   });
 
   it("V3-D D1: emits a domain-shaped overlay on the primary unit, deterministically, for every non-generic domain", async () => {
