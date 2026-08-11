@@ -200,3 +200,26 @@ Stable key/value block appended to by every Phase 4 plan. Do not remove or reord
 | Original proof project (`41b2d9ea-...`) mtimes | `captions.json` Aug 10 13:29:32, `analysis.json` Aug 10 13:41:46 — unchanged from prior plans, confirmed untouched by this task |
 | Automated verify script | PASS — `project=0213f617-f887-4c33-8349-8dfdaf2213c8 segments=316 baseline=612 adjacentDuplicateTexts=0` |
 | FINDINGS.md status after Task 2 | None — no new findings; the deck-attach method matches 04-03's own documented approach exactly, not a fresh workaround |
+
+### Live clinical analysis on the fixed pipeline (Task 3 — 04.1-05)
+
+| Key | Value |
+|---|---|
+| Trigger | Clicked the study view's "Analyze" pill (`gstack browse click`, 1 UI action) — the isolated harness has no fake-analysis override (`STUDYLOOP_FAKE_ANALYSIS` deliberately unset in the restart command) |
+| Analyze clicked at | 2026-08-10T22:05:34Z |
+| Analyze completed (status -> `done`) at | 2026-08-10T22:16:55Z |
+| Wall-clock duration | **11m21s (681s)** vs baseline **4m35s (275s)** — notably longer this run; polled every ~10s via `GET /api/projects/:id/analyze/status`, full timestamped log in the harness log file. Progress reported 0% for ~8m30s, then 25% (~22:10:04), then 50% (~22:15:55), then done — coarser-grained and slower than the baseline's 0%->25%->50%->done cadence, consistent with ordinary non-deterministic provider-side latency variance on a live third-party call, not a pipeline regression (this run's own code path — `runAnalysisJobV3`, `correctAnalysisAnchors`, `logAnchorCorrectionSummary` — is unchanged from what 04.1-03 committed and unit-tested; the extra wall-clock time sits entirely in the provider round-trip, which this plan's own tasks do not instrument further) |
+| Schema version | 3 |
+| source field | `model` (not `stub` — confirms the live-provider path) |
+| domain | `clinical` |
+| units / pearls / concepts / themes / edges | **24 / 11 / 24 / 4 / 9** vs baseline 18 / 8 / 18 / 4 / 8 — a different completion is expected (independent non-deterministic model run on a differently-shaped, now-deduped transcript), not a defect |
+| Unit anchors (units.anchors) | 39 vs baseline 74 |
+| DOSAGE (safety-tier) units produced | 2 — `cpap-and-peep-settings-range` (t=82) and `pressure-support-range` (t=288), matching the baseline's own 2-DOSAGE-unit pattern |
+| Correction telemetry (from the harness log, `[analysis] anchor-correction:` prefix) | `units=1 safetyTier=0 pearls=0 unresolved=0` — one detail line: `unit=cpap-peep-continuous-pressure-mechanism type=MECHANISM before=112 after=72.07` |
+| Chunk observation | The corrected unit's claimed anchor (t=112) and its corrected/true position (t=72.07) both fall inside chunk 0 of the 480s (`CHUNK_WINDOW_SECONDS`) chunk window (video duration 870s -> chunks `[0,480)` and `[480,870)`) — no cross-chunk drift observed for this run's one correction, unlike the baseline's growing-drift pattern that reached into material spoken well past 480s. **Not drawing a conclusion from a second single-correction sample** — this run had far fewer/smaller drifts overall (1 of 39 unit anchors corrected, vs 21 of 66 in the baseline replay), consistent with either the tightened chunk prompt (04.1-03 Task 3) genuinely reducing drift, or ordinary run-to-run variance on a non-deterministic model; this run alone cannot distinguish the two. |
+| Safety-tier corrections | 0 — both DOSAGE units this run landed within tolerance on the first pass, needing no correction |
+| Zero-correction interpretation | N/A — this run did correct one anchor (not a zero-correction run), so the "silent when nothing corrected" telemetry behavior (04.1-03) was not exercised here; it fired exactly once as designed |
+| Original proof project (`41b2d9ea-...`) `analysis.json` mtime | Aug 10 13:41:46 2026 (2026-08-10T18:41:46.401Z) — unchanged from before this task |
+| Automated verify script | PASS — `project=0213f617-f887-4c33-8349-8dfdaf2213c8 source=model version=3 units=24 pearls=11 edges=9 unitAnchors=39` |
+| Stray pre-existing project noted (not created by this plan) | `5b9601fd-4f6b-45b2-b5b9-b1b28504524b` (the 04-01 smoke project) is also present under the proof data root — its `captions.json` mtime (Aug 10 13:01:09 2026) predates this plan's harness restart entirely; it carries no analysis and contributes nothing to the review queue (already documented in the Setup section above, 04-03). No delete route exists in this app, so it is left in place, unmodified, exactly as every prior 04-0x plan left it. |
+| FINDINGS.md status after Task 3 | None — no new findings; the wall-clock difference is recorded above as an observation, not a finding requiring investigation, since it does not affect any acceptance criterion (source=model confirmed, units present, baseline untouched) |
