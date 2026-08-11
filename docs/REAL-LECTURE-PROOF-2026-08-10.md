@@ -116,3 +116,7 @@ F-01 (`transcriptSource` is a declared-path category, not a resolve-branch indic
 - **Verifier invocation:** `cd server && npx tsx src/scripts/verifyAnchors.ts /Users/antemo/StudyLoopProof-2026-08-10/projects/41b2d9ea-a4b1-428a-b09a-7065ed3dee1f --out docs/proof-evidence-2026-08-10`
 - **Smoke project (04-01, distinct, not deleted, contributes nothing to the review queue):** `/Users/antemo/StudyLoopProof-2026-08-10/projects/5b9601fd-4f6b-45b2-b5b9-b1b28504524b/`
 - **Source locations cited:** `server/src/lib/captionParse.ts`, `server/src/lib/ytdlp.ts`, `server/src/lib/analysis.ts` (`chunkTranscript`, `CHUNK_WINDOW_SECONDS`), `server/src/lib/attestation.ts` (`isUnitFeedable`), `server/src/lib/review.ts` (`deriveLiveCards`, `buildReviewQueue`), `server/src/routes/review.ts`, `server/src/routes/reviewExport.ts`, `server/src/lib/anchorVerify.ts`, `server/src/scripts/verifyAnchors.ts`
+
+## Addendum (Phase 04.1, 2026-08-10)
+
+The per-mode verdicts above are the record of what was true on this report's own date and are not edited here. Phase 04.1 (Anchor Fidelity Repair) fixed F-09 (rolling-caption duplication) and F-10 (anchor-timestamp drift), and settled F-11 (near-duplicate escape) as a documented limitation, then re-ran this same lecture on the isolated harness and re-judged the fresh result with the same committed, unmodified verifier and an independent safety-value re-audit. Full detail, including which of the verdicts above this re-run displaces and which it does not: `docs/proof-evidence-2026-08-10/rerun-04.1/REPORT-ADDENDUM.md`.
