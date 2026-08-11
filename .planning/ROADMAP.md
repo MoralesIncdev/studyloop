@@ -14,7 +14,7 @@ StudyLoop's engine is built (all 11 prior build phases merged) but the 2026-08-0
 - [x] **Phase 1: Ingestion Pipeline Repair** - Caption fallback runs in the normal flow; image-only slide PDFs warn instead of failing silently (completed 2026-08-09)
 - [x] **Phase 2: Analysis Fidelity Hardening** - Chunk-overlap dedup, enrichment marked or suppressed, overlay-field discipline (completed 2026-08-10)
 - [x] **Phase 3: Attestation Gate & Compile Honesty** - Un-attested pearl review channel closed per LOCKED ADR; compile distinguishes Dismissed; anchors clickable (completed 2026-08-10)
-- [ ] **Phase 4: Real-Lecture Proof Re-Run** - Full end-to-end PASS on a real nursing lecture with zero manual workarounds
+- [x] **Phase 4: Real-Lecture Proof Re-Run** - Full end-to-end PASS on a real nursing lecture with zero manual workarounds (completed 2026-08-10)
 - [ ] **Phase 5: Depth Tier (Accuracy-Gated)** - Library prerequisite graph, multi-video lesson composer, home-grid Threads
 
 ## Phase Details
@@ -94,7 +94,7 @@ Plans:
   4. The previously-unproven session-content rendering paths (notes, captures, watchedUpTo, lessonSummary) are exercised during the run and verified in the compiled export
   5. The proof is written up as a dated report (like REAL-LECTURE-PROOF-2026-08-08.md) with adversarial verification, and CI is green
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 Plans:
 
@@ -102,14 +102,14 @@ Plans:
 - [x] 04-02-PLAN.md — committed verbatim-anchor verifier, cross-validated against the 2026-08-08 project (wave 1)
 - [x] 04-03-PLAN.md — proof run part 1: UI paste, independent deck attach, real clinical analysis (wave 2)
 - [x] 04-04-PLAN.md — proof run part 2: attestation lifecycle, session content, compile + export (wave 3)
-- [ ] 04-05-PLAN.md — adversarial verification, dated report, CI + provenance, Ryan sign-off (wave 4)
+- [x] 04-05-PLAN.md — adversarial verification, dated report, CI + provenance, Ryan sign-off (wave 4)
 
 ### Phase 04.1: Anchor Fidelity Repair (INSERTED)
 
 **Goal:** Anchor timestamps point where the content is actually spoken — F-10 drift (10/18 units up to ~4m42s off, incl. both DOSAGE cards) and F-09 rolling-caption duplication root-caused and fixed; anchor verifier re-run on the 2026-08-10 proof project yields a clean report; PROOF-01 closes
 **Requirements**: PROOF-01 (carried open from Phase 4; see docs/proof-evidence-2026-08-10/ FINDINGS F-09/F-10/F-11)
 **Depends on:** Phase 4
-**Plans:** 6/7 plans executed
+**Plans:** 7/7 plans complete
 
 Plans:
 
@@ -119,7 +119,7 @@ Plans:
 - [x] 04.1-04-PLAN.md — F-11: predicate-condition evidence, narrowest safe fix or documented limitation (wave 3)
 - [x] 04.1-05-PLAN.md — D-02 live re-run: re-ingest and re-analyze on the isolated proof harness (wave 4)
 - [x] 04.1-06-PLAN.md — D-03 oracle: verifier run unmodified, violation classification, safety-value re-audit (wave 5)
-- [ ] 04.1-07-PLAN.md — evidence ledger, report addendum, PROOF-01 verdict, Ryan sign-off (wave 6)
+- [x] 04.1-07-PLAN.md — evidence ledger, report addendum, PROOF-01 verdict, Ryan sign-off (wave 6)
 
 ### Phase 5: Depth Tier (Accuracy-Gated)
 
@@ -147,5 +147,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Ingestion Pipeline Repair | 3/3 | Complete    | 2026-08-09 |
 | 2. Analysis Fidelity Hardening | 4/4 | Complete    | 2026-08-10 |
 | 3. Attestation Gate & Compile Honesty | 3/3 | Complete    | 2026-08-10 |
-| 4. Real-Lecture Proof Re-Run | 4/5 | In Progress|  |
+| 4. Real-Lecture Proof Re-Run | 5/5 | Complete    | 2026-08-10 |
 | 5. Depth Tier (Accuracy-Gated) | 0/TBD | Not started | - |

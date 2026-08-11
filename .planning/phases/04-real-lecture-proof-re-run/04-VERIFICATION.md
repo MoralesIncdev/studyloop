@@ -1,11 +1,11 @@
 ---
 phase: 04-real-lecture-proof-re-run
 verified: 2026-08-10T21:00:00Z
-status: gaps_found
+status: passed
 score: 3/5 roadmap success criteria fully verified (SC3, SC4, SC5); SC1 and SC2 verified as NOT achieved against their literal wording — a documented, human-accepted gap, not an execution failure
 behavior_unverified: 0
 overrides_applied: 0
-re_verification: null
+re_verification: 2026-08-10 — gaps closed by Phase 04.1 (Anchor Fidelity Repair): F-09/F-10 fixed, unmodified verifier re-run on fresh live analysis = 0/59 violations (vs 32/82 baseline), safety re-audit clean, PROOF-01 [x] with clause-by-clause provenance; Ryan approved closure incl. Slides-CONDITIONAL and Document-mode-partial carve-outs. Evidence: docs/proof-evidence-2026-08-10/rerun-04.1/ + 04.1-VERIFICATION.md (7/7).
 gaps:
   - truth: "SC1 — a real nursing lecture runs paste-to-compile with zero manual workarounds; Setup is a clean PASS, not CONDITIONAL"
     status: failed

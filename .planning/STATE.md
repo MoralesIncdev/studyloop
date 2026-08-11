@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 4
-current_phase_name: Real-Lecture Proof Re-Run
-status: awaiting-checkpoint
+current_phase: 04.1
+current_phase_name: Anchor Fidelity Repair
+status: planning
 stopped_at: Completed 04.1-06-PLAN.md
-last_updated: "2026-08-11T01:40:00.000Z"
+last_updated: "2026-08-11T02:04:19.300Z"
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 22
-  completed_plans: 21
+  completed_plans: 22
 last_activity: 2026-08-10
 last_activity_desc: "Phase 04.1 Plan 6 (of 7) — D-03's oracle speaks: the committed server/src/scripts/verifyAnchors.ts CLI, run unmodified with no --tolerance flag, against 04.1-05's fresh live-model analysis (project 0213f617-...) returned 59 checked (39 unit anchors/9 edges/11 pearls), 57 exact, 2 normalized, 0 violations, exit code 0 — a clean report by D-03's strongest definition, against the 2026-08-10 baseline's own 82 checked/50 exact/32 violations. Report pair written to a new docs/proof-evidence-2026-08-10/rerun-04.1/ subdirectory; baseline pair confirmed byte-unchanged via git diff --quiet, and zero edits made to anchorVerify.ts/verifyAnchors.ts/anchorVerify.test.ts across this plan's commits. violation-classification.md records the clean verdict (nothing to classify) with the totals comparison. Independent safety-value re-audit found both DOSAGE units this run produced (cpap-and-peep-settings-range, pressure-support-range) carry exact numeric values AND, unlike the baseline's same two units (40s/160s anchor drift), correctly-positioned anchors; a 54% stratified sample of non-safety units plus all 11 pearls and all 9 edges found zero hallucinations, zero enrichment-flagged items (matches baseline's 0), no new FINDINGS.md entry filed. PROOF-01 stays Pending (shared-ID gate — 04.1-07 still to run)."
 ---
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-08-09)
 
 ## Current Position
 
-Phase: 4 of 6 (Real-Lecture Proof Re-Run) — all 5 plans executed; VERIFICATION: passed-with-gaps
-Status: CONDITIONAL PASS accepted by Ryan 2026-08-10 (report: docs/REAL-LECTURE-PROOF-2026-08-10.md).
+Phase: 04.1 of 6 (Anchor Fidelity Repair)
+Status: Ready to plan
 PROOF-02 complete; PROOF-01 open — carried to inserted Phase 04.1 (Anchor Fidelity Repair: F-09 rolling captions, F-10 anchor drift, F-11 dedup escape).
 Formal `phase complete 4` is gated on gap closure by design — it lands when Phase 04.1 closes PROOF-01.
 
@@ -39,7 +39,7 @@ Next action: continue Phase 04.1 wave execution (04.1-07, per depends_on in its 
 
 **Velocity:**
 
-- Total plans completed: 11
+- Total plans completed: 22
 - Average duration: ~26 min
 - Total execution time: ~3.0 hours
 
@@ -50,6 +50,8 @@ Next action: continue Phase 04.1 wave execution (04.1-07, per depends_on in its 
 | 1 | 3 | - | - |
 | 2 | 4 | - | - |
 | 3 | 3 | - | - |
+| 04.1 | 7 | - | - |
+| 4 | 5 | - | - |
 
 **Recent Trend:**
 
